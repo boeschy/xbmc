@@ -516,6 +516,7 @@ void CDVDInputStreamBluray::ProcessEvent() {
       m_title = disc_info->titles[m_event.param];
     else
       m_title = nullptr;
+    m_menu = false;
 
     break;
   }
@@ -1133,8 +1134,10 @@ void CDVDInputStreamBluray::OnMenu()
   // toggle the popup menu on their own without firing this event, and if they do this, our
   // internal tracking state would be wrong. So just process and return.
   if(bd_user_input(m_bd, -1, BD_VK_POPUP) >= 0)
+  {
+    m_menu = !m_menu;
     return;
-
+  }
   CLog::Log(LOGDEBUG, "CDVDInputStreamBluray::OnMenu - popup failed, trying root");
 
   if (bd_user_input(m_bd, -1, BD_VK_ROOT_MENU) >= 0)
