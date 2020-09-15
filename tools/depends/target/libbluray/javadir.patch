@@ -1,0 +1,11 @@
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -225,7 +225,7 @@
+ 
+ 
+ if USING_BDJAVA_BUILD_JAR
+-jardir=$(datadir)/java/
++jardir=$(libdir)/
+ jar_DATA=$(top_builddir)/.libs/libbluray-$(BDJ_TYPE)-$(VERSION).jar
+ 
+ $(top_builddir)/.libs/libbluray-$(BDJ_TYPE)-$(VERSION).jar: all-local

@@ -81,6 +81,10 @@ for a in $(otool -LX "$TARGET_BINARY"  | grep "$EXTERNAL_LIBS" | awk ' { print $
 	install_name_tool -change "$a" "$DYLIB_NAMEPATH/$(basename $a)" "$TARGET_BINARY"
 done
 
+echo "Package $EXTERNAL_LIBS/lib/libbluray-*-*.jar"
+mkdir -p "$TARGET_FRAMEWORKS"
+cp -f $EXTERNAL_LIBS/lib/libbluray-*-*.jar $TARGET_FRAMEWORKS
+
 echo "Package $EXTERNAL_LIBS/lib/python$PYTHON_VERSION"
 mkdir -p "$TARGET_CONTENTS/Libraries/lib"
 PYTHONSYNC="rsync -aq --exclude .DS_Store --exclude *.a --exclude *.exe --exclude test --exclude tests"
