@@ -9,8 +9,7 @@ ARCHIVE=$(SOURCE).tar.bz2
 
 # configuration settings
 CONFIGURE=./configure --prefix=$(PREFIX) --disable-shared --exec-prefix=$(PREFIX) \
-  --disable-examples --disable-doxygen-doc \
-  --disable-bdjava-jar
+  --disable-examples --disable-doxygen-doc
 
 LIBDYLIB=$(PLATFORM)/.libs/libbluray.la
 
