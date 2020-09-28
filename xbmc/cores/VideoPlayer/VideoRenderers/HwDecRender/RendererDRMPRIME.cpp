@@ -60,9 +60,10 @@ CBaseRenderer* CRendererDRMPRIME::Create(CVideoBuffer* buffer)
       return nullptr;
     }
 
-    AVDRMLayerDescriptor* layer = &desc->layers[0];
-    uint32_t format = layer->format;
     uint64_t modifier = desc->objects[0].format_modifier;
+    uint32_t format = desc->format;
+    if (!format && desc->nb_layers == 1)
+      format = desc->layers[0].format;
 
     buf->ReleaseDescriptor();
 

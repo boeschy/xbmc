@@ -50,7 +50,9 @@ CBaseRenderer* CRendererDRMPRIMEGLES::Create(CVideoBuffer* buffer)
   }
 
   uint64_t modifier = desc->objects[0].format_modifier;
-  uint32_t format = desc->layers[0].format;
+  uint32_t format = desc->format;
+  if (!format && desc->nb_layers == 1)
+    format = desc->layers[0].format;
 
   buf->ReleaseDescriptor();
 
