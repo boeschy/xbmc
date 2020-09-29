@@ -39,6 +39,7 @@ public:
 
   bool SetProperty(const std::string& name, uint64_t value);
   bool SupportsProperty(const std::string& name);
+  bool SupportsPropertyAndValue(const char* name, uint64_t value);
 
 protected:
   explicit CDRMObject(int fd);
