@@ -38,7 +38,7 @@ CWinSystemGbm::CWinSystemGbm() :
 
 bool CWinSystemGbm::InitWindowSystem()
 {
-  const char* x11 = getenv("DISPLAY");
+  const char* x11 = getenv("X11_DISPLAY");
   const char* wayland = getenv("WAYLAND_DISPLAY");
   if (x11 || wayland)
   {
