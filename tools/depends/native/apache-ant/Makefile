@@ -1,17 +1,17 @@
 include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile
+PREFIX=$(NATIVEPREFIX)
+PLATFORM=$(NATIVEPLATFORM)
+
+DEPS= ../../Makefile.include Makefile 01-fix-chmod.patch
 
 # lib name, version
-LIBNAME=libass
-VERSION=0.14.0
-SOURCE=$(LIBNAME)-$(VERSION)
+LIBNAME=apache-ant
+VERSION=1.10.6
+SOURCE=$(LIBNAME)-$(VERSION)-src
 ARCHIVE=$(SOURCE).tar.gz
+BASE_URL=https://archive.apache.org/dist/ant/source
 
-# configuration settings
-CONFIGURE=cp -f $(CONFIG_SUB) $(CONFIG_GUESS) .; \
-          ./configure --prefix=$(PREFIX) --disable-shared
-
-LIBDYLIB=$(PLATFORM)/$(LIBNAME)/.libs/$(LIBNAME).a
+LIBDYLIB=$(PLATFORM)/dist/bin/ant
 
 all: .installed-$(PLATFORM)
 
@@ -21,18 +21,18 @@ $(TARBALLS_LOCATION)/$(ARCHIVE):
 $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
-	cd $(PLATFORM); $(AUTORECONF) -vif
-	cd $(PLATFORM); $(CONFIGURE)
+	cd $(PLATFORM); patch -p1 -i ../01-fix-chmod.patch
+	cd $(PLATFORM); ./bootstrap.sh
 
 $(LIBDYLIB): $(PLATFORM)
-	$(MAKE) -C $(PLATFORM)
+	cd $(PLATFORM); ./build.sh
 
 .installed-$(PLATFORM): $(LIBDYLIB)
-	$(MAKE) -C $(PLATFORM) install
+	cd $(PLATFORM); ANT_HOME=$(PREFIX) ./build.sh install-lite
 	touch $@
 
 clean:
-	$(MAKE) -C $(PLATFORM) clean
+	cd $(PLATFORM); ./build.sh clean
 	rm -f .installed-$(PLATFORM)
 
 distclean::

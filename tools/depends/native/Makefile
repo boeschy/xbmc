@@ -7,7 +7,7 @@ endif
 NATIVE= m4 gettext heimdal autoconf automake \
         libtool pkg-config yasm nasm cmake \
         gas-preprocessor libffi python3 zlib \
-        pcre swig \
+        pcre swig apache-ant \
         libpng libjpeg-turbo liblzo2 giflib \
         setuptools distutilscross JsonSchemaBuilder TexturePacker \
         flatbuffers \

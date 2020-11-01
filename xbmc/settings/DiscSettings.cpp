@@ -10,6 +10,7 @@
 
 #include "Settings.h"
 #include "dialogs/GUIDialogKaiToast.h"
+#include "filesystem/BlurayCallback.h"
 #include "lib/Setting.h"
 #include "messaging/helpers/DialogOKHelper.h"
 #include "utils/Variant.h"
@@ -19,6 +20,7 @@
 
 #include <libbluray/bluray-version.h>
 #include <libbluray/bluray.h>
+#include <libbluray/log_control.h>
 
 using namespace KODI::MESSAGING;
 
@@ -43,6 +45,8 @@ void CDiscSettings::OnSettingChanged(const std::shared_ptr<const CSetting>& sett
     {
       bool bdjWorking = false;
       BLURAY* bd = bd_init();
+      bd_set_debug_handler(CBlurayCallback::bluray_logger);
+      bd_set_debug_mask(DBG_CRIT | DBG_BLURAY | DBG_NAV | 0x3FFFF);
       const BLURAY_DISC_INFO* info = bd_get_disc_info(bd);
 
       if (!info->libjvm_detected)

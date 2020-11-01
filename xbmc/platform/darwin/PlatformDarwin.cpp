@@ -20,5 +20,7 @@ bool CPlatformDarwin::Init()
 
   setenv("OS", "OS X", true); // for python scripts that check the OS
 
+  setenv("LIBBLURAY_CP", CSpecialProtocol::TranslatePath("special://frameworks/").c_str(), 0);
+
   return true;
 }
