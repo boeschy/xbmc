@@ -23,9 +23,6 @@
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 
-#include "platform/freebsd/OptionalsReg.h"
-#include "platform/linux/OptionalsReg.h"
-
 #include <string.h>
 
 using namespace KODI::WINDOWING::GBM;
@@ -35,46 +32,7 @@ CWinSystemGbm::CWinSystemGbm() :
   m_GBM(new CGBMUtils),
   m_libinput(new CLibInputHandler)
 {
-  std::string envSink;
-  if (getenv("KODI_AE_SINK"))
-    envSink = getenv("KODI_AE_SINK");
-  if (StringUtils::EqualsNoCase(envSink, "ALSA"))
-  {
-    OPTIONALS::ALSARegister();
-  }
-  else if (StringUtils::EqualsNoCase(envSink, "PULSE"))
-  {
-    OPTIONALS::PulseAudioRegister();
-  }
-  else if (StringUtils::EqualsNoCase(envSink, "OSS"))
-  {
-    OPTIONALS::OSSRegister();
-  }
-  else if (StringUtils::EqualsNoCase(envSink, "SNDIO"))
-  {
-    OPTIONALS::SndioRegister();
-  }
-  else if (StringUtils::EqualsNoCase(envSink, "ALSA+PULSE"))
-  {
-    OPTIONALS::ALSARegister();
-    OPTIONALS::PulseAudioRegister();
-  }
-  else
-  {
-    if (!OPTIONALS::PulseAudioRegister())
-    {
-      if (!OPTIONALS::ALSARegister())
-      {
-        if (!OPTIONALS::SndioRegister())
-        {
-          OPTIONALS::OSSRegister();
-        }
-      }
-    }
-  }
-
   m_dpms = std::make_shared<CGBMDPMSSupport>();
-  m_lirc.reset(OPTIONALS::LircRegister());
   m_libinput->Start();
 }
 
@@ -119,14 +77,28 @@ bool CWinSystemGbm::InitWindowSystem()
     return false;
   }
 
-  CServiceBroker::GetSettingsComponent()
-      ->GetSettings()
-      ->GetSetting(CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE)
-      ->SetVisible(true);
-  CServiceBroker::GetSettingsComponent()
-      ->GetSettings()
-      ->GetSetting("videoscreen.limitguisize")
-      ->SetVisible(true);
+  auto settingsComponent = CServiceBroker::GetSettingsComponent();
+  if (!settingsComponent)
+    return false;
+
+  auto settings = settingsComponent->GetSettings();
+  if (!settings)
+    return false;
+
+  auto setting = settings->GetSetting(CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE);
+  if (setting)
+    setting->SetVisible(true);
+
+  setting = settings->GetSetting("videoscreen.limitguisize");
+  if (setting)
+    setting->SetVisible(true);
+
+  setting = settings->GetSetting(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
+  if (setting)
+  {
+    setting->SetVisible(false);
+    settings->SetBool(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK, false);
+  }
 
   CLog::Log(LOGDEBUG, "CWinSystemGbm::%s - initialized DRM", __FUNCTION__);
   return CWinSystemBase::InitWindowSystem();

@@ -107,8 +107,8 @@
 #define ADDON_INSTANCE_VERSION_IMAGEDECODER_XML_ID    "kodi.binary.instance.imagedecoder"
 #define ADDON_INSTANCE_VERSION_IMAGEDECODER_DEPENDS   "addon-instance/ImageDecoder.h"
 
-#define ADDON_INSTANCE_VERSION_INPUTSTREAM            "3.0.0"
-#define ADDON_INSTANCE_VERSION_INPUTSTREAM_MIN        "3.0.0"
+#define ADDON_INSTANCE_VERSION_INPUTSTREAM            "3.0.1"
+#define ADDON_INSTANCE_VERSION_INPUTSTREAM_MIN        "3.0.1"
 #define ADDON_INSTANCE_VERSION_INPUTSTREAM_XML_ID     "kodi.binary.instance.inputstream"
 #define ADDON_INSTANCE_VERSION_INPUTSTREAM_DEPENDS    "c-api/addon-instance/inputstream.h" \
                                                       "c-api/addon-instance/inputstream/demux_packet.h" \
@@ -129,8 +129,8 @@
 #define ADDON_INSTANCE_VERSION_PERIPHERAL_DEPENDS     "addon-instance/Peripheral.h" \
                                                       "addon-instance/PeripheralUtils.h"
 
-#define ADDON_INSTANCE_VERSION_PVR                    "7.0.2"
-#define ADDON_INSTANCE_VERSION_PVR_MIN                "7.0.2"
+#define ADDON_INSTANCE_VERSION_PVR                    "7.1.0"
+#define ADDON_INSTANCE_VERSION_PVR_MIN                "7.1.0"
 #define ADDON_INSTANCE_VERSION_PVR_XML_ID             "kodi.binary.instance.pvr"
 #define ADDON_INSTANCE_VERSION_PVR_DEPENDS            "c-api/addon-instance/pvr.h" \
                                                       "c-api/addon-instance/pvr/pvr_channel_groups.h" \
@@ -172,8 +172,8 @@
 #define ADDON_INSTANCE_VERSION_VISUALIZATION_DEPENDS  "addon-instance/Visualization.h" \
                                                       "c-api/addon-instance/visualization.h"
 
-#define ADDON_INSTANCE_VERSION_VIDEOCODEC             "2.0.0"
-#define ADDON_INSTANCE_VERSION_VIDEOCODEC_MIN         "2.0.0"
+#define ADDON_INSTANCE_VERSION_VIDEOCODEC             "2.0.2"
+#define ADDON_INSTANCE_VERSION_VIDEOCODEC_MIN         "2.0.1"
 #define ADDON_INSTANCE_VERSION_VIDEOCODEC_XML_ID      "kodi.binary.instance.videocodec"
 #define ADDON_INSTANCE_VERSION_VIDEOCODEC_DEPENDS     "c-api/addon-instance/video_codec.h" \
                                                       "c-api/addon-instance/inputstream/stream_codec.h" \

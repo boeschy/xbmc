@@ -465,9 +465,21 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
         case FF_PROFILE_H264_HIGH_10:
           profile = CJNIMediaCodecInfoCodecProfileLevel::AVCProfileHigh10;
           break;
+        case FF_PROFILE_H264_HIGH_422:
+          profile = CJNIMediaCodecInfoCodecProfileLevel::AVCProfileHigh422;
+          break;
+        case FF_PROFILE_H264_HIGH_444:
+          profile = CJNIMediaCodecInfoCodecProfileLevel::AVCProfileHigh444;
+          break;
+        // All currently not supported formats
         case FF_PROFILE_H264_HIGH_10_INTRA:
-          // No known h/w decoder supporting Hi10P
+        case FF_PROFILE_H264_HIGH_422_INTRA:
+        case FF_PROFILE_H264_HIGH_444_PREDICTIVE:
+        case FF_PROFILE_H264_HIGH_444_INTRA:
+        case FF_PROFILE_H264_CAVLC_444:
           goto FAIL;
+        default:
+          break;
       }
       m_mime = "video/avc";
       m_formatname = "amc-h264";
@@ -482,6 +494,12 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
       }
       break;
     case AV_CODEC_ID_HEVC:
+      if (m_hints.profile == FF_PROFILE_HEVC_REXT)
+      {
+        // No known h/w decoder supporting Hi10P
+        goto FAIL;
+      }
+
       if (m_hints.codec_tag == MKTAG('d', 'v', 'h', 'e'))
       {
         m_mime = "video/dolby-vision";
@@ -589,9 +607,8 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
                 m_hints.cryptoSession->keySystem);
       goto FAIL;
     }
-    CJNIMediaCrypto crypto(uuid, std::vector<char>(m_hints.cryptoSession->sessionId,
-                                                   m_hints.cryptoSession->sessionId +
-                                                       m_hints.cryptoSession->sessionIdSize));
+    CJNIMediaCrypto crypto(uuid, std::vector<char>(m_hints.cryptoSession->sessionId.begin(),
+                                                   m_hints.cryptoSession->sessionId.end()));
     m_needSecureDecoder =
         crypto.requiresSecureDecoderComponent(m_mime) &&
         (m_hints.cryptoSession->flags & DemuxCryptoSession::FLAG_SECURE_DECODER) != 0;
@@ -700,9 +717,8 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
     CLog::Log(LOGDEBUG, "CDVDVideoCodecAndroidMediaCodec::Open Initializing MediaCrypto");
 
     m_crypto =
-        new CJNIMediaCrypto(uuid, std::vector<char>(m_hints.cryptoSession->sessionId,
-                                                    m_hints.cryptoSession->sessionId +
-                                                        m_hints.cryptoSession->sessionIdSize));
+        new CJNIMediaCrypto(uuid, std::vector<char>(m_hints.cryptoSession->sessionId.begin(),
+                                                    m_hints.cryptoSession->sessionId.end()));
 
     if (!m_crypto)
     {

@@ -281,13 +281,52 @@ bool CPVRChannelGroupInternal::AddAndUpdateChannels(const CPVRChannelGroup& chan
 std::vector<std::shared_ptr<CPVRChannel>> CPVRChannelGroupInternal::RemoveDeletedChannels(const CPVRChannelGroup& channels)
 {
   std::vector<std::shared_ptr<CPVRChannel>> removedChannels = CPVRChannelGroup::RemoveDeletedChannels(channels);
-
-  for (const auto& channel : removedChannels)
+  if (!removedChannels.empty())
   {
-    // since channel was not found in the internal group, it was deleted from the backend
-    channel->Delete();
-  }
+    bool channelsDeleted = false;
 
+    const std::shared_ptr<CPVRDatabase> database = CServiceBroker::GetPVRManager().GetTVDatabase();
+    if (!database)
+    {
+      CLog::LogF(LOGERROR, "No TV database");
+    }
+    else
+    {
+      std::vector<std::shared_ptr<CPVREpg>> epgsToRemove;
+
+      for (const auto& channel : removedChannels)
+      {
+        const auto epg = channel->GetEPG();
+        if (epg)
+          epgsToRemove.emplace_back(epg);
+
+        // Note: We need to obtain a lock for every channel instance before we can lock
+        //       the TV db. This order is important. Otherwise deadlocks may occur.
+        channel->Lock();
+      }
+
+      // Note: We must lock the db the whole time, otherwise races may occur.
+      database->Lock();
+      for (const auto& channel : removedChannels)
+      {
+        // since channel was not found in the internal group, it was deleted from the backend
+        channelsDeleted |= channel->QueueDelete();
+        channel->Unlock();
+
+        size_t queryCount = database->GetDeleteQueriesCount();
+        if (queryCount > CHANNEL_COMMIT_QUERY_COUNT_LIMIT)
+          database->CommitDeleteQueries();
+      }
+
+      if (channelsDeleted)
+        database->CommitDeleteQueries();
+
+      database->Unlock();
+
+      // delete the EPG data for the removed channels
+      CServiceBroker::GetPVRManager().EpgContainer().QueueDeleteEpgs(epgsToRemove);
+    }
+  }
   return removedChannels;
 }
 

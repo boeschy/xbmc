@@ -65,7 +65,7 @@ namespace MUSIC_UTILS
           for (CVariant::const_iterator_array varid = pSongItem->GetProperty("artistid").begin_array();
             varid != pSongItem->GetProperty("artistid").end_array(); varid++)
           {
-            int idArtist = varid->asInteger();
+            int idArtist = static_cast<int>(varid->asInteger());
             result = (itemID == idArtist);
             if (result)
               break;
@@ -100,6 +100,8 @@ namespace MUSIC_UTILS
         db.SetArtForItem(itemID, type, m_artType, m_newArt);
       else
         db.RemoveArtForItem(itemID, type, m_artType);
+      // Artwork changed so set datemodified field for artist, album or song
+      db.SetItemUpdated(itemID, type);
 
       /* Update the art of the songs of the current music playlist.
       Song thumb is often a fallback from the album and fanart is from the artist(s).
