@@ -3929,7 +3929,7 @@ int CVideoPlayer::OnDiscNavResult(void* pData, int iMessage)
           if (time < 10000 && time > 0)
             m_dvd.iDVDStillTime += time;
         }
-        m_dvd.state = DVDSTATE_STILL;
+        // m_dvd.state = DVDSTATE_STILL;
         CLog::Log(LOGDEBUG, "BD_EVENT_STILL_TIME - waiting {} sec, with delay of {} sec",
                   m_dvd.iDVDStillTime, time / 1000);
       }
