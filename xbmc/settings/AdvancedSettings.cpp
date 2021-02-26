@@ -297,7 +297,7 @@ void CAdvancedSettings::Initialize()
   m_bShoutcastArt = true;
 
   m_musicThumbs = "folder.jpg|Folder.jpg|folder.JPG|Folder.JPG|cover.jpg|Cover.jpg|cover.jpeg|thumb.jpg|Thumb.jpg|thumb.JPG|Thumb.JPG";
-  m_musicArtistExtraArt = {};
+  m_musicArtistExtraArt = { };
   m_musicAlbumExtraArt = {};
 
   m_bMusicLibraryAllItemsOnBottom = false;
@@ -408,7 +408,6 @@ void CAdvancedSettings::Initialize()
   m_cacheMemSize = 1024 * 1024 * 20; // 20 MiB
   m_cacheBufferMode = CACHE_BUFFER_MODE_NETWORK; // Default (buffer all network filesystems)
   m_cacheChunkSize = 128 * 1024; // 128 KiB
-
   // the following setting determines the readRate of a player data
   // as multiply of the default data read rate
   m_cacheReadFactor = 4.0f;
@@ -446,6 +445,7 @@ void CAdvancedSettings::Initialize()
   m_stereoscopicregex_3d = "[-. _]3d[-. _]";
   m_stereoscopicregex_sbs = "[-. _]h?sbs[-. _]";
   m_stereoscopicregex_tab = "[-. _]h?tab[-. _]";
+  m_stereoscopicregex_mvc = "[-. _]mvc[-. _]";
 
   m_logLevelHint = m_logLevel = LOG_LEVEL_NORMAL;
 
@@ -606,6 +606,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     XMLUtils::GetString(pElement, "stereoscopicregex3d", m_stereoscopicregex_3d);
     XMLUtils::GetString(pElement, "stereoscopicregexsbs", m_stereoscopicregex_sbs);
     XMLUtils::GetString(pElement, "stereoscopicregextab", m_stereoscopicregex_tab);
+    XMLUtils::GetString(pElement, "stereoscopicregexmvc", m_stereoscopicregex_mvc);
     XMLUtils::GetFloat(pElement, "subsdelayrange", m_videoSubsDelayRange, 10, 600);
     XMLUtils::GetFloat(pElement, "audiodelayrange", m_videoAudioDelayRange, 10, 600);
     XMLUtils::GetString(pElement, "defaultplayer", m_videoDefaultPlayer);
@@ -698,7 +699,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
           CLog::Log(LOGWARNING,
                     "Ignoring malformed refreshrate override, fpsmin:{:f} fpsmax:{:f} "
                     "refreshmin:{:f} refreshmax:{:f}",
-                    override.fpsmin, override.fpsmax, override.refreshmin, override.refreshmax);
+              override.fpsmin, override.fpsmax, override.refreshmin, override.refreshmax);
 
         pRefreshOverride = pRefreshOverride->NextSiblingElement("override");
       }
@@ -730,7 +731,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
           CLog::Log(LOGWARNING,
                     "Ignoring malformed refreshrate fallback, fpsmin:{:f} fpsmax:{:f} "
                     "refreshmin:{:f} refreshmax:{:f}",
-                    fallback.fpsmin, fallback.fpsmax, fallback.refreshmin, fallback.refreshmax);
+              fallback.fpsmin, fallback.fpsmax, fallback.refreshmin, fallback.refreshmax);
 
         pRefreshFallback = pRefreshFallback->NextSiblingElement("fallback");
       }

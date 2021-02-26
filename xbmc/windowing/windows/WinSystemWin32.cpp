@@ -515,8 +515,9 @@ bool CWinSystemWin32::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool 
     return true;
   }
 
-  // entering to stereo mode, limit resolution to 1080p@23.976
-  if (stereoChange && !IsStereoEnabled() && res.iWidth > 1280)
+  // entering to stereo mode, limit resolution to 1080p@23.976 if selected by the user
+  if (stereoChange && !IsStereoEnabled() && res.iWidth > 1280
+   && CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_STEREOHWLOCKSINGLEFPS))
   {
     res = CDisplaySettings::GetInstance().GetResolutionInfo(
         CResolutionUtils::ChooseBestResolution(24.f / 1.001f, 1920, 1080, true));

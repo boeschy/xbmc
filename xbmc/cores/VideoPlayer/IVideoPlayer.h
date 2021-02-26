@@ -96,6 +96,7 @@ public:
   virtual int GetVideoBitrate() = 0;
   virtual void SetSpeed(int iSpeed) = 0;
   virtual bool IsEOS() { return false; }
+  virtual bool SupportsExtension() const { return false; };
 };
 
 class CDVDAudioCodec;
@@ -122,5 +123,5 @@ public:
   bool IsStalled() const override = 0;
   virtual bool IsPassthrough() const = 0;
   virtual float GetDynamicRangeAmplification() const = 0;
-  virtual bool IsEOS() { return false; }
+  virtual bool IsEOS() { return false; };
 };

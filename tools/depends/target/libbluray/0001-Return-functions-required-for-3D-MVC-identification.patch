@@ -1,0 +1,207 @@
+From 85e81532ba72df31eb4376ae46f4db62ffcfabea Mon Sep 17 00:00:00 2001
+From: Assaf Paz <damagedspline@gmail.com>
+Date: Thu, 3 Mar 2022 14:09:28 +0200
+Subject: [PATCH] Return functions required for 3D MVC identification
+
+Signed-off-by: Assaf Paz <damagedspline@gmail.com>
+---
+ CMakeLists.txt         |  2 ++
+ cmake/libbluray.def    |  6 ++++
+ src/libbluray/bluray.c | 72 ++++++++++++++++++++++++++++++++++++++++++
+ src/libbluray/bluray.h | 45 ++++++++++++++++++++++++++
+ 4 files changed, 125 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f753cf6..ecec33b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -260,6 +260,8 @@ install(FILES
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/libbluray/player_settings.h
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/util/log_control.h
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/libbluray/bdnav/meta_data.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/libbluray/bdnav/mpls_data.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/libbluray/bdnav/uo_mask_table.h
+   DESTINATION include/libbluray)
+ 
+ install(FILES
+diff --git a/cmake/libbluray.def b/cmake/libbluray.def
+index 2beec83..0ef390e 100644
+--- a/cmake/libbluray.def
++++ b/cmake/libbluray.def
+@@ -21,6 +21,7 @@ EXPORTS
+        bd_get_playlist_info
+        bd_get_sound_effect
+        bd_get_title_info
++       bd_get_title_mpls
+        bd_get_title_size
+        bd_get_titles
+        bd_get_version
+@@ -66,3 +67,8 @@ EXPORTS
+        bd_tell
+        bd_tell_time
+        bd_user_input
++       bd_clip_open
++       bd_clip_read
++       bd_clip_seek
++       bd_clip_size
++       bd_clip_close
+diff --git a/src/libbluray/bluray.c b/src/libbluray/bluray.c
+index fcb3e6a..3458c41 100644
+--- a/src/libbluray/bluray.c
++++ b/src/libbluray/bluray.c
+@@ -3988,6 +3988,13 @@ struct mpls_pl *bd_read_mpls(const char *mpls_file)
+     return mpls_parse(mpls_file);
+ }
+ 
++struct mpls_pl *bd_get_title_mpls(BLURAY *bd)
++{
++    if (bd != NULL && bd->title != NULL && bd->title->pl != NULL)
++        return bd->title->pl;
++    return NULL;
++}
++
+ void bd_free_mpls(struct mpls_pl *pl)
+ {
+     mpls_free(&pl);
+@@ -4012,3 +4019,68 @@ void bd_free_bdjo(struct bdjo_data *obj)
+ {
+     bdjo_free(&obj);
+ }
++
++/**
++ * Open clip file
++ *
++ * @param bd  BLURAY object
++ * @param file  name of a clip (relative to BDMV\STREAM folder)
++ * @return the bd_file_s struct if succes or nullptr otherwise
++ */
++struct bd_file_s* bd_clip_open(BLURAY *bd, const char *file)
++{
++	struct bd_file_s* fp = NULL;
++	bd_mutex_lock(&bd->mutex);
++	fp = disc_open_stream(bd->disc, file);
++	bd_mutex_unlock(&bd->mutex);
++
++	return fp;
++}
++
++/**
++ *  Seek to pos in opened file
++ *
++ * @param file  bd_file_s struct
++ * @param offset  number of bytes to offset from origin
++ * @param origin  position used as reference for the offset
++ * @return current seek position
++ */
++int64_t bd_clip_seek(struct bd_file_s* file, int64_t offset, int32_t origin)
++{
++	return file_seek(file, offset, origin);
++}
++
++/**
++ *  Read from opened file
++ *
++ * @param file  bd_file_s struct
++ * @param buf  pointer to a block of memory with a size of bytes
++ * @param size  size, in bytes, to be read.
++ * @return current position
++ */
++int64_t bd_clip_read(struct bd_file_s* file, uint8_t *buf, uint64_t size)
++{
++	file_read(file, buf, size);
++}
++
++/**
++ *  Get size of opened file
++ *
++ * @param file  bd_file_s struct
++ * @return size of file
++ */
++int64_t bd_clip_size(struct bd_file_s* file)
++{
++	return file_size(file);
++}
++
++/**
++ *  Close the file
++ *
++ * @param file  bd_file_s struct
++ * @return size of file
++ */
++void bd_clip_close(struct bd_file_s* file)
++{
++	file_close(file);
++}
+diff --git a/src/libbluray/bluray.h b/src/libbluray/bluray.h
+index 01d4671..85f70f3 100644
+--- a/src/libbluray/bluray.h
++++ b/src/libbluray/bluray.h
+@@ -1079,6 +1079,7 @@ void bd_free_clpi(struct clpi_cl *cl);
+ 
+ 
+ struct mpls_pl;
++struct mpls_pl *bd_get_title_mpls(BLURAY *bd);
+ struct mpls_pl *bd_read_mpls(const char *mpls_file);
+ void bd_free_mpls(struct mpls_pl *);
+ 
+@@ -1095,6 +1096,15 @@ void bd_free_bdjo(struct bdjo_data *);
+ int  bd_start_bdj(BLURAY *bd, const char* start_object); // start BD-J from the specified BD-J object (should be a 5 character string)
+ void bd_stop_bdj(BLURAY *bd); // shutdown BD-J and clean up resources
+ 
++/**
++ * Open clip file
++ *
++ * @param bd  BLURAY object
++ * @param file  name of a clip (relative to BDMV\STREAM folder)
++ * @return the bd_file_s struct if succes or nullptr otherwise
++ */
++struct bd_file_s* bd_clip_open(BLURAY *bd, const char *file);
++
+ /**
+  *
+  *  Read a file from BluRay Virtual File System.
+@@ -1130,6 +1140,41 @@ int bd_read_file(BLURAY *, const char *path, void **data, int64_t *size);
+ struct bd_dir_s *bd_open_dir(BLURAY *, const char *dir);
+ struct bd_file_s *bd_open_file_dec(BLURAY *, const char *path);
+ 
++/**
++ *  Seek to pos in opened file
++ *
++ * @param file  bd_file_s struct
++ * @param offset  number of bytes to offset from origin
++ * @param origin  position used as reference for the offset
++ * @return current seek position
++ */
++int64_t bd_clip_seek(struct bd_file_s* file, int64_t offset, int32_t origin);
++
++/**
++ *  Read from opened file
++ *
++ * @param file  bd_file_s struct
++ * @param buf  pointer to a block of memory with a size of bytes
++ * @param size  size, in bytes, to be read.
++ * @return current position
++ */
++int64_t bd_clip_read(struct bd_file_s* file, uint8_t *buf, uint64_t size);
++
++/**
++ *  Get size of opened file
++ *
++ * @param file  bd_file_s struct
++ * @return size of file
++ */
++int64_t bd_clip_size(struct bd_file_s* file);
++
++/**
++ *  Close the file
++ *
++ * @param file  bd_file_s struct
++ * @return size of file
++ */
++void bd_clip_close(struct bd_file_s* file);
+ 
+ #ifdef __cplusplus
+ }
+-- 
+2.30.0.windows.2
+
