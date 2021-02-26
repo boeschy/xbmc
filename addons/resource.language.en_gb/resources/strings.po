@@ -23411,3 +23411,43 @@ msgstr ""
 msgctxt "#39189"
 msgid "Available only with manual subtitle position"
 msgstr ""
+
+#. MVC enable
+msgctxt "#60000"
+msgid "Support 3D MVC"
+msgstr ""
+
+#. MVC enable help
+msgctxt "#60001"
+msgid "3D MVC is full frame stereoscopic 3D usually available on commercial 3D Blu-ray discs"
+msgstr ""
+
+#. MVC decoder HW support level
+msgctxt "#60002"
+msgid "3D MVC decoder HW support level"
+msgstr ""
+
+#. MVC decoder HW support level help
+msgctxt "#60003"
+msgid "Some GPUs have limited HW decoding support. In case of issues with 3D MVC decoding, try choosing a lower value. It is recommended to select the highest level that is verified to be working."
+msgstr ""
+
+#. 3D Display control
+msgctxt "#60004"
+msgid "Auto control Windows 3D Display mode"
+msgstr ""
+
+#. 3D Display control help
+msgctxt "#60005"
+msgid "In order for full frame 3D (HDMI frame packing) to work, Windows must have the 3D Display flag enabled in the Display settings. Enabling this option will auto control the 3D Display flag according to the played content."
+msgstr ""
+
+#. Lock HW based to single fps
+msgctxt "#60006"
+msgid "Lock HW based stereoscopic 3D to a single fps"
+msgstr ""
+
+#. Lock HW based to single fps help
+msgctxt "#60007"
+msgid "Some system configurations only support a single stereoscopic 3D resolution (24/1.001), enable this in such cases."
+msgstr ""

@@ -83,6 +83,9 @@ if(UNIX)
   option(ENABLE_INTERNAL_GTEST "Enable internal gtest?" OFF)
   option(ENABLE_INTERNAL_UDFREAD "Enable internal udfread?" OFF)
 endif()
+if (WIN32)
+  option(ENABLE_BUILD_BLURAY "Enable build bluray?" ON)
+endif()
 # prefer kissfft from xbmc/contrib but let use system one on unices
 cmake_dependent_option(ENABLE_INTERNAL_KISSFFT "Enable internal kissfft?" ON "UNIX" ON)
 # System options
@@ -209,6 +212,14 @@ set(optional_deps Alsa
                   Udfread
                   XSLT
                   ${PLATFORM_OPTIONAL_DEPS})
+
+if(ENABLE_BUILD_BLURAY)
+  # Udfread is dependency for Bluray - as such we must make sure that the 
+  # declare order is correct or build will fail due to missing dependecy.
+  # Below will move Bluray as the last item
+  list(REMOVE_ITEM optional_deps Bluray)
+  list(APPEND optional_deps Bluray)
+endif()
 
 # Check optional deps first, since their availability can influence required ones, e.g. ffmpeg
 core_optional_dep(${optional_deps})

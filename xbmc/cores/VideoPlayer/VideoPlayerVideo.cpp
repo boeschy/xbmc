@@ -431,7 +431,6 @@ void CVideoPlayerVideo::Process()
     {
       if(m_pVideoCodec)
         m_pVideoCodec->Reset();
-
       if (m_picture.videoBuffer)
       {
         m_picture.videoBuffer->Release();
@@ -448,7 +447,6 @@ void CVideoPlayerVideo::Process()
       bool sync = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
       if(m_pVideoCodec)
         m_pVideoCodec->Reset();
-
       if (m_picture.videoBuffer)
       {
         m_picture.videoBuffer->Release();
@@ -479,7 +477,6 @@ void CVideoPlayerVideo::Process()
       m_speed = std::static_pointer_cast<CDVDMsgInt>(pMsg)->m_value;
       if (m_pVideoCodec)
         m_pVideoCodec->SetSpeed(m_speed);
-
       m_droppingStats.Reset();
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_STREAMCHANGE))

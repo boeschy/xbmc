@@ -10,6 +10,10 @@
 # UDFREAD_LIBRARIES - the udfread libraries
 # UDFREAD_DEFINITIONS - the udfread definitions
 
+
+if (ENABLE_BUILD_BLURAY)
+  include(${CMAKE_SOURCE_DIR}/tools/depends/target/udfread/build_udfread.cmake)
+else()
 if(ENABLE_INTERNAL_UDFREAD)
   include(cmake/scripts/common/ModuleHelpers.cmake)
 
@@ -30,17 +34,17 @@ if(ENABLE_INTERNAL_UDFREAD)
 
   set_property(GLOBAL APPEND PROPERTY INTERNAL_DEPS_PROP udfread)
 else()
-  if(PKG_CONFIG_FOUND)
-    pkg_check_modules(PC_UDFREAD udfread>=1.0.0 QUIET)
-  endif()
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(PC_UDFREAD udfread>=1.0.0 QUIET)
+endif()
 
-  find_path(UDFREAD_INCLUDE_DIR NAMES udfread/udfread.h
-                            PATHS ${PC_UDFREAD_INCLUDEDIR})
+find_path(UDFREAD_INCLUDE_DIR NAMES udfread/udfread.h
+                          PATHS ${PC_UDFREAD_INCLUDEDIR})
 
-  find_library(UDFREAD_LIBRARY NAMES udfread libudfread
-                           PATHS ${PC_UDFREAD_LIBDIR})
+find_library(UDFREAD_LIBRARY NAMES udfread libudfread
+                         PATHS ${PC_UDFREAD_LIBDIR})
 
-  set(UDFREAD_VERSION ${PC_UDFREAD_VERSION})
+set(UDFREAD_VERSION ${PC_UDFREAD_VERSION})
 endif()
 
 include(FindPackageHandleStandardArgs)
@@ -55,3 +59,4 @@ if(UDFREAD_FOUND)
 endif()
 
 mark_as_advanced(UDFREAD_INCLUDE_DIR UDFREAD_LIBRARY)
+endif()

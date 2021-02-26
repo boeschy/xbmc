@@ -65,7 +65,7 @@
 #include "video/Bookmark.h"
 #include "video/VideoInfoTag.h"
 #include "windowing/WinSystem.h"
-
+#include"DVDCodecs/DVDCodecUtils.h"
 #include <iterator>
 #include <utility>
 
@@ -3764,6 +3764,11 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
 
     if (!player->OpenStream(hint))
       return false;
+
+    // disable extension reading if player (i.e. decoder) doesn't support it
+    std::shared_ptr<CDVDInputStream::IExtensionStream> ext = std::dynamic_pointer_cast<CDVDInputStream::IExtensionStream>(m_pInputStream);
+    if (ext && !dynamic_cast<IDVDStreamPlayerVideo*>(player)->SupportsExtension())
+      ext->DisableExtension();
 
     player->SendMessage(std::make_shared<CDVDMsgBool>(CDVDMsg::GENERAL_PAUSE, m_displayLost), 1);
 
