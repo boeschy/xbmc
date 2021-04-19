@@ -17,7 +17,7 @@ bool CPlatformDarwin::Init()
   if (!CPlatformPosix::Init())
     return false;
   setenv("SSL_CERT_FILE", CSpecialProtocol::TranslatePath("special://xbmc/system/certs/cacert.pem").c_str(), 0);
-
+  setenv("LIBBLURAY_CP", CSpecialProtocol::TranslatePath("special://frameworks/").c_str(), 0);
   setenv("OS", "OS X", true); // for python scripts that check the OS
 
   return true;
