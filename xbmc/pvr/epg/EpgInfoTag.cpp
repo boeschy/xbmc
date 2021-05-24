@@ -177,10 +177,6 @@ void CPVREpgInfoTag::Serialize(CVariant& value) const
   value["episodename"] = m_strEpisodeName;
   value["episodenum"] = m_iEpisodeNumber;
   value["episodepart"] = m_iEpisodePart;
-  value["hastimer"] = false; // compat
-  value["hastimerrule"] = false; // compat
-  value["hasrecording"] = false; // compat
-  value["recording"] = ""; // compat
   value["isactive"] = IsActive();
   value["wasactive"] = WasActive();
   value["isseries"] = IsSeries();
@@ -347,7 +343,7 @@ const std::string CPVREpgInfoTag::GetCastLabel() const
   // Note: see CVideoInfoTag::GetCast for reference implementation.
   std::string strLabel;
   for (const auto& castEntry : m_cast)
-    strLabel += StringUtils::Format("%s\n", castEntry.c_str());
+    strLabel += StringUtils::Format("{}\n", castEntry);
 
   return StringUtils::TrimRight(strLabel, "\n");
 }
@@ -577,7 +573,8 @@ std::vector<PVR_EDL_ENTRY> CPVREpgInfoTag::GetEdl() const
 
 void CPVREpgInfoTag::UpdatePath()
 {
-  m_strFileNameAndPath = StringUtils::Format("pvr://guide/%04i/%s.epg", EpgID(), m_startTime.GetAsDBDateTime().c_str());
+  m_strFileNameAndPath =
+      StringUtils::Format("pvr://guide/{:04}/{}.epg", EpgID(), m_startTime.GetAsDBDateTime());
 }
 
 int CPVREpgInfoTag::EpgID() const

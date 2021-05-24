@@ -86,12 +86,12 @@ bool CWinShader::UnlockVertexBuffer()
 
 bool CWinShader::LoadEffect(const std::string& filename, DefinesMap* defines)
 {
-  CLog::LogF(LOGDEBUG, "loading shader %s", filename);
+  CLog::LogF(LOGDEBUG, "loading shader {}", filename);
 
   XFILE::CFileStream file;
   if(!file.Open(filename))
   {
-    CLog::LogF(LOGERROR, "failed to open file %s", filename);
+    CLog::LogF(LOGERROR, "failed to open file {}", filename);
     return false;
   }
 
@@ -100,7 +100,7 @@ bool CWinShader::LoadEffect(const std::string& filename, DefinesMap* defines)
 
   if (!m_effect.Create(pStrEffect, defines))
   {
-    CLog::LogF(LOGERROR, "%s failed", pStrEffect);
+    CLog::LogF(LOGERROR, "{} failed", pStrEffect);
     return false;
   }
 
@@ -207,11 +207,14 @@ void COutputShader::ApplyEffectParameters(CD3DEffect &effect, unsigned sourceWid
 
     effect.SetScalar("g_toneP1", param);
     effect.SetFloatArray("g_coefsDst", coefs, 3);
+    m_toneMappingDebug = param;
   }
   else if (m_toneMapping && m_toneMappingMethod == VS_TONEMAPMETHOD_ACES)
   {
-    effect.SetScalar("g_luminance", GetLuminanceValue());
+    float lumin = GetLuminanceValue();
+    effect.SetScalar("g_luminance", lumin);
     effect.SetScalar("g_toneP1", m_toneMappingParam);
+    m_toneMappingDebug = lumin;
   }
   else if (m_toneMapping && m_toneMappingMethod == VS_TONEMAPMETHOD_HABLE)
   {
@@ -220,6 +223,7 @@ void COutputShader::ApplyEffectParameters(CD3DEffect &effect, unsigned sourceWid
     float lumin_div100 = lumin / (100.0f * m_toneMappingParam);
     effect.SetScalar("g_toneP1", lumin_factor);
     effect.SetScalar("g_toneP2", lumin_div100);
+    m_toneMappingDebug = lumin;
   }
 }
 
@@ -304,7 +308,7 @@ bool COutputShader::Create(
 
   if (!LoadEffect(effectString, &defines))
   {
-    CLog::LogF(LOGERROR, "Failed to load shader %s.", effectString);
+    CLog::LogF(LOGERROR, "Failed to load shader {}.", effectString);
     return false;
   }
 
@@ -509,6 +513,45 @@ void COutputShader::CreateDitherView()
   m_useDithering = true;
 }
 
+std::string COutputShader::GetDebugInfo()
+{
+  std::string tone = "OFF";
+  std::string hlg = "OFF";
+  std::string lut = "OFF";
+  std::string dither = "OFF";
+
+  if (m_toneMapping)
+  {
+    std::string method;
+    switch (m_toneMappingMethod)
+    {
+      case VS_TONEMAPMETHOD_REINHARD:
+        method = "Reinhard";
+        break;
+      case VS_TONEMAPMETHOD_ACES:
+        method = "ACES";
+        break;
+      case VS_TONEMAPMETHOD_HABLE:
+        method = "Hable";
+        break;
+    }
+    tone = StringUtils::Format("ON ({}, {:.2f}, {:.2f}{})", method, m_toneMappingParam,
+                               m_toneMappingDebug, (m_toneMappingMethod == 1) ? "" : " nits");
+  }
+
+  if (m_useHLGtoPQ)
+    hlg = "ON (peak 1000 nits)";
+
+  if (m_useLut)
+    lut = StringUtils::Format("ON (size {})", m_lutSize);
+
+  if (m_useDithering)
+    dither = StringUtils::Format("ON (depth {})", m_ditherDepth);
+
+  return StringUtils::Format("Tone mapping: {} | HLG to PQ: {} | 3D LUT: {} | Dithering: {}", tone,
+                             hlg, lut, dither);
+}
+
 //==================================================================================
 
 bool CYUV2RGBShader::Create(AVPixelFormat fmt, AVColorPrimaries dstPrimaries,
@@ -555,7 +598,7 @@ bool CYUV2RGBShader::Create(AVPixelFormat fmt, AVColorPrimaries dstPrimaries,
 
   if(!LoadEffect(effectString, &defines))
   {
-    CLog::LogF(LOGERROR, "Failed to load shader %s.", effectString);
+    CLog::LogF(LOGERROR, "Failed to load shader {}.", effectString);
     return false;
   }
 
@@ -778,7 +821,7 @@ bool CConvolutionShader1Pass::Create(ESCALINGMETHOD method, const std::shared_pt
       effectString = "special://xbmc/system/shaders/convolution-6x6_d3d.fx";
       break;
     default:
-      CLog::LogF(LOGERROR, "scaling method %d not supported.", method);
+      CLog::LogF(LOGERROR, "scaling method {} not supported.", method);
       return false;
   }
 
@@ -801,7 +844,7 @@ bool CConvolutionShader1Pass::Create(ESCALINGMETHOD method, const std::shared_pt
 
   if(!LoadEffect(effectString, &defines))
   {
-    CLog::LogF(LOGERROR, "Failed to load shader %s.", effectString);
+    CLog::LogF(LOGERROR, "Failed to load shader {}.", effectString);
     return false;
   }
 
@@ -914,7 +957,7 @@ bool CConvolutionShaderSeparable::Create(ESCALINGMETHOD method, const std::share
       effectString = "special://xbmc/system/shaders/convolutionsep-6x6_d3d.fx";
       break;
     default:
-      CLog::LogF(LOGERROR, "scaling method %d not supported.", method);
+      CLog::LogF(LOGERROR, "scaling method {} not supported.", method);
       return false;
   }
 
@@ -943,7 +986,7 @@ bool CConvolutionShaderSeparable::Create(ESCALINGMETHOD method, const std::share
 
   if(!LoadEffect(effectString, &defines))
   {
-    CLog::LogF(LOGERROR, "Failed to load shader %s.", effectString);
+    CLog::LogF(LOGERROR, "Failed to load shader {}.", effectString);
     return false;
   }
 
@@ -999,7 +1042,7 @@ bool CConvolutionShaderSeparable::ChooseIntermediateD3DFormat()
     return false;
   }
 
-  CLog::LogF(LOGDEBUG, "format %i", m_IntermediateFormat);
+  CLog::LogF(LOGDEBUG, "format {}", m_IntermediateFormat);
   return true;
 }
 
@@ -1176,7 +1219,7 @@ bool CTestShader::Create()
 
   if (!m_effect.Create(strShader, nullptr))
   {
-    CLog::LogF(LOGERROR, "Failed to create test shader: %s", strShader);
+    CLog::LogF(LOGERROR, "Failed to create test shader: {}", strShader);
     return false;
   }
   return true;

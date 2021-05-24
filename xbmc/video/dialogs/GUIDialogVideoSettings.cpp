@@ -103,9 +103,11 @@ void CGUIDialogVideoSettings::OnSettingChanged(const std::shared_ptr<const CSett
                                                vs.m_CustomNonLinStretch);
 
     m_viewModeChanged = true;
-    GetSettingsManager()->SetNumber(SETTING_VIDEO_ZOOM, vs.m_CustomZoomAmount);
-    GetSettingsManager()->SetNumber(SETTING_VIDEO_PIXEL_RATIO, vs.m_CustomPixelRatio);
-    GetSettingsManager()->SetNumber(SETTING_VIDEO_VERTICAL_SHIFT, vs.m_CustomVerticalShift);
+    GetSettingsManager()->SetNumber(SETTING_VIDEO_ZOOM, static_cast<double>(vs.m_CustomZoomAmount));
+    GetSettingsManager()->SetNumber(SETTING_VIDEO_PIXEL_RATIO,
+                                    static_cast<double>(vs.m_CustomPixelRatio));
+    GetSettingsManager()->SetNumber(SETTING_VIDEO_VERTICAL_SHIFT,
+                                    static_cast<double>(vs.m_CustomVerticalShift));
     GetSettingsManager()->SetBool(SETTING_VIDEO_NONLIN_STRETCH, vs.m_CustomNonLinStretch);
     m_viewModeChanged = false;
   }
@@ -221,8 +223,8 @@ void CGUIDialogVideoSettings::OnSettingAction(const std::shared_ptr<const CSetti
     if (!settings)
       return;
 
-    auto setting = settings->GetSetting(CSettings::SETTING_VIDEOSCREEN_GUICALIBRATION);
-    if (!setting)
+    auto calibsetting = settings->GetSetting(CSettings::SETTING_VIDEOSCREEN_GUICALIBRATION);
+    if (!calibsetting)
     {
       CLog::Log(LOGERROR, "Failed to load setting for: {}",
                 CSettings::SETTING_VIDEOSCREEN_GUICALIBRATION);
@@ -231,7 +233,7 @@ void CGUIDialogVideoSettings::OnSettingAction(const std::shared_ptr<const CSetti
 
     // launch calibration window
     if (profileManager->GetMasterProfile().getLockMode() != LOCK_MODE_EVERYONE &&
-        g_passwordManager.CheckSettingLevelLock(setting->GetLevel()))
+        g_passwordManager.CheckSettingLevelLock(calibsetting->GetLevel()))
       return;
 
     CServiceBroker::GetGUI()->GetWindowManager().ForceActivateWindow(WINDOW_SCREEN_CALIBRATION);
@@ -489,7 +491,7 @@ void CGUIDialogVideoSettings::VideoStreamsOptionFiller(
     if (!info.name.empty())
     {
       if (!strLanguage.empty())
-        strItem = StringUtils::Format("%s - %s", strLanguage.c_str(), info.name.c_str());
+        strItem = StringUtils::Format("{} - {}", strLanguage, info.name);
       else
         strItem = info.name;
     }
@@ -499,17 +501,17 @@ void CGUIDialogVideoSettings::VideoStreamsOptionFiller(
     }
 
     if (info.codecName.empty())
-      strItem += StringUtils::Format(" (%ix%i", info.width, info.height);
+      strItem += StringUtils::Format(" ({}x{}", info.width, info.height);
     else
-      strItem += StringUtils::Format(" (%s, %ix%i", info.codecName.c_str(), info.width, info.height);
+      strItem += StringUtils::Format(" ({}, {}x{}", info.codecName, info.width, info.height);
 
     if (info.bitrate)
-      strItem += StringUtils::Format(", %i bps)", info.bitrate);
+      strItem += StringUtils::Format(", {} bps)", info.bitrate);
     else
       strItem += ")";
 
     strItem += FormatFlags(info.flags);
-    strItem += StringUtils::Format(" (%i/%i)", i + 1, videoStreamCount);
+    strItem += StringUtils::Format(" ({}/{})", i + 1, videoStreamCount);
     list.emplace_back(strItem, i);
   }
 
@@ -546,7 +548,7 @@ std::string CGUIDialogVideoSettings::FormatFlags(StreamFlags flags)
   std::string formated = StringUtils::Join(localizedFlags, ", ");
 
   if (!formated.empty())
-    formated = StringUtils::Format(" [%s]", formated);
+    formated = StringUtils::Format(" [{}]", formated);
 
   return formated;
 }

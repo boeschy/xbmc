@@ -53,20 +53,20 @@ void CAdvancedSettings::OnSettingsLoaded()
   Load(*profileManager);
 
   // default players?
-  CLog::Log(LOGINFO, "Default Video Player: %s", m_videoDefaultPlayer.c_str());
-  CLog::Log(LOGINFO, "Default Audio Player: %s", m_audioDefaultPlayer.c_str());
+  CLog::Log(LOGINFO, "Default Video Player: {}", m_videoDefaultPlayer);
+  CLog::Log(LOGINFO, "Default Audio Player: {}", m_audioDefaultPlayer);
 
   // setup any logging...
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
   if (settings->GetBool(CSettings::SETTING_DEBUG_SHOWLOGINFO))
   {
     m_logLevel = std::max(m_logLevelHint, LOG_LEVEL_DEBUG_FREEMEM);
-    CLog::Log(LOGINFO, "Enabled debug logging due to GUI setting (%d)", m_logLevel);
+    CLog::Log(LOGINFO, "Enabled debug logging due to GUI setting ({})", m_logLevel);
   }
   else
   {
     m_logLevel = std::min(m_logLevelHint, LOG_LEVEL_DEBUG/*LOG_LEVEL_NORMAL*/);
-    CLog::Log(LOGINFO, "Disabled debug logging due to GUI setting. Level %d.", m_logLevel);
+    CLog::Log(LOGINFO, "Disabled debug logging due to GUI setting. Level {}.", m_logLevel);
   }
   CServiceBroker::GetLogging().SetLogLevel(m_logLevel);
 }
@@ -342,6 +342,9 @@ void CAdvancedSettings::Initialize()
                                   //with ipv6.
   m_curlDisableHTTP2 = false;
 
+#if defined(TARGET_WINDOWS_DESKTOP)
+  m_minimizeToTray = false;
+#endif
 #if defined(TARGET_DARWIN_EMBEDDED)
   m_startFullScreen = true;
 #else
@@ -379,8 +382,9 @@ void CAdvancedSettings::Initialize()
   m_PVRDefaultSortOrder.sortOrder = SortOrderDescending;
 
   m_cacheMemSize = 1024 * 1024 * 20; // 20 MiB
-  m_cacheBufferMode = CACHE_BUFFER_MODE_INTERNET; // Default (buffer all internet streams/filesystems)
+  m_cacheBufferMode = CACHE_BUFFER_MODE_REMOTE; // Default (buffer all remote filesystems)
   m_cacheChunkSize = 128 * 1024; // 128 KiB
+
   // the following setting determines the readRate of a player data
   // as multiply of the default data read rate
   m_cacheReadFactor = 4.0f;
@@ -427,6 +431,7 @@ void CAdvancedSettings::Initialize()
   m_userAgent = g_sysinfo.GetUserAgent();
 
   m_nfsTimeout = 5;
+  m_nfsRetries = -1;
 
   m_initialized = true;
 }
@@ -455,25 +460,26 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
   CXBMCTinyXML advancedXML;
   if (!CFile::Exists(file))
   {
-    CLog::Log(LOGINFO, "No settings file to load (%s)", file.c_str());
+    CLog::Log(LOGINFO, "No settings file to load ({})", file);
     return;
   }
 
   if (!advancedXML.LoadFile(file))
   {
-    CLog::Log(LOGERROR, "Error loading %s, Line %d\n%s", file.c_str(), advancedXML.ErrorRow(), advancedXML.ErrorDesc());
+    CLog::Log(LOGERROR, "Error loading {}, Line {}\n{}", file, advancedXML.ErrorRow(),
+              advancedXML.ErrorDesc());
     return;
   }
 
   TiXmlElement *pRootElement = advancedXML.RootElement();
   if (!pRootElement || StringUtils::CompareNoCase(pRootElement->Value(), "advancedsettings") != 0)
   {
-    CLog::Log(LOGERROR, "Error loading %s, no <advancedsettings> node", file.c_str());
+    CLog::Log(LOGERROR, "Error loading {}, no <advancedsettings> node", file);
     return;
   }
 
   // succeeded - tell the user it worked
-  CLog::Log(LOGINFO, "Loaded settings file from %s", file.c_str());
+  CLog::Log(LOGINFO, "Loaded settings file from {}", file);
 
   //Make a copy of the AS.xml and hide advancedsettings passwords
   CXBMCTinyXML advancedXMLCopy(advancedXML);
@@ -515,6 +521,10 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
 #else
       CLog::Log(LOGWARNING, "nfstimeout unsupported");
 #endif
+    }
+    if (network->FirstChildElement("nfsretries"))
+    {
+      XMLUtils::GetInt(network, "nfsretries", m_nfsRetries, -1, 30);
     }
   }
 
@@ -626,7 +636,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
       TiXmlElement* pRefreshOverride = pAdjustRefreshrate->FirstChildElement("override");
       while (pRefreshOverride)
       {
-        RefreshOverride override = {0};
+        RefreshOverride override = {};
 
         float fps;
         if (XMLUtils::GetFloat(pRefreshOverride, "fps", fps))
@@ -664,8 +674,10 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
         if (fpsCorrect && refreshCorrect)
           m_videoAdjustRefreshOverrides.push_back(override);
         else
-          CLog::Log(LOGWARNING, "Ignoring malformed refreshrate override, fpsmin:%f fpsmax:%f refreshmin:%f refreshmax:%f",
-              override.fpsmin, override.fpsmax, override.refreshmin, override.refreshmax);
+          CLog::Log(LOGWARNING,
+                    "Ignoring malformed refreshrate override, fpsmin:{:f} fpsmax:{:f} "
+                    "refreshmin:{:f} refreshmax:{:f}",
+                    override.fpsmin, override.fpsmax, override.refreshmin, override.refreshmax);
 
         pRefreshOverride = pRefreshOverride->NextSiblingElement("override");
       }
@@ -673,7 +685,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
       TiXmlElement* pRefreshFallback = pAdjustRefreshrate->FirstChildElement("fallback");
       while (pRefreshFallback)
       {
-        RefreshOverride fallback = {0};
+        RefreshOverride fallback = {};
         fallback.fallback = true;
 
         float refresh;
@@ -694,8 +706,10 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
         if (fallback.refreshmin > 0.0f && fallback.refreshmax >= fallback.refreshmin)
           m_videoAdjustRefreshOverrides.push_back(fallback);
         else
-          CLog::Log(LOGWARNING, "Ignoring malformed refreshrate fallback, fpsmin:%f fpsmax:%f refreshmin:%f refreshmax:%f",
-              fallback.fpsmin, fallback.fpsmax, fallback.refreshmin, fallback.refreshmax);
+          CLog::Log(LOGWARNING,
+                    "Ignoring malformed refreshrate fallback, fpsmin:{:f} fpsmax:{:f} "
+                    "refreshmin:{:f} refreshmax:{:f}",
+                    fallback.fpsmin, fallback.fpsmax, fallback.refreshmin, fallback.refreshmax);
 
         pRefreshFallback = pRefreshFallback->NextSiblingElement("fallback");
       }
@@ -717,7 +731,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
 
       while (pRefreshVideoLatency)
       {
-        RefreshVideoLatency videolatency = {0};
+        RefreshVideoLatency videolatency = {};
 
         if (XMLUtils::GetFloat(pRefreshVideoLatency, "rate", refresh))
         {
@@ -736,7 +750,9 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
         if (videolatency.refreshmin > 0.0f && videolatency.refreshmax >= videolatency.refreshmin)
           m_videoRefreshLatency.push_back(videolatency);
         else
-          CLog::Log(LOGWARNING, "Ignoring malformed display latency <refresh> entry, min:%f max:%f", videolatency.refreshmin, videolatency.refreshmax);
+          CLog::Log(LOGWARNING,
+                    "Ignoring malformed display latency <refresh> entry, min:{:f} max:{:f}",
+                    videolatency.refreshmin, videolatency.refreshmax);
 
         pRefreshVideoLatency = pRefreshVideoLatency->NextSiblingElement("refresh");
       }
@@ -887,6 +903,9 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
 
   XMLUtils::GetBoolean(pRootElement, "handlemounting", m_handleMounting);
 
+#if defined(TARGET_WINDOWS_DESKTOP)
+  XMLUtils::GetBoolean(pRootElement, "minimizetotray", m_minimizeToTray);
+#endif
 #if defined(HAS_SDL) || defined(TARGET_WINDOWS)
   XMLUtils::GetBoolean(pRootElement, "fullscreen", m_startFullScreen);
 #endif
@@ -1380,12 +1399,12 @@ void CAdvancedSettings::SetDebugMode(bool debug)
     int level = std::max(m_logLevelHint, LOG_LEVEL_DEBUG_FREEMEM);
     m_logLevel = level;
     CServiceBroker::GetLogging().SetLogLevel(level);
-    CLog::Log(LOGINFO, "Enabled debug logging due to GUI setting. Level %d.", level);
+    CLog::Log(LOGINFO, "Enabled debug logging due to GUI setting. Level {}.", level);
   }
   else
   {
     int level = std::min(m_logLevelHint, LOG_LEVEL_DEBUG/*LOG_LEVEL_NORMAL*/);
-    CLog::Log(LOGINFO, "Disabled debug logging due to GUI setting. Level %d.", level);
+    CLog::Log(LOGINFO, "Disabled debug logging due to GUI setting. Level {}.", level);
     m_logLevel = level;
     CServiceBroker::GetLogging().SetLogLevel(level);
   }

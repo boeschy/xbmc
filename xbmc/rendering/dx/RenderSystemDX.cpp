@@ -92,7 +92,7 @@ bool CRenderSystemDX::InitRenderSystem()
   uint32_t version = 0;
   for (uint32_t decimal = m_deviceResources->GetDeviceFeatureLevel() >> 8, round = 0; decimal > 0; decimal >>= 4, ++round)
     version += (decimal % 16) * std::pow(10, round);
-  m_RenderVersion = StringUtils::Format("%.1f", static_cast<float>(version) / 10.0f);
+  m_RenderVersion = StringUtils::Format("{:.1f}", static_cast<float>(version) / 10.0f);
 
   return true;
 }
@@ -158,7 +158,7 @@ void CRenderSystemDX::CheckInterlacedStereoView()
     DXGI_FORMAT texFormat = m_deviceResources->GetBackBuffer().GetFormat();
     if (!m_rightEyeTex.Create(outputSize.Width, outputSize.Height, 1, D3D11_USAGE_DEFAULT, texFormat))
     {
-      CLog::Log(LOGERROR, "%s - Failed to create right eye buffer.", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - Failed to create right eye buffer.", __FUNCTION__);
       CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoMode(RENDER_STEREO_MODE_SPLIT_HORIZONTAL); // try fallback to split horizontal
     }
     else

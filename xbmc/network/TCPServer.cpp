@@ -186,7 +186,7 @@ void CTCPServer::Process()
 
           if (newconnection->m_socket == INVALID_SOCKET)
           {
-            CLog::Log(LOGERROR, "JSONRPC Server: Accept of new connection failed: %d", errno);
+            CLog::Log(LOGERROR, "JSONRPC Server: Accept of new connection failed: {}", errno);
             if (EBADF == errno)
             {
               CThread::Sleep(1000);
@@ -227,6 +227,9 @@ void CTCPServer::Announce(ANNOUNCEMENT::AnnouncementFlag flag,
                           const std::string& message,
                           const CVariant& data)
 {
+  if (m_connections.empty())
+    return;
+
   std::string str = IJSONRPCAnnouncer::AnnouncementToJSONRPC(flag, sender, message, data, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_jsonOutputCompact);
 
   for (unsigned int i = 0; i < m_connections.size(); i++)
@@ -262,7 +265,7 @@ bool CTCPServer::Initialize()
 #ifdef TARGET_WINDOWS_STORE
 bool CTCPServer::InitializeBlue()
 {
-  CLog::Log(LOGDEBUG, "%s is not implemented", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "{} is not implemented", __FUNCTION__);
   return true; // need to fake it for now
 }
 
@@ -333,7 +336,8 @@ bool CTCPServer::InitializeBlue()
   service.dwNumberOfCsAddrs       = 1;
 
   if (WSASetService(&service, RNRSERVICE_REGISTER, 0) == SOCKET_ERROR)
-    CLog::Log(LOGERROR, "JSONRPC Server: failed to register bluetooth service error %d",  WSAGetLastError());
+    CLog::Log(LOGERROR, "JSONRPC Server: failed to register bluetooth service error {}",
+              WSAGetLastError());
 
   return true;
 #endif
@@ -364,7 +368,7 @@ bool CTCPServer::InitializeBlue()
 
   if (listen(fd, 10) < 0)
   {
-    CLog::Log(LOGERROR, "JSONRPC Server: Failed to listen to bluetooth port %d", sa.rc_channel);
+    CLog::Log(LOGERROR, "JSONRPC Server: Failed to listen to bluetooth port {}", sa.rc_channel);
     closesocket(fd);
     return false;
   }
@@ -435,7 +439,7 @@ bool CTCPServer::InitializeBlue()
 
   if (sdp_record_register(session, record, 0) < 0)
   {
-    CLog::Log(LOGERROR, "JSONRPC Server: Failed to register record with error %d", errno);
+    CLog::Log(LOGERROR, "JSONRPC Server: Failed to register record with error {}", errno);
     closesocket(fd);
     sdp_close(session);
     sdp_record_free(record);

@@ -561,7 +561,7 @@ void shairplay_log(void *cls, int level, const char *msg)
     default:
       break;
   }
-    CLog::Log(xbmcLevel, "AIRTUNES: %s", msg);
+  CLog::Log(xbmcLevel, "AIRTUNES: {}", msg);
 }
 
 bool CAirTunesServer::StartServer(int port, bool nonlocal, bool usePassword, const std::string &password/*=""*/)
@@ -594,9 +594,7 @@ bool CAirTunesServer::StartServer(int port, bool nonlocal, bool usePassword, con
   if (ServerInstance->Initialize(pw))
   {
     success = true;
-    std::string appName = StringUtils::Format("%s@%s",
-                                             m_macAddress.c_str(),
-                                             CSysInfo::GetDeviceName().c_str());
+    std::string appName = StringUtils::Format("{}@{}", m_macAddress, CSysInfo::GetDeviceName());
 
     std::vector<std::pair<std::string, std::string> > txt;
     txt.emplace_back("txtvers", "1");

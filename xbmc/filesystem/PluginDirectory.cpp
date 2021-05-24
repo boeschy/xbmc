@@ -53,7 +53,7 @@ bool CPluginDirectory::StartScript(const std::string& strPath, bool resume)
       !CAddonInstaller::GetInstance().InstallModal(url.GetHostName(), addon,
                                                    InstallModalPrompt::PROMPT))
   {
-    CLog::Log(LOGERROR, "Unable to find plugin %s", url.GetHostName().c_str());
+    CLog::Log(LOGERROR, "Unable to find plugin {}", url.GetHostName());
     return false;
   }
 
@@ -84,7 +84,13 @@ bool CPluginDirectory::GetPluginResult(const std::string& strPath, CFileItem &re
     resultItem.SetDynPath(newDir.m_fileResult->GetPath());
     resultItem.SetMimeType(newDir.m_fileResult->GetMimeType());
     resultItem.SetContentLookup(newDir.m_fileResult->ContentLookup());
-    resultItem.MergeInfo(*newDir.m_fileResult);
+
+    if (resultItem.HasProperty("OverrideInfotag") &&
+        resultItem.GetProperty("OverrideInfotag").asBoolean())
+      resultItem.UpdateInfo(*newDir.m_fileResult);
+    else
+      resultItem.MergeInfo(*newDir.m_fileResult);
+
     if (newDir.m_fileResult->HasVideoInfoTag() && newDir.m_fileResult->GetVideoInfoTag()->GetResumePoint().IsSet())
       resultItem.m_lStartOffset = STARTOFFSET_RESUME; // resume point set in the resume item, so force resume
   }
@@ -350,7 +356,7 @@ bool CPluginDirectory::RunScriptWithParams(const std::string& strPath, bool resu
       !CAddonInstaller::GetInstance().InstallModal(url.GetHostName(), addon,
                                                    InstallModalPrompt::PROMPT))
   {
-    CLog::Log(LOGERROR, "Unable to find plugin %s", url.GetHostName().c_str());
+    CLog::Log(LOGERROR, "Unable to find plugin {}", url.GetHostName());
     return false;
   }
 
@@ -433,7 +439,7 @@ bool CPluginDirectory::IsMediaLibraryScanningAllowed(const std::string& content,
   if (!CServiceBroker::GetAddonMgr().GetAddon(url.GetHostName(), addon, ADDON_PLUGIN,
                                               OnlyEnabled::YES))
   {
-    CLog::Log(LOGERROR, "Unable to find plugin %s", url.GetHostName().c_str());
+    CLog::Log(LOGERROR, "Unable to find plugin {}", url.GetHostName());
     return false;
   }
   CPluginSource* plugin = dynamic_cast<CPluginSource*>(addon.get());

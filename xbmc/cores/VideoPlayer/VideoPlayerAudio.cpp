@@ -32,16 +32,12 @@
 class CDVDMsgAudioCodecChange : public CDVDMsg
 {
 public:
-  CDVDMsgAudioCodecChange(const CDVDStreamInfo &hints, CDVDAudioCodec* codec)
-    : CDVDMsg(GENERAL_STREAMCHANGE)
-    , m_codec(codec)
-    , m_hints(hints)
+  CDVDMsgAudioCodecChange(const CDVDStreamInfo& hints, std::unique_ptr<CDVDAudioCodec> codec)
+    : CDVDMsg(GENERAL_STREAMCHANGE), m_codec(std::move(codec)), m_hints(hints)
   {}
- ~CDVDMsgAudioCodecChange() override
-  {
-    delete m_codec;
-  }
-  CDVDAudioCodec* m_codec;
+  ~CDVDMsgAudioCodecChange() override = default;
+
+  std::unique_ptr<CDVDAudioCodec> m_codec;
   CDVDStreamInfo  m_hints;
 };
 
@@ -53,7 +49,6 @@ CVideoPlayerAudio::CVideoPlayerAudio(CDVDClock* pClock, CDVDMessageQueue& parent
 , m_audioSink(pClock)
 {
   m_pClock = pClock;
-  m_pAudioCodec = NULL;
   m_audioClock = 0;
   m_speed = DVD_PLAYSPEED_NORMAL;
   m_stalled = true;
@@ -78,16 +73,15 @@ CVideoPlayerAudio::~CVideoPlayerAudio()
 
 bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
 {
-  CLog::Log(LOGINFO, "Finding audio codec for: %i", hints.codec);
+  CLog::Log(LOGINFO, "Finding audio codec for: {}", hints.codec);
   bool allowpassthrough = !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
   if (m_processInfo.IsRealtimeStream())
     allowpassthrough = false;
 
   CAEStreamInfo::DataType streamType =
       m_audioSink.GetPassthroughStreamType(hints.codec, hints.samplerate, hints.profile);
-  CDVDAudioCodec* codec = CDVDFactoryCodec::CreateAudioCodec(hints, m_processInfo,
-                                                             allowpassthrough, m_processInfo.AllowDTSHDDecode(),
-                                                             streamType);
+  std::unique_ptr<CDVDAudioCodec> codec = CDVDFactoryCodec::CreateAudioCodec(
+      hints, m_processInfo, allowpassthrough, m_processInfo.AllowDTSHDDecode(), streamType);
   if(!codec)
   {
     CLog::Log(LOGERROR, "Unsupported audio codec");
@@ -95,10 +89,10 @@ bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
   }
 
   if(m_messageQueue.IsInited())
-    m_messageQueue.Put(new CDVDMsgAudioCodecChange(hints, codec), 0);
+    m_messageQueue.Put(new CDVDMsgAudioCodecChange(hints, std::move(codec)), 0);
   else
   {
-    OpenStream(hints, codec);
+    OpenStream(hints, std::move(codec));
     m_messageQueue.Init();
     CLog::Log(LOGINFO, "Creating audio thread");
     Create();
@@ -106,10 +100,9 @@ bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
   return true;
 }
 
-void CVideoPlayerAudio::OpenStream(CDVDStreamInfo &hints, CDVDAudioCodec* codec)
+void CVideoPlayerAudio::OpenStream(CDVDStreamInfo& hints, std::unique_ptr<CDVDAudioCodec> codec)
 {
-  SAFE_DELETE(m_pAudioCodec);
-  m_pAudioCodec = codec;
+  m_pAudioCodec = std::move(codec);
 
   m_processInfo.ResetAudioCodecInfo();
 
@@ -186,8 +179,7 @@ void CVideoPlayerAudio::CloseStream(bool bWaitForBuffers)
   if (m_pAudioCodec)
   {
     m_pAudioCodec->Dispose();
-    delete m_pAudioCodec;
-    m_pAudioCodec = NULL;
+    m_pAudioCodec.reset();
   }
 }
 
@@ -301,8 +293,9 @@ void CVideoPlayerAudio::Process()
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESYNC))
     { //player asked us to set internal clock
       double pts = static_cast<CDVDMsgDouble*>(pMsg)->m_value;
-      CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_RESYNC(%f), level: %d, cache: %f",
-                pts, m_messageQueue.GetLevel(), m_audioSink.GetDelay());
+      CLog::Log(LOGDEBUG,
+                "CVideoPlayerAudio - CDVDMsg::GENERAL_RESYNC({:f}), level: {}, cache: {:f}", pts,
+                m_messageQueue.GetLevel(), m_audioSink.GetDelay());
 
       double delay = m_audioSink.GetDelay();
       if (pts > m_audioClock - delay + 0.5 * DVD_TIME_BASE)
@@ -370,13 +363,13 @@ void CVideoPlayerAudio::Process()
     else if (pMsg->IsType(CDVDMsg::GENERAL_STREAMCHANGE))
     {
       CDVDMsgAudioCodecChange* msg(static_cast<CDVDMsgAudioCodecChange*>(pMsg));
-      OpenStream(msg->m_hints, msg->m_codec);
+      OpenStream(msg->m_hints, std::move(msg->m_codec));
       msg->m_codec = NULL;
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_PAUSE))
     {
       m_paused = static_cast<CDVDMsgBool*>(pMsg)->m_value;
-      CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_PAUSE: %d", m_paused);
+      CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_PAUSE: {}", m_paused);
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_REQUEST_STATE))
     {
@@ -482,7 +475,7 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
       m_audioSink.Destroy(false);
 
       if (!m_audioSink.Create(audioframe, m_streaminfo.codec, m_synctype == SYNC_RESAMPLE))
-        CLog::Log(LOGERROR, "%s - failed to create audio renderer", __FUNCTION__);
+        CLog::Log(LOGERROR, "{} - failed to create audio renderer", __FUNCTION__);
 
       m_audioSink.SetDynamicRangeCompression((long)(m_processInfo.GetVideoSettings().m_VolumeAmplification * 100));
 
@@ -563,7 +556,8 @@ void CVideoPlayerAudio::SetSyncType(bool passthrough)
   {
     const char *synctypes[] = {"clock feedback", "resample", "invalid"};
     int synctype = (m_synctype >= 0 && m_synctype <= 1) ? m_synctype : 2;
-    CLog::Log(LOGDEBUG, "CVideoPlayerAudio:: synctype set to %i: %s", m_synctype, synctypes[synctype]);
+    CLog::Log(LOGDEBUG, "CVideoPlayerAudio:: synctype set to {}: {}", m_synctype,
+              synctypes[synctype]);
     m_prevsynctype = m_synctype;
     if (m_synctype == SYNC_RESAMPLE)
       m_audioSink.SetResampleMode(1);
@@ -612,19 +606,16 @@ bool CVideoPlayerAudio::SwitchCodecIfNeeded()
 
   CAEStreamInfo::DataType streamType = m_audioSink.GetPassthroughStreamType(
       m_streaminfo.codec, m_streaminfo.samplerate, m_streaminfo.profile);
-  CDVDAudioCodec *codec = CDVDFactoryCodec::CreateAudioCodec(m_streaminfo, m_processInfo,
-                                                             allowpassthrough, m_processInfo.AllowDTSHDDecode(),
-                                                             streamType);
+  std::unique_ptr<CDVDAudioCodec> codec = CDVDFactoryCodec::CreateAudioCodec(
+      m_streaminfo, m_processInfo, allowpassthrough, m_processInfo.AllowDTSHDDecode(), streamType);
 
   if (!codec || codec->NeedPassthrough() == m_pAudioCodec->NeedPassthrough())
   {
     // passthrough state has not changed
-    delete codec;
     return false;
   }
 
-  delete m_pAudioCodec;
-  m_pAudioCodec = codec;
+  m_pAudioCodec = std::move(codec);
 
   return true;
 }

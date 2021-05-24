@@ -138,12 +138,13 @@ void CLirc::ProcessCode(char *buf)
   char *end = nullptr;
   long repeat = strtol(repeatStr, &end, 16);
   if (!end || *end != 0)
-    CLog::Log(LOGERROR, "LIRC: invalid non-numeric character in expression %s", repeatStr);
+    CLog::Log(LOGERROR, "LIRC: invalid non-numeric character in expression {}", repeatStr);
 
   if (repeat == 0)
   {
-    CLog::Log(LOGDEBUG, "LIRC: - NEW %s %s %s %s (%s)", &scanCode[0], &repeatStr[0], &buttonName[0], &deviceName[0], buttonName);
-    m_firstClickTime = XbmcThreads::SystemClockMillis();
+    CLog::Log(LOGDEBUG, "LIRC: - NEW {} {} {} {} ({})", &scanCode[0], &repeatStr[0], &buttonName[0],
+              &deviceName[0], buttonName);
+    m_firstClickTime = std::chrono::steady_clock::now();
 
     XBMC_Event newEvent;
     newEvent.type = XBMC_BUTTON;
@@ -159,7 +160,11 @@ void CLirc::ProcessCode(char *buf)
     XBMC_Event newEvent;
     newEvent.type = XBMC_BUTTON;
     newEvent.keybutton.button = button;
-    newEvent.keybutton.holdtime = XbmcThreads::SystemClockMillis() - m_firstClickTime;
+
+    auto now = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_firstClickTime);
+
+    newEvent.keybutton.holdtime = duration.count();
     std::shared_ptr<CAppInboundProtocol> appPort = CServiceBroker::GetAppPort();
     if (appPort)
       appPort->OnEvent(newEvent);

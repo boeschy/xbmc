@@ -278,8 +278,7 @@ int CGUIDialogAddonInfo::AskForVersion(std::vector<std::pair<AddonVersion, std::
 
   for (const auto& versionInfo : versions)
   {
-    CFileItem item(StringUtils::Format(g_localizeStrings.Get(21339).c_str(),
-                                       versionInfo.first.asString().c_str()));
+    CFileItem item(StringUtils::Format(g_localizeStrings.Get(21339), versionInfo.first.asString()));
     if (m_localAddon && m_localAddon->Version() == versionInfo.first &&
         m_item->GetAddonInfo()->Origin() == versionInfo.second)
       item.Select(true);
@@ -379,8 +378,8 @@ void CGUIDialogAddonInfo::OnSelectVersion()
       if (versions[i].second == LOCAL_CACHE)
       {
         CAddonInstaller::GetInstance().InstallFromZip(
-            StringUtils::Format("special://home/addons/packages/%s-%s.zip", processAddonId.c_str(),
-                                versions[i].first.asString().c_str()));
+            StringUtils::Format("special://home/addons/packages/{}-{}.zip", processAddonId,
+                                versions[i].first.asString()));
       }
       else
       {
@@ -527,8 +526,7 @@ bool CGUIDialogAddonInfo::PromptIfDependency(int heading, int line2)
 
   if (!deps.empty())
   {
-    std::string line0 =
-        StringUtils::Format(g_localizeStrings.Get(24046).c_str(), m_localAddon->Name().c_str());
+    std::string line0 = StringUtils::Format(g_localizeStrings.Get(24046), m_localAddon->Name());
     std::string line1 = StringUtils::Join(deps, ", ");
     HELPERS::ShowOKDialogLines(CVariant{heading}, CVariant{std::move(line0)},
                                CVariant{std::move(line1)}, CVariant{line2});
@@ -596,8 +594,7 @@ void CGUIDialogAddonInfo::OnSettings()
 
 bool CGUIDialogAddonInfo::ShowDependencyList(Reactivate reactivate, EntryPoint entryPoint)
 {
-  if (entryPoint != EntryPoint::INSTALL ||
-      (entryPoint == EntryPoint::INSTALL && !m_allDepsInstalled))
+  if (entryPoint != EntryPoint::INSTALL || m_showDepDialogOnInstall)
   {
     auto pDialog = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(
         WINDOW_DIALOG_SELECT);
@@ -614,8 +611,7 @@ bool CGUIDialogAddonInfo::ShowDependencyList(Reactivate reactivate, EntryPoint e
 
       if (infoAddon)
       {
-        if (entryPoint != EntryPoint::UPDATE ||
-            (entryPoint == EntryPoint::UPDATE && !it.m_isInstalledUpToDate()))
+        if (entryPoint != EntryPoint::UPDATE || !it.IsInstalledUpToDate())
         {
           const CFileItemPtr item = std::make_shared<CFileItem>(infoAddon->Name());
           int messageId = 24180; // minversion only
@@ -642,17 +638,17 @@ bool CGUIDialogAddonInfo::ShowDependencyList(Reactivate reactivate, EntryPoint e
           {
             messageId = 24182; // => installed
 
-            if (!it.m_isInstalledUpToDate())
+            if (!it.IsInstalledUpToDate())
             {
               messageId = 24183; // => update to
             }
           }
 
           item->SetLabel2(StringUtils::Format(
-              g_localizeStrings.Get(messageId).c_str(), it.m_depInfo.versionMin.asString().c_str(),
-              it.m_installed ? it.m_installed->Version().asString().c_str() : "",
-              it.m_available ? it.m_available->Version().asString().c_str() : "",
-              it.m_depInfo.optional ? g_localizeStrings.Get(24184).c_str() : ""));
+              g_localizeStrings.Get(messageId), it.m_depInfo.versionMin.asString(),
+              it.m_installed ? it.m_installed->Version().asString() : "",
+              it.m_available ? it.m_available->Version().asString() : "",
+              it.m_depInfo.optional ? g_localizeStrings.Get(24184) : ""));
 
           item->SetArt("icon", infoAddon->Icon());
           item->SetProperty("addon_id", it.m_depInfo.id);
@@ -743,7 +739,7 @@ void CGUIDialogAddonInfo::BuildDependencyList()
   if (!m_item)
     return;
 
-  m_allDepsInstalled = true;
+  m_showDepDialogOnInstall = false;
   m_depsInstalledWithAvailable.clear();
   m_deps = CServiceBroker::GetAddonMgr().GetDepsRecursive(m_item->GetAddonInfo()->ID(),
                                                           OnlyEnabledRootAddon::NO);
@@ -761,7 +757,6 @@ void CGUIDialogAddonInfo::BuildDependencyList()
                                                 OnlyEnabled::YES))
     {
       addonInstalled = nullptr;
-      m_allDepsInstalled = false;
     }
 
     // Find add-on in repositories
@@ -770,7 +765,19 @@ void CGUIDialogAddonInfo::BuildDependencyList()
       addonAvailable = nullptr;
     }
 
-    // Depending on advancedsettings.xml <showalldependencies>:
+    if (!addonInstalled)
+    {
+      // after pushing the install button the dependency install dialog will
+      // pop up only if non-module dependencies are going to be installed or
+      // dependencies are unavailable. the latter is for informational purposes
+
+      if (showAllDependencies || !addonAvailable ||
+          addonAvailable->MainType() != ADDON_SCRIPT_MODULE)
+      {
+        m_showDepDialogOnInstall = true;
+      }
+    }
+
     // AddonType ADDON_SCRIPT_MODULE needs to be filtered as these low-level add-ons
     // should be hidden to the user in the dependency select dialog
 
@@ -779,8 +786,7 @@ void CGUIDialogAddonInfo::BuildDependencyList()
         (addonAvailable && addonAvailable->MainType() != ADDON_SCRIPT_MODULE) ||
         (!addonAvailable && !addonInstalled))
     {
-      m_depsInstalledWithAvailable.emplace_back(
-          CInstalledWithAvailable{dep, addonInstalled, addonAvailable});
+      m_depsInstalledWithAvailable.emplace_back(dep, addonInstalled, addonAvailable);
     }
 
     // sort optional add-ons to top of the list
@@ -789,4 +795,17 @@ void CGUIDialogAddonInfo::BuildDependencyList()
         m_depsInstalledWithAvailable.begin(), m_depsInstalledWithAvailable.end(),
         [](const auto& a, const auto& b) { return a.m_depInfo.optional > b.m_depInfo.optional; });
   }
+}
+
+bool CInstalledWithAvailable::IsInstalledUpToDate() const
+{
+  if (m_installed)
+  {
+    if (!m_available || m_available->Version() == m_installed->Version())
+    {
+      return true;
+    }
+  }
+
+  return false;
 }

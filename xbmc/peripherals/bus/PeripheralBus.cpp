@@ -94,10 +94,10 @@ void CPeripheralBus::UnregisterRemovedDevices(const PeripheralScanResults& resul
         features.size() > 1 || (features.size() == 1 && features.at(0) != FEATURE_UNKNOWN);
     if (peripheral->Type() != PERIPHERAL_UNKNOWN || peripheralHasFeatures)
     {
-      CLog::Log(LOGINFO, "%s - device removed from %s/%s: %s (%s:%s)", __FUNCTION__,
-                PeripheralTypeTranslator::TypeToString(peripheral->Type()),
-                peripheral->Location().c_str(), peripheral->DeviceName().c_str(),
-                peripheral->VendorIdAsString(), peripheral->ProductIdAsString());
+      CLog::Log(LOGINFO, "{} - device removed from {}/{}: {} ({}:{})", __FUNCTION__,
+                PeripheralTypeTranslator::TypeToString(peripheral->Type()), peripheral->Location(),
+                peripheral->DeviceName(), peripheral->VendorIdAsString(),
+                peripheral->ProductIdAsString());
       peripheral->OnDeviceRemoved();
     }
 
@@ -258,10 +258,10 @@ void CPeripheralBus::Register(const PeripheralPtr& peripheral)
 
   if (bPeripheralAdded)
   {
-    CLog::Log(LOGINFO, "%s - new %s device registered on %s->%s: %s (%s:%s)", __FUNCTION__,
+    CLog::Log(LOGINFO, "{} - new {} device registered on {}->{}: {} ({}:{})", __FUNCTION__,
               PeripheralTypeTranslator::TypeToString(peripheral->Type()),
-              PeripheralTypeTranslator::BusTypeToString(m_type), peripheral->Location().c_str(),
-              peripheral->DeviceName().c_str(), peripheral->VendorIdAsString(),
+              PeripheralTypeTranslator::BusTypeToString(m_type), peripheral->Location(),
+              peripheral->DeviceName(), peripheral->VendorIdAsString(),
               peripheral->ProductIdAsString());
     m_manager.OnDeviceAdded(*this, *peripheral);
   }
@@ -310,11 +310,10 @@ void CPeripheralBus::GetDirectory(const std::string& strPath, CFileItemList& ite
     if (strVersion.empty())
       strVersion = g_localizeStrings.Get(13205);
 
-    std::string strDetails =
-        StringUtils::Format("%s %s", g_localizeStrings.Get(24051).c_str(), strVersion.c_str());
+    std::string strDetails = StringUtils::Format("{} {}", g_localizeStrings.Get(24051), strVersion);
     if (peripheral->GetBusType() == PERIPHERAL_BUS_CEC && !peripheral->GetSettingBool("enabled"))
-      strDetails = StringUtils::Format("%s: %s", g_localizeStrings.Get(126).c_str(),
-                                       g_localizeStrings.Get(13106).c_str());
+      strDetails =
+          StringUtils::Format("{}: {}", g_localizeStrings.Get(126), g_localizeStrings.Get(13106));
 
     peripheralFile->SetProperty("version", strVersion);
     peripheralFile->SetLabel2(strDetails);
