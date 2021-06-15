@@ -1531,7 +1531,7 @@ std::string StringUtils::SizeToString(int64_t size)
   }
 
   if (!i)
-    strLabel = StringUtils::Format("%.lf B", s);
+    strLabel = StringUtils::Format("{:.2f} B", s);
   else if (i == ARRAY_SIZE(prefixes))
   {
     if (s >= 1000.0)
@@ -1842,4 +1842,9 @@ std::string StringUtils::FormatFileSize(uint64_t bytes)
 const std::locale& StringUtils::GetOriginalLocale() noexcept
 {
   return g_langInfo.GetOriginalLocale();
+}
+
+std::string StringUtils::CreateFromCString(const char* cstr)
+{
+  return cstr != nullptr ? std::string(cstr) : std::string();
 }

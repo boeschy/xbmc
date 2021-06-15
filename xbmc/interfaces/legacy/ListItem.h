@@ -1008,10 +1008,12 @@ namespace XBMCAddon
       /// | StationName   | string ("My Station Name") - Used to enforce/override MusicPlayer.StationName infolabel from addons (e.g. in radio addons)
       /// | TotalTime     | float (7848.0) - Set the total time of the item in seconds
       /// | OverrideInfotag | string - "true", "false" - When true will override all info from previous listitem
+      /// | ForceResolvePlugin | string - "true", "false" - When true ensures that a plugin will always receive callbacks to resolve paths (useful for playlist cases)
       ///
       ///-----------------------------------------------------------------------
       /// @python_v20 OverrideInfotag property added
       /// @python_v20 **ResumeTime** and **TotalTime** deprecated. Use **InfoTagVideo.setResumePoint()** instead.
+      /// @python_v20 ForceResolvePlugin property added
       ///
       /// **Example:**
       /// ~~~~~~~~~~~~~{.py}
@@ -1269,7 +1271,7 @@ private:
       const MUSIC_INFO::CMusicInfoTag* GetMusicInfoTag() const;
 
       void setTitleRaw(std::string title);
-      void setPathRaw(std::string path);
+      void setPathRaw(const std::string& path);
       void setCountRaw(int count);
       void setSizeRaw(int64_t size);
       void setDateTimeRaw(const std::string& dateTime);
@@ -1278,8 +1280,8 @@ private:
       void setMimeTypeRaw(const std::string& mimetype);
       void setSpecialSortRaw(std::string specialSort);
       void setContentLookupRaw(bool enable);
-      void addArtRaw(std::string type, std::string url);
-      void addPropertyRaw(std::string type, CVariant value);
+      void addArtRaw(std::string type, const std::string& url);
+      void addPropertyRaw(std::string type, const CVariant& value);
       void addSubtitlesRaw(const std::vector<std::string>& subtitles);
     };
 

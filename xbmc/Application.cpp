@@ -212,6 +212,7 @@ using namespace KODI::MESSAGING;
 using namespace ActiveAE;
 
 using namespace XbmcThreads;
+using namespace std::chrono_literals;
 
 using KODI::MESSAGING::HELPERS::DialogResponse;
 
@@ -625,7 +626,7 @@ bool CApplication::Initialize()
 
   std::string localizedStr = g_localizeStrings.Get(24150);
   int iDots = 1;
-  while (!event.WaitMSec(1000))
+  while (!event.Wait(1000ms))
   {
     if (databaseManager.IsUpgrading())
       CServiceBroker::GetRenderSystem()->ShowSplash(std::string(iDots, ' ') + localizedStr + std::string(iDots, '.'));
@@ -669,7 +670,7 @@ bool CApplication::Initialize()
             CJob::PRIORITY_DEDICATED);
         localizedStr = g_localizeStrings.Get(24151);
         iDots = 1;
-        while (!event.WaitMSec(1000))
+        while (!event.Wait(1000ms))
         {
           CServiceBroker::GetRenderSystem()->ShowSplash(std::string(iDots, ' ') + localizedStr +
                                                         std::string(iDots, '.'));
@@ -2586,17 +2587,8 @@ void CApplication::Stop(int exitCode)
 
 bool CApplication::PlayMedia(CFileItem& item, const std::string &player, int iPlaylist)
 {
-  // If item is a plugin, expand out
-  for (int i=0; URIUtils::IsPlugin(item.GetDynPath()) && i<5; ++i)
-  {
-    bool resume = item.m_lStartOffset == STARTOFFSET_RESUME;
-
-    if (!XFILE::CPluginDirectory::GetPluginResult(item.GetDynPath(), item, resume) ||
-        item.GetDynPath() == item.GetPath()) // GetPluginResult resolved to an empty path
-      return false;
-  }
-  // if after the 5 resolution attempts the item is still a plugin just return, it isn't playable
-  if (URIUtils::IsPlugin(item.GetDynPath()))
+  // if the item is a plugin we need to resolve the plugin paths
+  if (URIUtils::HasPluginPath(item) && !XFILE::CPluginDirectory::GetResolvedPluginResult(item))
     return false;
 
   if (item.IsSmartPlayList())
@@ -2726,16 +2718,8 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
   if (item.IsPlayList())
     return false;
 
-  for (int i=0; URIUtils::IsPlugin(item.GetDynPath()) && i<5; ++i)
-  { // we modify the item so that it becomes a real URL
-    bool resume = item.m_lStartOffset == STARTOFFSET_RESUME;
-
-    if (!XFILE::CPluginDirectory::GetPluginResult(item.GetDynPath(), item, resume) ||
-        item.GetDynPath() == item.GetPath()) // GetPluginResult resolved to an empty path
-      return false;
-  }
-  // if after the 5 resolution attempts the item is still a plugin just return, it isn't playable
-  if (URIUtils::IsPlugin(item.GetDynPath()))
+  // if the item is a plugin we need to resolve the plugin paths
+  if (URIUtils::HasPluginPath(item) && !XFILE::CPluginDirectory::GetResolvedPluginResult(item))
     return false;
 
 #ifdef HAS_UPNP
