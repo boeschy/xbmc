@@ -1,16 +1,15 @@
 include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile tvos.patch
+DEPS= ../../Makefile.include Makefile tvos.patch android.patch
 
 # lib name, version
 LIBNAME=libbluray
-VERSION=1.1.2
+VERSION=1.2.1
 SOURCE=$(LIBNAME)-$(VERSION)
 ARCHIVE=$(SOURCE).tar.bz2
 
 # configuration settings
 CONFIGURE=./configure --prefix=$(PREFIX) --disable-shared --exec-prefix=$(PREFIX) \
-  --disable-examples --disable-doxygen-doc \
-  --disable-bdjava-jar
+  --disable-examples --disable-doxygen-doc
 
 LIBDYLIB=$(PLATFORM)/.libs/libbluray.la
 
@@ -26,6 +25,9 @@ $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	sed -i -e "s|CFLAGS=|#CFLAGS=|" $(PLATFORM)/Makefile.am
 	cd $(PLATFORM); ./bootstrap
 	cd $(PLATFORM); $(CONFIGURE)
+ifeq ($(OS),android)
+	cd $(PLATFORM); patch -p1 -i ../android.patch
+endif
 ifeq ($(TARGET_PLATFORM),appletvos)
 	cd $(PLATFORM); patch -p1 -i ../tvos.patch
 endif
