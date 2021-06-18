@@ -10,7 +10,7 @@ GIT_BASE_URL=https://github.com/fandangos
 
 # configuration settings
 CONFIGURE=./configure --prefix=$(PREFIX) --disable-shared --exec-prefix=$(PREFIX) \
-  --disable-examples --disable-doxygen-doc
+  --disable-examples --disable-doxygen-doc --disable-bdjava-jar
 
 LIBDYLIB=$(PLATFORM)/.libs/libbluray.la
 
