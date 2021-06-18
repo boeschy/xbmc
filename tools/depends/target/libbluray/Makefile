@@ -3,9 +3,10 @@ DEPS= ../../Makefile.include Makefile tvos.patch
 
 # lib name, version
 LIBNAME=libbluray
-VERSION=1.1.2
+VERSION=47726b99922899bb9c4ea688356199f2068d156a
 SOURCE=$(LIBNAME)-$(VERSION)
-ARCHIVE=$(SOURCE).tar.bz2
+ARCHIVE=$(VERSION).tar.gz
+GIT_BASE_URL=https://github.com/fandangos
 
 # configuration settings
 CONFIGURE=./configure --prefix=$(PREFIX) --disable-shared --exec-prefix=$(PREFIX) \
@@ -16,7 +17,7 @@ LIBDYLIB=$(PLATFORM)/.libs/libbluray.la
 all: .installed-$(PLATFORM)
 
 $(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
+	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(GIT_BASE_URL)/$(LIBNAME)/archive/$(ARCHIVE)
 
 $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	rm -rf $(PLATFORM); mkdir -p $(PLATFORM)
@@ -26,7 +27,8 @@ ifeq ($(OS),osx)
 endif
 	# libbluray has borked Makefile.am with respect to CFLAGS, remove the offending line
 	sed -i -e "s|CFLAGS=|#CFLAGS=|" $(PLATFORM)/Makefile.am
-	cd $(PLATFORM); ./bootstrap
+	cd $(PLATFORM)/contrib; git clone https://code.videolan.org/videolan/libudfread
+	cd $(PLATFORM); sh ./bootstrap
 	cd $(PLATFORM); $(CONFIGURE)
 ifeq ($(TARGET_PLATFORM),appletvos)
 	cd $(PLATFORM); patch -p1 -i ../tvos.patch
