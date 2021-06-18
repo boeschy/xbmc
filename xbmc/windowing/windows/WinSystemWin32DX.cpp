@@ -140,6 +140,10 @@ void CWinSystemWin32DX::OnMove(int x, int y)
   if (newMonitor != m_hMonitor)
   {
     MONITOR_DETAILS* details = GetDisplayDetails(newMonitor);
+
+    if (!details)
+      return;
+
     CDisplaySettings::GetInstance().SetMonitor(KODI::PLATFORM::WINDOWS::FromW(details->MonitorNameW));
     m_deviceResources->SetMonitor(newMonitor);
     m_hMonitor = newMonitor;
@@ -420,4 +424,9 @@ void CWinSystemWin32DX::SetHdrMetaData(DXGI_HDR_METADATA_HDR10& hdr10) const
 void CWinSystemWin32DX::SetHdrColorSpace(const DXGI_COLOR_SPACE_TYPE colorSpace) const
 {
   m_deviceResources->SetHdrColorSpace(colorSpace);
+}
+
+DEBUG_INFO_RENDER CWinSystemWin32DX::GetDebugInfo()
+{
+  return m_deviceResources->GetDebugInfo();
 }
