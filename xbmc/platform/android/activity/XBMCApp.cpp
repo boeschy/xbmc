@@ -268,11 +268,11 @@ void CXBMCApp::onResume()
 
 void CXBMCApp::onPause()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
-  m_bResumePlayback = false;
-
   if (CJNIBase::GetSDKVersion() < 24)
   {
+    android_printf("%s: ", __PRETTY_FUNCTION__);
+    m_bResumePlayback = false;
+
     if (g_application.GetAppPlayer().IsPlaying())
     {
       if (g_application.GetAppPlayer().HasVideo())
@@ -287,10 +287,10 @@ void CXBMCApp::onPause()
 
     if (m_hasReqVisible)
       g_application.SwitchToFullScreen(true);
-  }
 
-  EnableWakeLock(false);
-  m_hasReqVisible = false;
+    EnableWakeLock(false);
+    m_hasReqVisible = false;
+  }
 }
 
 void CXBMCApp::onStop()
