@@ -1,7 +1,7 @@
 # Kodi Media Center language file
 # Addon Name: Estuary
 # Addon id: skin.estuary
-# Addon Provider: phil65, Ichabod Fletchman
+# Addon Provider: Team Kodi
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
@@ -15,6 +15,18 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: es_MX\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "Addon Summary"
+msgid "Estuary skin by phil65. (Kodi's default skin)"
+msgstr "Máscara Estuary por phil65 y Piers. (La máscara predeterminada de Kodi)"
+
+msgctxt "Addon Description"
+msgid "Estuary is the default skin for Kodi 17.0 and above. It attempts to be easy for first time Kodi users to understand and use."
+msgstr "Estuary es la máscara por defecto para Kodi 17.0 y superior. Su objetivo es ser fácil de entender y usar para los usuarios nuevos a Kodi."
+
+msgctxt "Addon Disclaimer"
+msgid "Estuary is the default skin for Kodi, removing it may cause issues"
+msgstr "Estuary es la máscara predeterminada de Kodi, eliminarla puede causar problemas"
 
 msgctxt "#31000"
 msgid "Now playing"
@@ -122,7 +134,7 @@ msgstr "No se han encontrado favoritos. Puedes agregar cualquier elemento en las
 
 msgctxt "#31026"
 msgid "Timeshift"
-msgstr "Cambio de hora"
+msgstr "Timeshift"
 
 msgctxt "#31027"
 msgid "Next aired"

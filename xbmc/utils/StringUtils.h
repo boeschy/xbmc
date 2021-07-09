@@ -31,10 +31,13 @@
 #undef FMT_DEPRECATED
 #define FMT_DEPRECATED
 #endif
-#include <fmt/format.h>
-
 #include "XBDateTime.h"
 #include "utils/params_check_macros.h"
+
+#include <fmt/format.h>
+#if FMT_VERSION >= 80000
+#include <fmt/xchar.h>
+#endif
 
 /*! \brief  C-processor Token stringification
 
@@ -374,6 +377,13 @@ public:
    * 102400 bytes as "100kB". See TestStringUtils for more examples.
    */
   static std::string FormatFileSize(uint64_t bytes);
+
+  /*! \brief Converts a cstring pointer (const char*) to a std::string.
+             In case nullptr is passed the result is an empty string.
+      \param cstr the const pointer to char
+      \return the resulting std::string or ""
+   */
+  static std::string CreateFromCString(const char* cstr);
 
 private:
   /*!

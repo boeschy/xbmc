@@ -14,6 +14,7 @@
 #include "DVDStreamInfo.h"
 #include "IVideoPlayer.h"
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
+#include "threads/SystemClock.h"
 #include "threads/Thread.h"
 #include "utils/BitstreamStats.h"
 
@@ -107,5 +108,7 @@ protected:
 
   mutable CCriticalSection m_info_section;
   SInfo            m_info;
+
+  bool m_displayReset = false;
 };
 

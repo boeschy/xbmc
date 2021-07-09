@@ -1,20 +1,33 @@
 # Kodi Media Center language file
 # Addon Name: Estuary
 # Addon id: skin.estuary
-# Addon Provider: phil65, Ichabod Fletchman
+# Addon Provider: Team Kodi
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
 "Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Chinese (China) (http://www.transifex.com/projects/p/kodi-main/language/zh_CN/)\n"
+"PO-Revision-Date: 2021-07-06 04:24+0000\n"
+"Last-Translator: Meano Lee <meanocat@gmail.com>\n"
+"Language-Team: Chinese (China) <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estuary/zh_cn/>\n"
+"Language: zh_cn\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: zh_CN\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Weblate 4.7.1\n"
+
+msgctxt "Addon Summary"
+msgid "Estuary skin by phil65. (Kodi's default skin)"
+msgstr "phil65 开发的 Estuary 皮肤（Kodi 的默认皮肤）。"
+
+msgctxt "Addon Description"
+msgid "Estuary is the default skin for Kodi 17.0 and above. It attempts to be easy for first time Kodi users to understand and use."
+msgstr "Estuary 是 Kodi 17.0 的默认皮肤。它力求使首次使用 Kodi 的用户易于上手。"
+
+msgctxt "Addon Disclaimer"
+msgid "Estuary is the default skin for Kodi, removing it may cause issues"
+msgstr "Estuary 是 Kodi 的默认皮肤，删除它可能导致故障。"
 
 msgctxt "#31000"
 msgid "Now playing"
@@ -396,6 +409,10 @@ msgctxt "#31114"
 msgid "Search YouTube"
 msgstr "搜索 YouTube"
 
+msgctxt "#31115"
+msgid "Toggle subtitle"
+msgstr "切换字幕"
+
 msgctxt "#31116"
 msgid "Remove this main menu item"
 msgstr "删除此主菜单项"
@@ -578,7 +595,7 @@ msgstr "数字键盘"
 
 msgctxt "#31162"
 msgid "Play your personal games or download one of the many game add-ons from the official repository."
-msgstr "玩你自己珍藏的游戏或者从官方仓库中下载游戏插件"
+msgstr "玩你自己珍藏的游戏或者从官方仓库中下载游戏插件。"
 
 msgctxt "#31163"
 msgid "Show Fanart background"

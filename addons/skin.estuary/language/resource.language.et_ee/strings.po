@@ -1,20 +1,33 @@
 # Kodi Media Center language file
 # Addon Name: Estuary
 # Addon id: skin.estuary
-# Addon Provider: phil65, Ichabod Fletchman
+# Addon Provider: Team Kodi
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
 "Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Estonian (Estonia) (http://www.transifex.com/projects/p/kodi-main/language/et_EE/)\n"
+"PO-Revision-Date: 2021-07-05 22:17+0000\n"
+"Last-Translator: Christian Gade <gade@kodi.tv>\n"
+"Language-Team: Estonian <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estuary/et_ee/>\n"
+"Language: et_ee\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: et_EE\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 4.7.1\n"
+
+msgctxt "Addon Summary"
+msgid "Estuary skin by phil65. (Kodi's default skin)"
+msgstr "Estuary rüü autor on phil65. (Kodi vaikerüü)"
+
+msgctxt "Addon Description"
+msgid "Estuary is the default skin for Kodi 17.0 and above. It attempts to be easy for first time Kodi users to understand and use."
+msgstr "Estuary on Kodi vaikerüü versioonist 17.0. Kodi esmakasutajatel on rüüd kerge mõista ja kasutada."
+
+msgctxt "Addon Disclaimer"
+msgid "Estuary is the default skin for Kodi, removing it may cause issues"
+msgstr "Estuary on Kodi vaikerüü, selle eemaldamine võib põhjustada probleeme"
 
 msgctxt "#31000"
 msgid "Now playing"
@@ -215,6 +228,10 @@ msgstr "Arial-il põhinev"
 msgctxt "#31054"
 msgid "Press [B]Left[/B] to step back, or [B]Right[/B] to step forward"
 msgstr "Tagasihüppeks vajuta [B]vasakut[/B] või edasihüppeks [B]paremat[/B] klahvi"
+
+msgctxt "#31055"
+msgid "Press [B]Right[/B] to frame advance"
+msgstr "Kaaderhaaval liikumiseks vajuta [B]paremat[/B] klahvi"
 
 msgctxt "#31056"
 msgid "Go to playlist"
@@ -502,7 +519,7 @@ msgstr "Esitamise kiirus"
 
 msgctxt "#31143"
 msgid "You did not set up PVR yet. In order to use PVR, choose a PVR client addon and configure it. Please visit http://kodi.wiki/view/PVR to learn more."
-msgstr "PVR on seadistamata. PVR-i kasutamiseks vali ja seadista PVR-i klientprogramm. Rohkem infot: http://kodi.wiki/view/PVR "
+msgstr "PVR on seadistamata. PVR-i kasutamiseks vali ja seadista PVR-i klientprogramm. Rohkem infot: http://kodi.wiki/view/PVR"
 
 msgctxt "#31144"
 msgid "Enter add-on browser"
@@ -606,4 +623,4 @@ msgstr "Kuva muusikavideote jaoks postereid mitte pisipilte"
 
 msgctxt "#31169"
 msgid "Artwork related settings."
-msgstr "Taustapiltidega seotud seaded. "
+msgstr "Taustapiltidega seotud seaded."
