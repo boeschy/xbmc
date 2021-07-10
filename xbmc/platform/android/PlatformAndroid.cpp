@@ -38,14 +38,6 @@ bool CPlatformAndroid::InitStageOne()
 
   setenv("LIBBLURAY_CACHE_ROOT", CSpecialProtocol::TranslatePath("special://userdata/cache/bluray/cache/").c_str(), 1);
 
-  setenv("JAVA_HOME", CSpecialProtocol::TranslatePath("special://xbmcbin/j2re-image/").c_str(), 1);
-  
-  setenv("JDK_HOME", CSpecialProtocol::TranslatePath("special://xbmcbin/j2re-image/").c_str(), 1);
-  
-  setenv("LIBBLURAY_CP", CSpecialProtocol::TranslatePath("special://xbmcbin/j2re-image/").c_str(), 1);
-  
-  setenv("LIBBLURAY_CACHE_ROOT", CSpecialProtocol::TranslatePath("special://userdata/cache/bluray/cache/").c_str(), 1);
-  
   setenv("OS", "Linux", true); // for python scripts that check the OS
 
   CWinSystemAndroidGLESContext::Register();
