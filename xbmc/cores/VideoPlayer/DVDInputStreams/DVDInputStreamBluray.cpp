@@ -499,6 +499,7 @@ void CDVDInputStreamBluray::ProcessEvent() {
   case BD_EVENT_TITLE:
   {
     CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_TITLE {}", m_event.param);
+    m_player->OnDiscNavResult(nullptr, BD_EVENT_TITLE);
     const BLURAY_DISC_INFO* disc_info = bd_get_disc_info(m_bd);
 
     m_menu = false;
@@ -507,15 +508,24 @@ void CDVDInputStreamBluray::ProcessEvent() {
     if (m_event.param == BLURAY_TITLE_TOP_MENU)
     {
       m_title = disc_info->top_menu;
+      m_player->OnDiscNavResult(nullptr, BLURAY_TITLE_TOP_MENU);
       m_menu = true;
       m_isInMainMenu = true;
     }
     else if (m_event.param == BLURAY_TITLE_FIRST_PLAY)
+    {
       m_title = disc_info->first_play;
+      m_player->OnDiscNavResult(nullptr, BLURAY_TITLE_FIRST_PLAY);
+    }
     else if (m_event.param <= disc_info->num_titles)
       m_title = disc_info->titles[m_event.param];
     else
       m_title = nullptr;
+  
+    if (m_event.param == BLURAY_UO_TITLE_SEARCH)
+      m_player->OnDiscNavResult(nullptr, BLURAY_UO_TITLE_SEARCH);
+  
+    m_menu = false;
 
     break;
   }
@@ -563,6 +573,7 @@ void CDVDInputStreamBluray::ProcessEvent() {
 
   case BD_EVENT_MENU:
     CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_MENU {}", m_event.param);
+    m_player->OnDiscNavResult(nullptr, BD_EVENT_MENU);
     m_menu = (m_event.param != 0);
     if (!m_menu)
       m_isInMainMenu = false;
@@ -777,6 +788,7 @@ void CDVDInputStreamBluray::OverlayFlush(int64_t pts)
   m_player->OnDiscNavResult(static_cast<void*>(group), BD_EVENT_MENU_OVERLAY);
   group->Release();
   m_hasOverlay = true;
+  m_menu = true;
 #endif
 }
 
