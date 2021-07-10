@@ -4241,7 +4241,7 @@ bool CVideoPlayer::OnAction(const CAction &action)
           if (!IsBlurayTopMenu && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) &&
               GetChapter() > 0 && GetChapter() < GetChapterCount())
           {
-            m_messenger.Put(new CDVDMsgPlayerSeekChapter(GetChapter() + 1));
+            m_messenger.Put(std::make_shared<CDVDMsgPlayerSeekChapter>(GetChapter() + 1));
             CServiceBroker::GetGUI()->GetInfoManager().GetInfoProviders().GetPlayerInfoProvider().SetDisplayAfterSeek();
             return true;
           }
@@ -4263,7 +4263,7 @@ bool CVideoPlayer::OnAction(const CAction &action)
 #if defined(HAVE_LIBBLURAY)
           if (!IsBlurayTopMenu && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) && GetChapter() > 0)
           {
-            m_messenger.Put(new CDVDMsgPlayerSeekChapter(GetChapter() - 1));
+            m_messenger.Put(std::make_shared<CDVDMsgPlayerSeekChapter>(GetChapter() - 1));
             CServiceBroker::GetGUI()->GetInfoManager().GetInfoProviders().GetPlayerInfoProvider().SetDisplayAfterSeek();
             return true;
           }
