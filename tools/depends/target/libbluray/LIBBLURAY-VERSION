@@ -1,4 +1,4 @@
 LIBNAME=libbluray
-VERSION=1.3.2
-GIT_REPO=https://github.com/Paxxi/libbluray
-GIT_TAG=05b3d0937a20974b6b0586d5dec822d2d26fe15f
+VERSION=1.3.4
+GIT_REPO=https://github.com/boeschy/libbluray
+GIT_TAG=1.3.4-mvc

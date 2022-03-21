@@ -62,6 +62,7 @@ externalproject_add(${LIBNAME}
     BUILD_BYPRODUCTS ${BLURAY_BINS})
 
 install(FILES ${BLURAY_BINS} DESTINATION ${CMAKE_BINARY_DIR})
+install(FILES ${BLURAY_BINS} DESTINATION /xbmc/${BUILD_DIR_NAME})
 
 set_target_properties(${LIBNAME} PROPERTIES FOLDER "External Projects")
 
