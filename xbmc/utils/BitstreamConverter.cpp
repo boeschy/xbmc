@@ -971,6 +971,10 @@ void CBitstreamConverter::BitstreamAllocAndCopy(uint8_t** poutbuf,
   uint8_t nal_header_size = offset ? 3 : 4;
   void *tmp;
 
+  // Skip ITU-T T.35 SMPTE ST 2094-40 SEI prefix NALUS
+  if (nal_type == HEVC_NAL_SEI_PREFIX && in[0] == 78 && in[1] == 1 && in[2] == 4)
+    return;
+
   // According to x265, this type is always encoded with four-sized header
   // https://bitbucket.org/multicoreware/x265_git/src/4bf31dc15fb6d1f93d12ecf21fad5e695f0db5c0/source/encoder/nal.cpp#lines-100
   if (nal_type == HEVC_NAL_UNSPEC62)
