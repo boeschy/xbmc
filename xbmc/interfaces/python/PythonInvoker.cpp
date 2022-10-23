@@ -17,20 +17,20 @@
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
 #include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "dialogs/GUIDialogKaiToast.h"
-#include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
 #include "interfaces/python/PyContext.h"
-#include "interfaces/python/XBPython.h"
 #include "interfaces/python/pythreadstate.h"
 #include "interfaces/python/swig.h"
 #include "messaging/ApplicationMessenger.h"
 #include "threads/SingleLock.h"
 #include "threads/SystemClock.h"
 #include "utils/CharsetConverter.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/XTimeUtils.h"
@@ -115,7 +115,7 @@ bool CPythonInvoker::Execute(
   if (script.empty())
     return false;
 
-  if (!CFile::Exists(script))
+  if (!CFileUtils::Exists(script))
   {
     CLog::Log(LOGERROR, "CPythonInvoker({}): python script \"{}\" does not exist", GetId(),
               CSpecialProtocol::TranslatePath(script));
@@ -220,7 +220,7 @@ bool CPythonInvoker::execute(const std::string& script, std::vector<std::wstring
           "version.",
           GetId());
       ADDON::VECADDONS addons;
-      CServiceBroker::GetAddonMgr().GetAddons(addons, ADDON::ADDON_SCRIPT_MODULE);
+      CServiceBroker::GetAddonMgr().GetAddons(addons, ADDON::AddonType::SCRIPT_MODULE);
       for (unsigned int i = 0; i < addons.size(); ++i)
         pythonPath.emplace(CSpecialProtocol::TranslatePath(addons[i]->LibPath()));
     }
@@ -644,7 +644,7 @@ void CPythonInvoker::onPythonModuleInitialization(void* moduleDict)
   PyObject* pyaddonid = PyUnicode_FromString(m_addon->ID().c_str());
   PyDict_SetItemString(moduleDictionary, "__xbmcaddonid__", pyaddonid);
 
-  ADDON::AddonVersion version = m_addon->GetDependencyVersion("xbmc.python");
+  ADDON::CAddonVersion version = m_addon->GetDependencyVersion("xbmc.python");
   PyObject* pyxbmcapiversion = PyUnicode_FromString(version.asString().c_str());
   PyDict_SetItemString(moduleDictionary, "__xbmcapiversion__", pyxbmcapiversion);
 
@@ -708,7 +708,7 @@ void CPythonInvoker::getAddonModuleDeps(const ADDON::AddonPtr& addon, std::set<s
   {
     //Check if dependency is a module addon
     ADDON::AddonPtr dependency;
-    if (CServiceBroker::GetAddonMgr().GetAddon(it.id, dependency, ADDON::ADDON_SCRIPT_MODULE,
+    if (CServiceBroker::GetAddonMgr().GetAddon(it.id, dependency, ADDON::AddonType::SCRIPT_MODULE,
                                                ADDON::OnlyEnabled::CHOICE_YES))
     {
       std::string path = CSpecialProtocol::TranslatePath(dependency->LibPath());

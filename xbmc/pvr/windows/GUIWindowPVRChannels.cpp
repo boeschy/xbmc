@@ -57,6 +57,18 @@ CGUIWindowPVRChannelsBase::~CGUIWindowPVRChannelsBase()
       this);
 }
 
+std::string CGUIWindowPVRChannelsBase::GetRootPath() const
+{
+  //! @todo Would it make sense to change GetRootPath() declaration in CGUIMediaWindow
+  //! to be non-const to get rid of the const_cast's here?
+
+  CGUIWindowPVRChannelsBase* pThis = const_cast<CGUIWindowPVRChannelsBase*>(this);
+  if (pThis->InitChannelGroup())
+    return pThis->GetDirectoryPath();
+
+  return CGUIWindowPVRBase::GetRootPath();
+}
+
 void CGUIWindowPVRChannelsBase::GetContextButtons(int itemNumber, CContextButtons& buttons)
 {
   // Add parent buttons before the Manage button
@@ -181,15 +193,15 @@ bool CGUIWindowPVRChannelsBase::OnMessage(CGUIMessage& message)
             case ACTION_MOUSE_LEFT_CLICK:
             case ACTION_PLAYER_PLAY:
               CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().SwitchToChannel(
-                  m_vecItems->Get(iItem), true);
+                  *(m_vecItems->Get(iItem)), true);
               break;
             case ACTION_SHOW_INFO:
               CServiceBroker::GetPVRManager().Get<PVR::GUI::EPG>().ShowEPGInfo(
-                  m_vecItems->Get(iItem));
+                  *(m_vecItems->Get(iItem)));
               break;
             case ACTION_DELETE_ITEM:
               CServiceBroker::GetPVRManager().Get<PVR::GUI::Channels>().HideChannel(
-                  m_vecItems->Get(iItem));
+                  *(m_vecItems->Get(iItem)));
               break;
             case ACTION_CONTEXT_MENU:
             case ACTION_MOUSE_RIGHT_CLICK:

@@ -214,23 +214,23 @@ JSONRPC_STATUS CPlayerOperations::GetItem(const std::string &method, ITransportL
         {
           switch (fileItem->GetVideoContentType())
           {
-            case VIDEODB_CONTENT_MOVIES:
+            case VideoDbContentType::MOVIES:
               videodatabase.GetMovieInfo("", *(fileItem->GetVideoInfoTag()),
                                          fileItem->GetVideoInfoTag()->m_iDbId);
               break;
 
-            case VIDEODB_CONTENT_MUSICVIDEOS:
+            case VideoDbContentType::MUSICVIDEOS:
               videodatabase.GetMusicVideoInfo("", *(fileItem->GetVideoInfoTag()),
                                               fileItem->GetVideoInfoTag()->m_iDbId);
               break;
 
-            case VIDEODB_CONTENT_EPISODES:
+            case VideoDbContentType::EPISODES:
               videodatabase.GetEpisodeInfo("", *(fileItem->GetVideoInfoTag()),
                                            fileItem->GetVideoInfoTag()->m_iDbId);
               break;
 
-            case VIDEODB_CONTENT_TVSHOWS:
-            case VIDEODB_CONTENT_MOVIE_SETS:
+            case VideoDbContentType::TVSHOWS:
+            case VideoDbContentType::MOVIE_SETS:
             default:
               break;
           }
@@ -752,8 +752,7 @@ JSONRPC_STATUS CPlayerOperations::Open(const std::string &method, ITransportLaye
     if (!epgTag || !epgTag->IsPlayable())
       return InvalidParams;
 
-    if (!CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().PlayEpgTag(
-            std::make_shared<CFileItem>(epgTag)))
+    if (!CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().PlayEpgTag(CFileItem(epgTag)))
       return FailedToExecute;
 
     return ACK;
@@ -774,7 +773,7 @@ JSONRPC_STATUS CPlayerOperations::Open(const std::string &method, ITransportLaye
       return InvalidParams;
 
     if (!CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().PlayMedia(
-            std::make_shared<CFileItem>(groupMember)))
+            CFileItem(groupMember)))
       return FailedToExecute;
 
     return ACK;
@@ -789,8 +788,7 @@ JSONRPC_STATUS CPlayerOperations::Open(const std::string &method, ITransportLaye
     if (!recording)
       return InvalidParams;
 
-    if (!CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().PlayMedia(
-            std::make_shared<CFileItem>(recording)))
+    if (!CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().PlayMedia(CFileItem(recording)))
       return FailedToExecute;
 
     return ACK;

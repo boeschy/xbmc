@@ -104,12 +104,11 @@ CPVRGUIChannelNavigator::CPVRGUIChannelNavigator()
 
 CPVRGUIChannelNavigator::~CPVRGUIChannelNavigator()
 {
-  CServiceBroker::GetGUI()
-      ->GetInfoManager()
-      .GetInfoProviders()
-      .GetPlayerInfoProvider()
-      .Events()
-      .Unsubscribe(this);
+  const auto gui = CServiceBroker::GetGUI();
+  if (!gui)
+    return;
+
+  gui->GetInfoManager().GetInfoProviders().GetPlayerInfoProvider().Events().Unsubscribe(this);
 }
 
 void CPVRGUIChannelNavigator::SubscribeToShowInfoEventStream()
@@ -232,7 +231,7 @@ void CPVRGUIChannelNavigator::SelectChannel(
 
 void CPVRGUIChannelNavigator::SwitchToCurrentChannel()
 {
-  CFileItemPtr item;
+  std::unique_ptr<CFileItem> item;
 
   {
     std::unique_lock<CCriticalSection> lock(m_critSection);
@@ -243,11 +242,11 @@ void CPVRGUIChannelNavigator::SwitchToCurrentChannel()
       m_iChannelEntryJobId = -1;
     }
 
-    item.reset(new CFileItem(m_currentChannel));
+    item = std::make_unique<CFileItem>(m_currentChannel);
   }
 
   if (item)
-    CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().SwitchToChannel(item, false);
+    CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().SwitchToChannel(*item, false);
 }
 
 bool CPVRGUIChannelNavigator::IsPreview() const

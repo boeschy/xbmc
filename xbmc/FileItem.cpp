@@ -291,7 +291,7 @@ CFileItem::CFileItem(const std::shared_ptr<CPVRTimerInfoTag>& timer)
 
   if (!timer->ChannelIcon().empty())
     SetArt("icon", timer->ChannelIcon());
-  else if (timer->m_bIsRadio)
+  else if (timer->IsRadio())
     SetArt("icon", "DefaultMusicSongs.png");
   else
     SetArt("icon", "DefaultTVShows.png");
@@ -810,6 +810,12 @@ void CFileItem::ToSortable(SortItem &sortable, Field field) const
 
   if (m_eventLogEntry)
     m_eventLogEntry->ToSortable(sortable, field);
+
+  if (IsFavourite())
+  {
+    if (field == FieldUserPreference)
+      sortable[FieldUserPreference] = GetProperty("favourite.index").asString();
+  }
 }
 
 void CFileItem::ToSortable(SortItem &sortable, const Fields &fields) const
@@ -1249,6 +1255,11 @@ bool CFileItem::IsStack() const
   return URIUtils::IsStack(m_strPath);
 }
 
+bool CFileItem::IsFavourite() const
+{
+  return URIUtils::IsFavourite(m_strPath);
+}
+
 bool CFileItem::IsPlugin() const
 {
   return URIUtils::IsPlugin(m_strPath);
@@ -1468,6 +1479,10 @@ void CFileItem::FillInDefaultIcon()
       else if ( IsPythonScript() )
       {
         SetArt("icon", "DefaultScript.png");
+      }
+      else if (IsFavourite())
+      {
+        SetArt("icon", "DefaultFavourites.png");
       }
       else
       {
@@ -3870,23 +3885,23 @@ std::string CFileItem::FindTrailer() const
   return strTrailer;
 }
 
-int CFileItem::GetVideoContentType() const
+VideoDbContentType CFileItem::GetVideoContentType() const
 {
-  VIDEODB_CONTENT_TYPE type = VIDEODB_CONTENT_MOVIES;
+  VideoDbContentType type = VideoDbContentType::MOVIES;
   if (HasVideoInfoTag() && GetVideoInfoTag()->m_type == MediaTypeTvShow)
-    type = VIDEODB_CONTENT_TVSHOWS;
+    type = VideoDbContentType::TVSHOWS;
   if (HasVideoInfoTag() && GetVideoInfoTag()->m_type == MediaTypeEpisode)
-    return VIDEODB_CONTENT_EPISODES;
+    return VideoDbContentType::EPISODES;
   if (HasVideoInfoTag() && GetVideoInfoTag()->m_type == MediaTypeMusicVideo)
-    return VIDEODB_CONTENT_MUSICVIDEOS;
+    return VideoDbContentType::MUSICVIDEOS;
   if (HasVideoInfoTag() && GetVideoInfoTag()->m_type == MediaTypeAlbum)
-    return VIDEODB_CONTENT_MUSICALBUMS;
+    return VideoDbContentType::MUSICALBUMS;
 
   CVideoDatabaseDirectory dir;
   VIDEODATABASEDIRECTORY::CQueryParams params;
   dir.GetQueryParams(m_strPath, params);
   if (params.GetSetId() != -1 && params.GetMovieId() == -1) // movie set
-    return VIDEODB_CONTENT_MOVIE_SETS;
+    return VideoDbContentType::MOVIE_SETS;
 
   return type;
 }

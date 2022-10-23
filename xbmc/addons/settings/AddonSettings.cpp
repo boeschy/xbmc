@@ -13,11 +13,11 @@
 #include "LangInfo.h"
 #include "ServiceBroker.h"
 #include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "addons/binary-addons/AddonInstanceHandler.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "addons/settings/SettingUrlEncodedString.h"
 #include "filesystem/Directory.h"
-#include "filesystem/File.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/LocalizeStrings.h"
 #include "messaging/ApplicationMessenger.h"
@@ -1146,11 +1146,11 @@ SettingPtr CAddonSettings::InitializeFromOldSettingAddon(const std::string& sett
   // get addon types
   std::string addonTypeStr = XMLUtils::GetAttribute(settingElement, "addontype");
   const auto addonTypesStr = StringUtils::Split(addonTypeStr, ",");
-  std::set<ADDON::TYPE> addonTypes;
+  std::set<AddonType> addonTypes;
   for (auto addonType : addonTypesStr)
   {
     auto type = ADDON::CAddonInfo::TranslateType(StringUtils::Trim(addonType));
-    if (type != ADDON::ADDON_UNKNOWN)
+    if (type != ADDON::AddonType::UNKNOWN)
       addonTypes.insert(type);
   }
 

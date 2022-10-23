@@ -15,6 +15,7 @@
 #include "Util.h"
 #include "addons/AddonManager.h"
 #include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "application/Application.h"
 #include "application/ApplicationComponents.h"
@@ -261,7 +262,7 @@ void CGUIDialogSubtitles::FillServices()
   ClearServices();
 
   VECADDONS addons;
-  CServiceBroker::GetAddonMgr().GetAddons(addons, ADDON_SUBTITLE_MODULE);
+  CServiceBroker::GetAddonMgr().GetAddons(addons, AddonType::SUBTITLE_MODULE);
 
   if (addons.empty())
   {
@@ -271,8 +272,8 @@ void CGUIDialogSubtitles::FillServices()
 
   std::string defaultService;
   const CFileItem &item = g_application.CurrentUnstackedItem();
-  if (item.GetVideoContentType() == VIDEODB_CONTENT_TVSHOWS ||
-      item.GetVideoContentType() == VIDEODB_CONTENT_EPISODES)
+  if (item.GetVideoContentType() == VideoDbContentType::TVSHOWS ||
+      item.GetVideoContentType() == VideoDbContentType::EPISODES)
     // Set default service for tv shows
     defaultService = CServiceBroker::GetSettingsComponent()->GetSettings()->GetString(CSettings::SETTING_SUBTITLES_TV);
   else
@@ -446,7 +447,8 @@ void CGUIDialogSubtitles::OnSubtitleServiceContextMenu(int itemIdx)
     {
       AddonPtr addon;
       if (CServiceBroker::GetAddonMgr().GetAddon(service->GetProperty("Addon.ID").asString(), addon,
-                                                 ADDON_SUBTITLE_MODULE, OnlyEnabled::CHOICE_YES))
+                                                 AddonType::SUBTITLE_MODULE,
+                                                 OnlyEnabled::CHOICE_YES))
       {
         CGUIDialogAddonSettings::ShowForAddon(addon);
       }

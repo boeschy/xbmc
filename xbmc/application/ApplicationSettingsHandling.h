@@ -12,9 +12,6 @@
 #include "settings/lib/ISettingCallback.h"
 #include "settings/lib/ISettingsHandler.h"
 
-class CApplicationVolumeHandling;
-class CApplicationSkinHandling;
-
 /*!
  * \brief Class handling application support for settings.
  */
@@ -23,10 +20,6 @@ class CApplicationSettingsHandling : public ISettingCallback,
                                      public ISettingsHandler,
                                      public ISubSettings
 {
-public:
-  CApplicationSettingsHandling(CApplicationSkinHandling& skinHandling,
-                               CApplicationVolumeHandling& volumeHandling);
-
 protected:
   void RegisterSettings();
   void UnregisterSettings();
@@ -38,7 +31,4 @@ protected:
   bool OnSettingUpdate(const std::shared_ptr<CSetting>& setting,
                        const char* oldSettingId,
                        const TiXmlNode* oldSettingNode) override;
-
-  CApplicationSkinHandling& m_skinHandling;
-  CApplicationVolumeHandling& m_volumeHandling;
 };

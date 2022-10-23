@@ -28,6 +28,8 @@
 #include <utility>
 #include <vector>
 
+enum class VideoDbContentType;
+
 namespace ADDON
 {
 class IAddon;
@@ -234,6 +236,7 @@ public:
   bool IsSmb() const;
   bool IsURL() const;
   bool IsStack() const;
+  bool IsFavourite() const;
   bool IsMultiPath() const;
   bool IsMusicDb() const;
   bool IsVideoDb() const;
@@ -263,7 +266,7 @@ public:
   void FillInDefaultIcon();
   void SetFileSizeLabel();
   void SetLabel(const std::string &strLabel) override;
-  int GetVideoContentType() const; /* return VIDEODB_CONTENT_TYPE, but don't want to include videodb in this header */
+  VideoDbContentType GetVideoContentType() const;
   bool IsLabelPreformatted() const { return m_bLabelPreformatted; }
   void SetLabelPreformatted(bool bYesNo) { m_bLabelPreformatted=bYesNo; }
   bool SortsOnTop() const { return m_specialSort == SortSpecialOnTop; }

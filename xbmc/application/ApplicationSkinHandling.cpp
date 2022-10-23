@@ -16,7 +16,9 @@
 #include "ServiceBroker.h"
 #include "TextureCache.h"
 #include "addons/AddonManager.h"
+#include "addons/AddonVersion.h"
 #include "addons/Skin.h"
+#include "addons/addoninfo/AddonType.h"
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
 #include "dialogs/GUIDialogButtonMenu.h"
@@ -37,6 +39,7 @@
 #include "settings/SettingsComponent.h"
 #include "settings/SkinSettings.h"
 #include "settings/lib/Setting.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/XBMCTinyXML.h"
 #include "utils/log.h"
@@ -44,14 +47,19 @@
 
 using namespace KODI::MESSAGING;
 
-bool CApplicationSkinHandling::LoadSkin(const std::string& skinID,
-                                        IMsgTargetCallback* msgCb,
-                                        IWindowManagerCallback* wCb)
+CApplicationSkinHandling::CApplicationSkinHandling(IMsgTargetCallback* msgCb,
+                                                   IWindowManagerCallback* wCb,
+                                                   bool& bInitializing)
+  : m_msgCb(msgCb), m_wCb(wCb), m_bInitializing(bInitializing)
 {
-  ADDON::SkinPtr skin;
+}
+
+bool CApplicationSkinHandling::LoadSkin(const std::string& skinID)
+{
+  std::shared_ptr<ADDON::CSkinInfo> skin;
   {
     ADDON::AddonPtr addon;
-    if (!CServiceBroker::GetAddonMgr().GetAddon(skinID, addon, ADDON::ADDON_SKIN,
+    if (!CServiceBroker::GetAddonMgr().GetAddon(skinID, addon, ADDON::AddonType::SKIN,
                                                 ADDON::OnlyEnabled::CHOICE_YES))
       return false;
     skin = std::static_pointer_cast<ADDON::CSkinInfo>(addon);
@@ -151,12 +159,12 @@ bool CApplicationSkinHandling::LoadSkin(const std::string& skinID,
   CLog::Log(LOGDEBUG, "Load Skin XML: {:.2f} ms", duration.count());
 
   CLog::Log(LOGINFO, "  initialize new skin...");
-  CServiceBroker::GetGUI()->GetWindowManager().AddMsgTarget(msgCb);
+  CServiceBroker::GetGUI()->GetWindowManager().AddMsgTarget(m_msgCb);
   CServiceBroker::GetGUI()->GetWindowManager().AddMsgTarget(&CServiceBroker::GetPlaylistPlayer());
   CServiceBroker::GetGUI()->GetWindowManager().AddMsgTarget(&g_fontManager);
   CServiceBroker::GetGUI()->GetWindowManager().AddMsgTarget(
       &CServiceBroker::GetGUI()->GetStereoscopicsManager());
-  CServiceBroker::GetGUI()->GetWindowManager().SetCallback(*wCb);
+  CServiceBroker::GetGUI()->GetWindowManager().SetCallback(*m_wCb);
 
   //@todo should be done by GUIComponents
   CServiceBroker::GetGUI()->GetWindowManager().Initialize();
@@ -366,12 +374,10 @@ bool CApplicationSkinHandling::LoadCustomWindows()
   return true;
 }
 
-void CApplicationSkinHandling::ReloadSkin(bool confirm,
-                                          IMsgTargetCallback* msgCb,
-                                          IWindowManagerCallback* wCb)
+void CApplicationSkinHandling::ReloadSkin(bool confirm)
 {
-  //  if (!g_SkinInfo || m_bInitializing)
-  //    return; // Don't allow reload before skin is loaded by system
+  if (!g_SkinInfo || m_bInitializing)
+    return; // Don't allow reload before skin is loaded by system
 
   std::string oldSkin = g_SkinInfo->ID();
 
@@ -381,7 +387,7 @@ void CApplicationSkinHandling::ReloadSkin(bool confirm,
 
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
   std::string newSkin = settings->GetString(CSettings::SETTING_LOOKANDFEEL_SKIN);
-  if (LoadSkin(newSkin, msgCb, wCb))
+  if (LoadSkin(newSkin))
   {
     /* The Reset() or SetString() below will cause recursion, so the m_confirmSkinChange boolean is set so as to not prompt the
        user as to whether they want to keep the current skin. */

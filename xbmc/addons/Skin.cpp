@@ -8,14 +8,12 @@
 
 #include "Skin.h"
 
-#include "AddonManager.h"
 #include "FileItem.h"
 #include "ServiceBroker.h"
 #include "Util.h"
+#include "addons/addoninfo/AddonType.h"
 #include "dialogs/GUIDialogKaiToast.h"
-// fallback for new skin resolution code
 #include "filesystem/Directory.h"
-#include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -28,6 +26,7 @@
 #include "settings/lib/Setting.h"
 #include "settings/lib/SettingDefinitions.h"
 #include "threads/Timer.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
@@ -151,20 +150,19 @@ bool CSkinSettingBool::SerializeSetting(TiXmlElement* element) const
   return true;
 }
 
-CSkinInfo::CSkinInfo(
-    const AddonInfoPtr& addonInfo,
-    const RESOLUTION_INFO& resolution /* = RESOLUTION_INFO() */)
-    : CAddon(addonInfo, ADDON_SKIN),
-      m_defaultRes(resolution),
-      m_effectsSlowDown(1.f),
-      m_debugging(false)
-  {
-    m_settingsUpdateHandler.reset(new CSkinSettingUpdateHandler(*this));
-  }
-
-CSkinInfo::CSkinInfo(const AddonInfoPtr& addonInfo) : CAddon(addonInfo, ADDON_SKIN)
+CSkinInfo::CSkinInfo(const AddonInfoPtr& addonInfo,
+                     const RESOLUTION_INFO& resolution /* = RESOLUTION_INFO() */)
+  : CAddon(addonInfo, AddonType::SKIN),
+    m_defaultRes(resolution),
+    m_effectsSlowDown(1.f),
+    m_debugging(false)
 {
-  for (const auto& values : Type(ADDON_SKIN)->GetValues())
+  m_settingsUpdateHandler.reset(new CSkinSettingUpdateHandler(*this));
+}
+
+CSkinInfo::CSkinInfo(const AddonInfoPtr& addonInfo) : CAddon(addonInfo, AddonType::SKIN)
+{
+  for (const auto& values : Type(AddonType::SKIN)->GetValues())
   {
     if (values.first != "res")
       continue;
@@ -178,7 +176,7 @@ CSkinInfo::CSkinInfo(const AddonInfoPtr& addonInfo) : CAddon(addonInfo, ADDON_SK
 
     std::vector<std::string> fracs = StringUtils::Split(strAspect, ':');
     if (fracs.size() == 2)
-      aspect = (float)(atof(fracs[0].c_str())/atof(fracs[1].c_str()));
+      aspect = (float)(atof(fracs[0].c_str()) / atof(fracs[1].c_str()));
     if (width > 0 && height > 0)
     {
       RESOLUTION_INFO res(width, height, aspect, folder);
@@ -189,11 +187,11 @@ CSkinInfo::CSkinInfo(const AddonInfoPtr& addonInfo) : CAddon(addonInfo, ADDON_SK
     }
   }
 
-  m_effectsSlowDown = Type(ADDON_SKIN)->GetValue("@effectslowdown").asFloat();
+  m_effectsSlowDown = Type(AddonType::SKIN)->GetValue("@effectslowdown").asFloat();
   if (m_effectsSlowDown == 0.0f)
     m_effectsSlowDown = 1.f;
 
-  m_debugging = Type(ADDON_SKIN)->GetValue("@debugging").asBoolean();
+  m_debugging = Type(AddonType::SKIN)->GetValue("@debugging").asBoolean();
 
   m_settingsUpdateHandler.reset(new CSkinSettingUpdateHandler(*this));
   LoadStartupWindows(addonInfo);
@@ -262,7 +260,7 @@ std::string CSkinInfo::GetSkinPath(const std::string& strFile, RESOLUTION_INFO *
   *res = *std::min_element(m_resolutions.begin(), m_resolutions.end(), closestRes(target));
 
   std::string strPath = URIUtils::AddFileToFolder(strPathToUse, res->strMode, strFile);
-  if (CFile::Exists(strPath))
+  if (CFileUtils::Exists(strPath))
     return strPath;
 
   // use the default resolution
@@ -273,7 +271,7 @@ std::string CSkinInfo::GetSkinPath(const std::string& strFile, RESOLUTION_INFO *
 
 bool CSkinInfo::HasSkinFile(const std::string &strFile) const
 {
-  return CFile::Exists(GetSkinPath(strFile));
+  return CFileUtils::Exists(GetSkinPath(strFile));
 }
 
 void CSkinInfo::LoadIncludes()
@@ -334,6 +332,7 @@ bool CSkinInfo::LoadStartupWindows(const AddonInfoPtr& addonInfo)
   m_startupWindows.emplace_back(WINDOW_FILES, "7");
   m_startupWindows.emplace_back(WINDOW_SETTINGS_MENU, "5");
   m_startupWindows.emplace_back(WINDOW_WEATHER, "8");
+  m_startupWindows.emplace_back(WINDOW_FAVOURITES, "1036");
   return true;
 }
 

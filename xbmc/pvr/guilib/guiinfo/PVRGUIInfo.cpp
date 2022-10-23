@@ -490,7 +490,7 @@ bool CPVRGUIInfo::GetListItemAndPlayerLabel(const CFileItem* item,
         return true;
       case VIDEOPLAYER_CHANNEL_NAME:
       case LISTITEM_CHANNEL_NAME:
-        strValue = recording->m_strChannelName;
+        strValue = recording->ChannelName();
         if (strValue.empty())
         {
           if (recording->ProviderName().empty())
@@ -1391,7 +1391,7 @@ bool CPVRGUIInfo::GetListItemAndPlayerBool(const CFileItem* item,
       {
         const std::shared_ptr<CPVRTimerInfoTag> timer = CPVRItem(item).GetTimerInfoTag();
         if (timer)
-          bValue = timer->GetTimerRuleId() != PVR_TIMER_NO_PARENT;
+          bValue = timer->HasParent();
         return true;
       }
       break;
@@ -1409,7 +1409,7 @@ bool CPVRGUIInfo::GetListItemAndPlayerBool(const CFileItem* item,
       {
         const std::shared_ptr<CPVRTimerInfoTag> timer = CPVRItem(item).GetTimerInfoTag();
         if (timer)
-          bValue = timer->IsReminder() && (timer->GetTimerRuleId() != PVR_TIMER_NO_PARENT);
+          bValue = timer->IsReminder() && timer->HasParent();
         return true;
       }
       break;

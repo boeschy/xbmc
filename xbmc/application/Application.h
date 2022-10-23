@@ -12,9 +12,6 @@
 #include "application/ApplicationEnums.h"
 #include "application/ApplicationPlayerCallback.h"
 #include "application/ApplicationSettingsHandling.h"
-#include "application/ApplicationSkinHandling.h"
-#include "application/ApplicationStackHelper.h"
-#include "application/ApplicationVolumeHandling.h"
 #include "guilib/IMsgTargetCallback.h"
 #include "guilib/IWindowManagerCallback.h"
 #include "messaging/IMessageTarget.h"
@@ -89,9 +86,7 @@ class CApplication : public IWindowManagerCallback,
                      public KODI::MESSAGING::IMessageTarget,
                      public CApplicationComponents,
                      public CApplicationPlayerCallback,
-                     public CApplicationSettingsHandling,
-                     public CApplicationSkinHandling,
-                     public CApplicationVolumeHandling
+                     public CApplicationSettingsHandling
 {
 friend class CAppInboundProtocol;
 
@@ -119,14 +114,12 @@ public:
   bool InitWindow(RESOLUTION res = RES_INVALID);
 
   bool Stop(int exitCode);
-  void ReloadSkin(bool confirm = false);
   const std::string& CurrentFile();
   CFileItem& CurrentFileItem();
   std::shared_ptr<CFileItem> CurrentFileItemPtr();
   const CFileItem& CurrentUnstackedItem();
   bool OnMessage(CGUIMessage& message) override;
   std::string GetCurrentPlayer();
-  const CApplicationStackHelper& GetAppStackHelper() const;
 
   int  GetMessageMask() override;
   void OnApplicationMessage(KODI::MESSAGING::ThreadMessage* pMsg) override;
@@ -257,7 +250,6 @@ private:
   std::atomic_uint m_WaitingExternalCalls;        /*!< counts threads which are waiting to be processed in FrameMove */
   unsigned int m_ProcessedExternalCalls = 0;      /*!< counts calls which are processed during one "door open" cycle in FrameMove */
   unsigned int m_ProcessedExternalDecay = 0;      /*!< counts to close door after a few frames of no python activity */
-  CApplicationStackHelper m_stackHelper;
   int m_ExitCode{EXITCODE_QUIT};
 };
 

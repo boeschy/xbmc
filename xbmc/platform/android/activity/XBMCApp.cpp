@@ -11,6 +11,7 @@
 #include "AndroidKey.h"
 #include "CompileInfo.h"
 #include "FileItem.h"
+#include "application/AppEnvironment.h"
 #include "application/AppParams.h"
 #include "application/Application.h"
 #include "application/ApplicationComponents.h"
@@ -91,6 +92,7 @@
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
+#include "video/VideoInfoTag.h"
 #include "windowing/WinEvents.h"
 #include "windowing/android/VideoSyncAndroid.h"
 #include "windowing/android/WinSystemAndroid.h"
@@ -637,7 +639,10 @@ void CXBMCApp::run()
   m_firstrun = false;
   android_printf(" => running XBMC_Run...");
 
-  status = XBMC_Run(true, std::make_shared<CAppParams>());
+  CAppEnvironment::SetUp(std::make_shared<CAppParams>());
+  status = XBMC_Run(true);
+  CAppEnvironment::TearDown();
+
   android_printf(" => XBMC_Run finished with %d", status);
 }
 
@@ -1015,8 +1020,13 @@ bool CXBMCApp::StartActivity(const std::string& package,
     GetPackageManager().getLaunchIntentForPackage(package) :
     CJNIIntent(intent);
 
-  if (!newIntent && CJNIBuild::SDK_INT >= 21)
-    newIntent = GetPackageManager().getLeanbackLaunchIntentForPackage(package);
+  if (intent.empty() && GetPackageManager().hasSystemFeature("android.software.leanback"))
+  {
+    CJNIIntent leanbackIntent = GetPackageManager().getLeanbackLaunchIntentForPackage(package);
+    if (leanbackIntent)
+      newIntent = leanbackIntent;
+  }
+
   if (!newIntent)
     return false;
 

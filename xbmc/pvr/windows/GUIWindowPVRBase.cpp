@@ -12,6 +12,7 @@
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
+#include "addons/addoninfo/AddonType.h"
 #include "dialogs/GUIDialogExtendedProgressBar.h"
 #include "dialogs/GUIDialogSelect.h"
 #include "guilib/GUIComponent.h"
@@ -225,22 +226,6 @@ bool CGUIWindowPVRBase::OnAction(const CAction& action)
   return CGUIMediaWindow::OnAction(action);
 }
 
-bool CGUIWindowPVRBase::OnBack(int actionID)
-{
-  if (actionID == ACTION_NAV_BACK)
-  {
-    // don't call CGUIMediaWindow as it will attempt to go to the parent folder which we don't want.
-    if (GetPreviousWindow() != WINDOW_FULLSCREEN_VIDEO)
-    {
-      CServiceBroker::GetGUI()->GetWindowManager().ActivateWindow(WINDOW_HOME);
-      return true;
-    }
-    else
-      return CGUIWindow::OnBack(actionID);
-  }
-  return CGUIMediaWindow::OnBack(actionID);
-}
-
 bool CGUIWindowPVRBase::ActivatePreviousChannelGroup()
 {
   const std::shared_ptr<CPVRChannelGroup> channelGroup = GetChannelGroup();
@@ -410,7 +395,7 @@ void CGUIWindowPVRBase::SetInvalid()
 bool CGUIWindowPVRBase::CanBeActivated() const
 {
   // check if there is at least one enabled PVR add-on
-  if (!CServiceBroker::GetAddonMgr().HasAddons(ADDON::ADDON_PVRDLL))
+  if (!CServiceBroker::GetAddonMgr().HasAddons(ADDON::AddonType::PVRDLL))
   {
     HELPERS::ShowOKDialogText(CVariant{19296}, CVariant{19272}); // No PVR add-on enabled, You need a tuner, backend software...
     return false;

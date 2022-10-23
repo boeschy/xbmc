@@ -18,6 +18,7 @@
 #include "dialogs/GUIDialogMediaSource.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
+#include "music/MusicDbUrl.h"
 #include "music/MusicLibraryQueue.h"
 #include "music/dialogs/GUIDialogInfoProviderSettings.h"
 #include "music/dialogs/GUIDialogMusicInfo.h"
@@ -38,7 +39,6 @@
 #include "dialogs/GUIDialogSmartPlaylistEditor.h"
 #include "dialogs/GUIDialogYesNo.h"
 #include "filesystem/Directory.h"
-#include "filesystem/File.h"
 #include "filesystem/MusicDatabaseDirectory.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -54,13 +54,14 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "storage/MediaManager.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/XTimeUtils.h"
 #include "utils/log.h"
-#include "video/dialogs/GUIDialogVideoInfo.h"
 #include "video/VideoInfoTag.h"
+#include "video/dialogs/GUIDialogVideoInfo.h"
 #include "view/GUIViewState.h"
 
 #include <algorithm>
@@ -411,7 +412,7 @@ void CGUIWindowMusicBase::OnQueueItem(int iItem, bool first)
     const std::shared_ptr<CProfileManager> profileManager =
       CServiceBroker::GetSettingsComponent()->GetProfileManager();
     if ((item->GetPath() == profileManager->GetUserDataItem("PartyMode.xsp")) &&
-      !XFILE::CFile::Exists(item->GetPath()))
+        !CFileUtils::Exists(item->GetPath()))
       return;
   }
 
@@ -571,7 +572,7 @@ void CGUIWindowMusicBase::GetContextButtons(int itemNumber, CContextButtons &but
     // When "PartyMode.xsp" not exist, only context menu button is edit
     if (item->IsSmartPlayList() &&
         (item->GetPath() == profileManager->GetUserDataItem("PartyMode.xsp")) &&
-        !XFILE::CFile::Exists(item->GetPath()))
+        !CFileUtils::Exists(item->GetPath()))
     {
       buttons.Add(CONTEXT_BUTTON_EDIT_SMART_PLAYLIST, 586);
       return;
@@ -794,7 +795,7 @@ void CGUIWindowMusicBase::PlayItem(int iItem)
     const std::shared_ptr<CProfileManager> profileManager =
         CServiceBroker::GetSettingsComponent()->GetProfileManager();
     if ((pItem->GetPath() == profileManager->GetUserDataItem("PartyMode.xsp")) &&
-        !XFILE::CFile::Exists(pItem->GetPath()))
+        !CFileUtils::Exists(pItem->GetPath()))
       return;
   }
 

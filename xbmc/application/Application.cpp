@@ -23,11 +23,15 @@
 #include "addons/Skin.h"
 #include "addons/VFSEntry.h"
 #include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "application/AppInboundProtocol.h"
 #include "application/AppParams.h"
 #include "application/ApplicationActionListeners.h"
 #include "application/ApplicationPlayer.h"
 #include "application/ApplicationPowerHandling.h"
+#include "application/ApplicationSkinHandling.h"
+#include "application/ApplicationStackHelper.h"
+#include "application/ApplicationVolumeHandling.h"
 #include "cores/AudioEngine/Engines/ActiveAE/ActiveAE.h"
 #include "cores/IPlayer.h"
 #include "cores/playercorefactory/PlayerCoreFactory.h"
@@ -36,6 +40,7 @@
 #include "dialogs/GUIDialogKaiToast.h"
 #include "events/EventLog.h"
 #include "events/NotificationEvent.h"
+#include "filesystem/File.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIControlProfiler.h"
 #include "guilib/GUIFontManager.h"
@@ -217,13 +222,10 @@ using namespace std::chrono_literals;
 #define MAX_FFWD_SPEED 5
 
 CApplication::CApplication(void)
-  : CApplicationPlayerCallback(m_stackHelper),
-    CApplicationSettingsHandling(*this, *this)
+  :
 #ifdef HAS_DVD_DRIVE
-    ,
-    m_Autorun(new CAutorun())
+    m_Autorun(new CAutorun()),
 #endif
-    ,
     m_pInertialScrollingHandler(new CInertialScrollingHandler()),
     m_WaitingExternalCalls(0)
 {
@@ -237,10 +239,16 @@ CApplication::CApplication(void)
   RegisterComponent(std::make_shared<CApplicationActionListeners>(m_critSection));
   RegisterComponent(std::make_shared<CApplicationPlayer>());
   RegisterComponent(std::make_shared<CApplicationPowerHandling>());
+  RegisterComponent(std::make_shared<CApplicationSkinHandling>(this, this, m_bInitializing));
+  RegisterComponent(std::make_shared<CApplicationVolumeHandling>());
+  RegisterComponent(std::make_shared<CApplicationStackHelper>());
 }
 
 CApplication::~CApplication(void)
 {
+  DeregisterComponent(typeid(CApplicationStackHelper));
+  DeregisterComponent(typeid(CApplicationVolumeHandling));
+  DeregisterComponent(typeid(CApplicationSkinHandling));
   DeregisterComponent(typeid(CApplicationPowerHandling));
   DeregisterComponent(typeid(CApplicationPlayer));
   DeregisterComponent(typeid(CApplicationActionListeners));
@@ -420,7 +428,7 @@ bool CApplication::Create()
   CServiceBroker::RegisterAE(m_pActiveAE.get());
 
   // initialize m_replayGainSettings
-  CacheReplayGainSettings(*settings);
+  GetComponent<CApplicationVolumeHandling>()->CacheReplayGainSettings(*settings);
 
   // load the keyboard layouts
   if (!keyboardLayoutManager->Load())
@@ -601,8 +609,12 @@ bool CApplication::Initialize()
 {
   m_pActiveAE->Start();
   // restore AE's previous volume state
-  SetHardwareVolume(m_volumeLevel);
-  CServiceBroker::GetActiveAE()->SetMute(m_muted);
+
+  const auto appVolume = GetComponent<CApplicationVolumeHandling>();
+  const auto level = appVolume->GetVolumeRatio();
+  const auto muted = appVolume->IsMuted();
+  appVolume->SetHardwareVolume(level);
+  CServiceBroker::GetActiveAE()->SetMute(muted);
 
 #if defined(HAS_DVD_DRIVE) && !defined(TARGET_WINDOWS) // somehow this throws an "unresolved external symbol" on win32
   // turn off cdio logging
@@ -674,15 +686,17 @@ bool CApplication::Initialize()
   // GUI depends on seek handler
   GetComponent<CApplicationPlayer>()->GetSeekHandler().Configure();
 
+  const auto skinHandling = GetComponent<CApplicationSkinHandling>();
+
   bool uiInitializationFinished = false;
 
   if (CServiceBroker::GetGUI()->GetWindowManager().Initialized())
   {
-    const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
 
     CServiceBroker::GetGUI()->GetWindowManager().CreateWindows();
 
-    m_confirmSkinChange = false;
+    skinHandling->m_confirmSkinChange = false;
 
     std::vector<AddonInfoPtr> incompatibleAddons;
     event.Reset();
@@ -724,7 +738,7 @@ bool CApplication::Initialize()
 
     // Start splashscreen and load skin
     CServiceBroker::GetRenderSystem()->ShowSplash("");
-    m_confirmSkinChange = true;
+    skinHandling->m_confirmSkinChange = true;
 
     auto setting = settings->GetSetting(CSettings::SETTING_LOOKANDFEEL_SKIN);
     if (!setting)
@@ -736,12 +750,12 @@ bool CApplication::Initialize()
     CServiceBroker::RegisterTextureCache(std::make_shared<CTextureCache>());
 
     std::string skinId = settings->GetString(CSettings::SETTING_LOOKANDFEEL_SKIN);
-    if (!CApplicationSkinHandling::LoadSkin(skinId, this, this))
+    if (!skinHandling->LoadSkin(skinId))
     {
       CLog::Log(LOGERROR, "Failed to load skin '{}'", skinId);
       std::string defaultSkin =
           std::static_pointer_cast<const CSettingString>(setting)->GetDefault();
-      if (!CApplicationSkinHandling::LoadSkin(defaultSkin, this, this))
+      if (!skinHandling->LoadSkin(defaultSkin))
       {
         CLog::Log(LOGFATAL, "Default skin '{}' could not be loaded! Terminating..", defaultSkin);
         return false;
@@ -840,14 +854,6 @@ bool CApplication::OnSettingsSaving() const
   // a lot of screens try to save settings on deinit and deinit is
   // called for every screen when the application is stopping
   return !m_bStop;
-}
-
-void CApplication::ReloadSkin(bool confirm/*=false*/)
-{
-  if (!g_SkinInfo || m_bInitializing)
-    return; // Don't allow reload before skin is loaded by system
-
-  CApplicationSkinHandling::ReloadSkin(confirm, this, this);
 }
 
 void CApplication::Render()
@@ -1357,8 +1363,9 @@ bool CApplication::OnAction(const CAction &action)
 
   if (action.GetID() == ACTION_MUTE)
   {
-    ToggleMute();
-    ShowVolumeBar(&action);
+    const auto appVolume = GetComponent<CApplicationVolumeHandling>();
+    appVolume->ToggleMute();
+    appVolume->ShowVolumeBar(&action);
     return true;
   }
 
@@ -1379,11 +1386,12 @@ bool CApplication::OnAction(const CAction &action)
   // Check for global volume control
   if ((action.GetAmount() && (action.GetID() == ACTION_VOLUME_UP || action.GetID() == ACTION_VOLUME_DOWN)) || action.GetID() == ACTION_VOLUME_SET)
   {
+    const auto appVolume = GetComponent<CApplicationVolumeHandling>();
     if (!appPlayer->IsPassthrough())
     {
-      if (m_muted)
-        UnMute();
-      float volume = m_volumeLevel;
+      if (appVolume->IsMuted())
+        appVolume->UnMute();
+      float volume = appVolume->GetVolumeRatio();
       int volumesteps = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_AUDIOOUTPUT_VOLUMESTEPS);
       // sanity check
       if (volumesteps == 0)
@@ -1391,9 +1399,13 @@ bool CApplication::OnAction(const CAction &action)
 
 // Android has steps based on the max available volume level
 #if defined(TARGET_ANDROID)
-      float step = (VOLUME_MAXIMUM - VOLUME_MINIMUM) / CXBMCApp::GetMaxSystemVolume();
+      float step = (CApplicationVolumeHandling::VOLUME_MAXIMUM -
+                    CApplicationVolumeHandling::VOLUME_MINIMUM) /
+                   CXBMCApp::GetMaxSystemVolume();
 #else
-      float step   = (VOLUME_MAXIMUM - VOLUME_MINIMUM) / volumesteps;
+      float step = (CApplicationVolumeHandling::VOLUME_MAXIMUM -
+                    CApplicationVolumeHandling::VOLUME_MINIMUM) /
+                   volumesteps;
 
       if (action.GetRepeat())
         step *= action.GetRepeat() * 50; // 50 fps
@@ -1404,13 +1416,14 @@ bool CApplication::OnAction(const CAction &action)
         volume -= action.GetAmount() * action.GetAmount() * step;
       else
         volume = action.GetAmount() * step;
-      if (volume != m_volumeLevel)
-        SetVolume(volume, false);
+      if (volume != appVolume->GetVolumeRatio())
+        appVolume->SetVolume(volume, false);
     }
     // show visual feedback of volume or passthrough indicator
-    ShowVolumeBar(&action);
+    appVolume->ShowVolumeBar(&action);
     return true;
   }
+
   if (action.GetID() == ACTION_GUIPROFILE_BEGIN)
   {
     CGUIControlProfiler::Instance().SetOutputFile(CSpecialProtocol::TranslatePath("special://home/guiprofiler.xml"));
@@ -1512,7 +1525,7 @@ void CApplication::OnApplicationMessage(ThreadMessage* pMsg)
   case TMSG_VOLUME_SHOW:
   {
     CAction action(pMsg->param1);
-    ShowVolumeBar(&action);
+    GetComponent<CApplicationVolumeHandling>()->ShowVolumeBar(&action);
   }
   break;
 
@@ -1920,7 +1933,7 @@ bool CApplication::Cleanup()
     CServiceBroker::UnregisterSpeechRecognition();
 
     CLog::Log(LOGINFO, "unload skin");
-    UnloadSkin();
+    GetComponent<CApplicationSkinHandling>()->UnloadSkin();
 
     CServiceBroker::UnregisterTextureCache();
 
@@ -2261,15 +2274,14 @@ bool CApplication::PlayMedia(CFileItem& item, const std::string& player, PLAYLIS
   }
   else if (item.IsPVR())
   {
-    return CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().PlayMedia(
-        CFileItemPtr(new CFileItem(item)));
+    return CServiceBroker::GetPVRManager().Get<PVR::GUI::Playback>().PlayMedia(item);
   }
 
   CURL path(item.GetPath());
   if (path.GetProtocol() == "game")
   {
     AddonPtr addon;
-    if (CServiceBroker::GetAddonMgr().GetAddon(path.GetHostName(), addon, ADDON_GAMEDLL,
+    if (CServiceBroker::GetAddonMgr().GetAddon(path.GetHostName(), addon, AddonType::GAMEDLL,
                                                OnlyEnabled::CHOICE_YES))
     {
       CFileItem addonItem(addon);
@@ -2290,12 +2302,13 @@ bool CApplication::PlayMedia(CFileItem& item, const std::string& player, PLAYLIS
 // return value: same with PlayFile()
 bool CApplication::PlayStack(CFileItem& item, bool bRestart)
 {
-  if (!m_stackHelper.InitializeStack(item))
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+  if (!stackHelper->InitializeStack(item))
     return false;
 
-  int startoffset = m_stackHelper.InitializeStackStartPartAndOffset(item);
+  int startoffset = stackHelper->InitializeStackStartPartAndOffset(item);
 
-  CFileItem selectedStackPart = m_stackHelper.GetCurrentStackPartFileItem();
+  CFileItem selectedStackPart = stackHelper->GetCurrentStackPartFileItem();
   selectedStackPart.SetStartOffset(startoffset);
 
   if (item.HasProperty("savedplayerstate"))
@@ -2314,6 +2327,7 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
     item.FillInMimeType();
 
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
 
   if (!bRestart)
   {
@@ -2321,7 +2335,7 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
     appPlayer->SetPlaySpeed(1);
 
     m_nextPlaylistItem = -1;
-    m_stackHelper.Clear();
+    stackHelper->Clear();
 
     if (item.IsVideo())
       CUtil::ClearSubtitles();
@@ -2369,7 +2383,7 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
     if (item.HasVideoInfoTag())
       options.state = item.GetVideoInfoTag()->GetResumePoint().playerState;
   }
-  if (!bRestart || m_stackHelper.IsPlayingISOStack())
+  if (!bRestart || stackHelper->IsPlayingISOStack())
   {
     // the following code block is only applicable when bRestart is false OR to ISO stacks
 
@@ -2474,11 +2488,11 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
         CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_fullScreenOnMovieStart &&
         !CMediaSettings::GetInstance().DoesMediaStartWindowed();
   }
-  else if(m_stackHelper.IsPlayingRegularStack())
+  else if (stackHelper->IsPlayingRegularStack())
   {
     //! @todo - this will fail if user seeks back to first file in stack
-    if (m_stackHelper.GetCurrentPartNumber() == 0 ||
-        m_stackHelper.GetRegisteredStack(item)->GetStartOffset() != 0)
+    if (stackHelper->GetCurrentPartNumber() == 0 ||
+        stackHelper->GetRegisteredStack(item)->GetStartOffset() != 0)
       options.fullscreen = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->
           m_fullScreenOnMovieStart && !CMediaSettings::GetInstance().DoesMediaStartWindowed();
     else
@@ -2516,9 +2530,10 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
       CLog::LogF(LOGDEBUG, "Ignored {} playback thread messages", dMsgCount);
   }
 
+  const auto appVolume = GetComponent<CApplicationVolumeHandling>();
   appPlayer->OpenFile(item, options, m_ServiceManager->GetPlayerCoreFactory(), player, *this);
-  appPlayer->SetVolume(m_volumeLevel);
-  appPlayer->SetMute(m_muted);
+  appPlayer->SetVolume(appVolume->GetVolumeRatio());
+  appPlayer->SetMute(appVolume->IsMuted());
 
 #if !defined(TARGET_POSIX)
   CGUIComponent *gui = CServiceBroker::GetGUI();
@@ -2535,6 +2550,8 @@ bool CApplication::PlayFile(CFileItem item, const std::string& player, bool bRes
 void CApplication::PlaybackCleanup()
 {
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
   if (!appPlayer->IsPlaying())
   {
     CGUIComponent *gui = CServiceBroker::GetGUI();
@@ -2585,7 +2602,7 @@ void CApplication::PlaybackCleanup()
 
   if (!appPlayer->IsPlaying())
   {
-    m_stackHelper.Clear();
+    stackHelper->Clear();
     appPlayer->ResetPlayer();
   }
 
@@ -2633,7 +2650,6 @@ void CApplication::StopPlaying()
 
 bool CApplication::OnMessage(CGUIMessage& message)
 {
-  const auto appPlayer = GetComponent<CApplicationPlayer>();
   switch (message.GetMessage())
   {
   case GUI_MSG_NOTIFY_ALL:
@@ -2657,8 +2673,10 @@ bool CApplication::OnMessage(CGUIMessage& message)
         CServiceBroker::GetGUI()->GetWindowManager().Delete(WINDOW_SPLASH);
 
         // show the volumebar if the volume is muted
-        if (IsMuted() || GetVolumeRatio() <= VOLUME_MINIMUM)
-          ShowVolumeBar();
+        const auto appVolume = GetComponent<CApplicationVolumeHandling>();
+        if (appVolume->IsMuted() ||
+            appVolume->GetVolumeRatio() <= CApplicationVolumeHandling::VOLUME_MINIMUM)
+          appVolume->ShowVolumeBar();
 
         if (!m_incompatibleAddons.empty())
         {
@@ -2687,7 +2705,7 @@ bool CApplication::OnMessage(CGUIMessage& message)
         m_bInitializing = false;
 
         if (message.GetSenderId() == WINDOW_SETTINGS_PROFILES)
-          g_application.ReloadSkin(false);
+          GetComponent<CApplicationSkinHandling>()->ReloadSkin(false);
       }
       else if (message.GetParam1() == GUI_MSG_UPDATE_ITEM && message.GetItem())
       {
@@ -2705,7 +2723,7 @@ bool CApplication::OnMessage(CGUIMessage& message)
     {
 #ifdef TARGET_DARWIN_EMBEDDED
       // @TODO move this away to platform code
-      CDarwinUtils::SetScheduling(appPlayer->IsPlayingVideo());
+      CDarwinUtils::SetScheduling(GetComponent<CApplicationPlayer>()->IsPlayingVideo());
 #endif
       PLAYLIST::CPlayList playList = CServiceBroker::GetPlaylistPlayer().GetPlaylist(
           CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
@@ -2745,6 +2763,7 @@ bool CApplication::OnMessage(CGUIMessage& message)
                                                          m_itemCurrentFile, param);
 
       // we don't want a busy dialog when switching channels
+      const auto appPlayer = GetComponent<CApplicationPlayer>();
       if (!m_itemCurrentFile->IsLiveTV() ||
           (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio()))
       {
@@ -2768,7 +2787,7 @@ bool CApplication::OnMessage(CGUIMessage& message)
           CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
       if (iNext < 0 || iNext >= playlist.size())
       {
-        appPlayer->OnNothingToQueueNotify();
+        GetComponent<CApplicationPlayer>()->OnNothingToQueueNotify();
         return true; // nothing to do
       }
 
@@ -2782,6 +2801,7 @@ bool CApplication::OnMessage(CGUIMessage& message)
       // Don't queue if next media type is different from current one
       bool bNothingToQueue = false;
 
+      const auto appPlayer = GetComponent<CApplicationPlayer>();
       if (!file.IsVideo() && appPlayer->IsPlayingVideo())
         bNothingToQueue = true;
       else if ((!file.IsAudio() || file.IsVideo()) && appPlayer->IsPlayingAudio())
@@ -2855,15 +2875,17 @@ bool CApplication::OnMessage(CGUIMessage& message)
      return true;
 
   case GUI_MSG_PLAYBACK_ENDED:
+  {
     m_playerEvent.Set();
-    if (m_stackHelper.IsPlayingRegularStack() && m_stackHelper.HasNextStackPartFileItem())
+    const auto stackHelper = GetComponent<CApplicationStackHelper>();
+    if (stackHelper->IsPlayingRegularStack() && stackHelper->HasNextStackPartFileItem())
     { // just play the next item in the stack
-      PlayFile(m_stackHelper.SetNextStackPartCurrentFileItem(), "", true);
+      PlayFile(stackHelper->SetNextStackPartCurrentFileItem(), "", true);
       return true;
     }
     ResetCurrentItem();
     if (!CServiceBroker::GetPlaylistPlayer().PlayNext(1, true))
-      appPlayer->ClosePlayer();
+      GetComponent<CApplicationPlayer>()->ClosePlayer();
 
     PlaybackCleanup();
 
@@ -2871,10 +2893,11 @@ bool CApplication::OnMessage(CGUIMessage& message)
     CServiceBroker::GetXBPython().OnPlayBackEnded();
 #endif
     return true;
+  }
 
   case GUI_MSG_PLAYLISTPLAYER_STOPPED:
     ResetCurrentItem();
-    if (appPlayer->IsPlaying())
+    if (GetComponent<CApplicationPlayer>()->IsPlaying())
       StopPlaying();
     PlaybackCleanup();
     return true;
@@ -3014,7 +3037,7 @@ void CApplication::ConfigureAndEnableAddons()
     {
       if (addonMgr.IsAddonDisabledWithReason(addon->ID(), ADDON::AddonDisabledReason::INCOMPATIBLE))
       {
-        auto addonInfo = addonMgr.GetAddonInfo(addon->ID());
+        auto addonInfo = addonMgr.GetAddonInfo(addon->ID(), AddonType::UNKNOWN);
         if (addonInfo && addonMgr.IsCompatible(addonInfo))
         {
           CLog::Log(LOGDEBUG, "CApplication::{}: enabling the compatible version of [{}].",
@@ -3097,7 +3120,7 @@ void CApplication::Process()
 void CApplication::ProcessSlow()
 {
   // process skin resources (skin timers)
-  ProcessSkin();
+  GetComponent<CApplicationSkinHandling>()->ProcessSkin();
 
   CServiceBroker::GetPowerManager().ProcessEvents();
 
@@ -3268,8 +3291,10 @@ CFileItem& CApplication::CurrentFileItem()
 
 const CFileItem& CApplication::CurrentUnstackedItem()
 {
-  if (m_stackHelper.IsPlayingISOStack() || m_stackHelper.IsPlayingRegularStack())
-    return m_stackHelper.GetCurrentStackPartFileItem();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
+  if (stackHelper->IsPlayingISOStack() || stackHelper->IsPlayingRegularStack())
+    return stackHelper->GetCurrentStackPartFileItem();
   else
     return *m_itemCurrentFile;
 }
@@ -3283,10 +3308,12 @@ double CApplication::GetTotalTime() const
   double rc = 0.0;
 
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
   if (appPlayer->IsPlaying())
   {
-    if (m_stackHelper.IsPlayingRegularStack())
-      rc = m_stackHelper.GetStackTotalTimeMs() * 0.001;
+    if (stackHelper->IsPlayingRegularStack())
+      rc = stackHelper->GetStackTotalTimeMs() * 0.001;
     else
       rc = appPlayer->GetTotalTime() * 0.001;
   }
@@ -3302,11 +3329,13 @@ double CApplication::GetTime() const
   double rc = 0.0;
 
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
   if (appPlayer->IsPlaying())
   {
-    if (m_stackHelper.IsPlayingRegularStack())
+    if (stackHelper->IsPlayingRegularStack())
     {
-      uint64_t startOfCurrentFile = m_stackHelper.GetCurrentStackPartStartTimeMs();
+      uint64_t startOfCurrentFile = stackHelper->GetCurrentStackPartStartTimeMs();
       rc = (startOfCurrentFile + appPlayer->GetTime()) * 0.001;
     }
     else
@@ -3324,24 +3353,28 @@ double CApplication::GetTime() const
 void CApplication::SeekTime( double dTime )
 {
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
   if (appPlayer->IsPlaying() && (dTime >= 0.0))
   {
     if (!appPlayer->CanSeek())
       return;
-    if (m_stackHelper.IsPlayingRegularStack())
+
+    if (stackHelper->IsPlayingRegularStack())
     {
       // find the item in the stack we are seeking to, and load the new
       // file if necessary, and calculate the correct seek within the new
       // file.  Otherwise, just fall through to the usual routine if the
       // time is higher than our total time.
-      int partNumberToPlay = m_stackHelper.GetStackPartNumberAtTimeMs(static_cast<uint64_t>(dTime * 1000.0));
-      uint64_t startOfNewFile = m_stackHelper.GetStackPartStartTimeMs(partNumberToPlay);
-      if (partNumberToPlay == m_stackHelper.GetCurrentPartNumber())
+      int partNumberToPlay =
+          stackHelper->GetStackPartNumberAtTimeMs(static_cast<uint64_t>(dTime * 1000.0));
+      uint64_t startOfNewFile = stackHelper->GetStackPartStartTimeMs(partNumberToPlay);
+      if (partNumberToPlay == stackHelper->GetCurrentPartNumber())
         appPlayer->SeekTime(static_cast<uint64_t>(dTime * 1000.0) - startOfNewFile);
       else
       { // seeking to a new file
-        m_stackHelper.SetStackPartCurrentFileItem(partNumberToPlay);
-        CFileItem *item = new CFileItem(m_stackHelper.GetCurrentStackPartFileItem());
+        stackHelper->SetStackPartCurrentFileItem(partNumberToPlay);
+        CFileItem* item = new CFileItem(stackHelper->GetCurrentStackPartFileItem());
         item->SetStartOffset(static_cast<uint64_t>(dTime * 1000.0) - startOfNewFile);
         // don't just call "PlayFile" here, as we are quite likely called from the
         // player thread, so we won't be able to delete ourselves.
@@ -3357,6 +3390,8 @@ void CApplication::SeekTime( double dTime )
 float CApplication::GetPercentage() const
 {
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
   if (appPlayer->IsPlaying())
   {
     if (appPlayer->GetTotalTime() == 0 && appPlayer->IsPlayingAudio() &&
@@ -3367,7 +3402,7 @@ float CApplication::GetPercentage() const
         return (float)(GetTime() / tag.GetDuration() * 100);
     }
 
-    if (m_stackHelper.IsPlayingRegularStack())
+    if (stackHelper->IsPlayingRegularStack())
     {
       double totalTime = GetTotalTime();
       if (totalTime > 0.0)
@@ -3382,10 +3417,12 @@ float CApplication::GetPercentage() const
 float CApplication::GetCachePercentage() const
 {
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
   if (appPlayer->IsPlaying())
   {
     // Note that the player returns a relative cache percentage and we want an absolute percentage
-    if (m_stackHelper.IsPlayingRegularStack())
+    if (stackHelper->IsPlayingRegularStack())
     {
       float stackedTotalTime = (float) GetTotalTime();
       // We need to take into account the stack's total time vs. currently playing file's total time
@@ -3403,11 +3440,13 @@ float CApplication::GetCachePercentage() const
 void CApplication::SeekPercentage(float percent)
 {
   const auto appPlayer = GetComponent<CApplicationPlayer>();
+  const auto stackHelper = GetComponent<CApplicationStackHelper>();
+
   if (appPlayer->IsPlaying() && (percent >= 0.0f))
   {
     if (!appPlayer->CanSeek())
       return;
-    if (m_stackHelper.IsPlayingRegularStack())
+    if (stackHelper->IsPlayingRegularStack())
       SeekTime(static_cast<double>(percent) * 0.01 * GetTotalTime());
     else
       appPlayer->SeekPercentage(percent);
@@ -3418,11 +3457,6 @@ std::string CApplication::GetCurrentPlayer()
 {
   const auto appPlayer = GetComponent<CApplicationPlayer>();
   return appPlayer->GetCurrentPlayer();
-}
-
-const CApplicationStackHelper& CApplication::GetAppStackHelper() const
-{
-  return m_stackHelper;
 }
 
 void CApplication::UpdateLibraries()
@@ -3529,7 +3563,7 @@ void CApplication::SetLoggingIn(bool switchingProfiles)
   // because in that case we have already loaded the new profile and
   // would therefore write the previous skin's settings into the new profile
   // instead of into the previous one
-  m_saveSkinOnUnloading = !switchingProfiles;
+  GetComponent<CApplicationSkinHandling>()->m_saveSkinOnUnloading = !switchingProfiles;
 }
 
 void CApplication::PrintStartupLog()

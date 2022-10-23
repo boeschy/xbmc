@@ -10,6 +10,7 @@
 
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
+#include "addons/addoninfo/AddonType.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
@@ -37,12 +38,6 @@ bool IsPlaying(const std::string& condition,
   return data ? static_cast<CApplicationPlayer*>(data)->IsPlaying() : false;
 }
 } // namespace
-
-CApplicationSettingsHandling::CApplicationSettingsHandling(
-    CApplicationSkinHandling& skinHandling, CApplicationVolumeHandling& volumeHandling)
-  : m_skinHandling(skinHandling), m_volumeHandling(volumeHandling)
-{
-}
 
 void CApplicationSettingsHandling::RegisterSettings()
 {
@@ -113,16 +108,17 @@ void CApplicationSettingsHandling::OnSettingChanged(const std::shared_ptr<const 
   if (!setting)
     return;
 
-  if (m_skinHandling.OnSettingChanged(*setting))
-    return;
-
   auto& components = CServiceBroker::GetAppComponents();
-  const auto appPower = components.GetComponent<CApplicationPowerHandling>();
-
-  if (appPower->OnSettingChanged(*setting))
+  const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+  if (appSkin->OnSettingChanged(*setting))
     return;
 
-  if (m_volumeHandling.OnSettingChanged(*setting))
+  const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+  if (appVolume->OnSettingChanged(*setting))
+    return;
+
+  const auto appPower = components.GetComponent<CApplicationPowerHandling>();
+  if (appPower->OnSettingChanged(*setting))
     return;
 
   const std::string& settingId = setting->GetId();
@@ -158,7 +154,7 @@ void CApplicationSettingsHandling::OnSettingAction(const std::shared_ptr<const C
     if (CServiceBroker::GetAddonMgr().GetAddon(
             CServiceBroker::GetSettingsComponent()->GetSettings()->GetString(
                 CSettings::SETTING_AUDIOCDS_ENCODER),
-            addon, ADDON::ADDON_AUDIOENCODER, ADDON::OnlyEnabled::CHOICE_YES))
+            addon, ADDON::AddonType::AUDIOENCODER, ADDON::OnlyEnabled::CHOICE_YES))
       CGUIDialogAddonSettings::ShowForAddon(addon);
   }
   else if (settingId == CSettings::SETTING_VIDEOSCREEN_GUICALIBRATION)
@@ -205,10 +201,14 @@ bool CApplicationSettingsHandling::OnSettingUpdate(const std::shared_ptr<CSettin
 
 bool CApplicationSettingsHandling::Load(const TiXmlNode* settings)
 {
-  return m_volumeHandling.Load(settings);
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+  return appVolume->Load(settings);
 }
 
 bool CApplicationSettingsHandling::Save(TiXmlNode* settings) const
 {
-  return m_volumeHandling.Save(settings);
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+  return appVolume->Save(settings);
 }

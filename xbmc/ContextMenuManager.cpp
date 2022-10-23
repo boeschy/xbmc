@@ -14,14 +14,17 @@
 #include "ServiceBroker.h"
 #include "addons/Addon.h"
 #include "addons/AddonEvents.h"
+#include "addons/AddonManager.h"
 #include "addons/ContextMenuAddon.h"
 #include "addons/ContextMenus.h"
 #include "addons/IAddon.h"
+#include "addons/addoninfo/AddonType.h"
 #include "dialogs/GUIDialogContextMenu.h"
 #include "favourites/ContextMenus.h"
 #include "messaging/ApplicationMessenger.h"
 #include "music/ContextMenus.h"
 #include "pvr/PVRContextMenus.h"
+#include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "video/ContextMenus.h"
 
@@ -79,9 +82,11 @@ void CContextMenuManager::Init()
       std::make_shared<CONTEXTMENU::CRemoveResumePoint>(),
       std::make_shared<CONTEXTMENU::CEjectDisk>(),
       std::make_shared<CONTEXTMENU::CEjectDrive>(),
-      std::make_shared<CONTEXTMENU::CRemoveFavourite>(),
-      std::make_shared<CONTEXTMENU::CRenameFavourite>(),
+      std::make_shared<CONTEXTMENU::CMoveUpFavourite>(),
+      std::make_shared<CONTEXTMENU::CMoveDownFavourite>(),
       std::make_shared<CONTEXTMENU::CChooseThumbnailForFavourite>(),
+      std::make_shared<CONTEXTMENU::CRenameFavourite>(),
+      std::make_shared<CONTEXTMENU::CRemoveFavourite>(),
       std::make_shared<CONTEXTMENU::CAddRemoveFavourite>(),
   };
 
@@ -95,7 +100,7 @@ void CContextMenuManager::Init()
 void CContextMenuManager::ReloadAddonItems()
 {
   VECADDONS addons;
-  m_addonMgr.GetAddons(addons, ADDON_CONTEXT_ITEM);
+  m_addonMgr.GetAddons(addons, AddonType::CONTEXTMENU_ITEM);
 
   std::vector<CContextMenuItem> addonItems;
   for (const auto& addon : addons)
@@ -125,7 +130,8 @@ void CContextMenuManager::OnEvent(const ADDON::AddonEvent& event)
   else if (typeid(event) == typeid(AddonEvents::Enabled))
   {
     AddonPtr addon;
-    if (m_addonMgr.GetAddon(event.addonId, addon, ADDON_CONTEXT_ITEM, OnlyEnabled::CHOICE_YES))
+    if (m_addonMgr.GetAddon(event.addonId, addon, AddonType::CONTEXTMENU_ITEM,
+                            OnlyEnabled::CHOICE_YES))
     {
       std::unique_lock<CCriticalSection> lock(m_criticalSection);
       auto items = std::static_pointer_cast<CContextMenuAddon>(addon)->GetItems();
@@ -140,7 +146,7 @@ void CContextMenuManager::OnEvent(const ADDON::AddonEvent& event)
   }
   else if (typeid(event) == typeid(AddonEvents::Disabled))
   {
-    if (m_addonMgr.HasType(event.addonId, ADDON_CONTEXT_ITEM))
+    if (m_addonMgr.HasType(event.addonId, AddonType::CONTEXTMENU_ITEM))
     {
       ReloadAddonItems();
     }
@@ -222,7 +228,7 @@ ContextMenuView CContextMenuManager::GetAddonItems(const CFileItem& fileItem, co
   return result;
 }
 
-bool CONTEXTMENU::ShowFor(const CFileItemPtr& fileItem, const CContextMenuItem& root)
+bool CONTEXTMENU::ShowFor(const std::shared_ptr<CFileItem>& fileItem, const CContextMenuItem& root)
 {
   if (!fileItem)
     return false;
@@ -272,7 +278,7 @@ bool CONTEXTMENU::ShowFor(const CFileItemPtr& fileItem, const CContextMenuItem& 
              : menuItems[selected - propertyMenuSize]->Execute(fileItem);
 }
 
-bool CONTEXTMENU::LoopFrom(const IContextMenuItem& menu, const CFileItemPtr& fileItem)
+bool CONTEXTMENU::LoopFrom(const IContextMenuItem& menu, const std::shared_ptr<CFileItem>& fileItem)
 {
   if (!fileItem)
     return false;

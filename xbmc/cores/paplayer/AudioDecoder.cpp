@@ -10,8 +10,10 @@
 
 #include "CodecFactory.h"
 #include "FileItem.h"
+#include "ICodec.h"
 #include "ServiceBroker.h"
-#include "application/Application.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationVolumeHandling.h"
 #include "music/tags/MusicInfoTag.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -139,6 +141,11 @@ AEAudioFormat CAudioDecoder::GetFormat()
   if (!m_codec)
     return format;
   return m_codec->m_format;
+}
+
+unsigned int CAudioDecoder::GetChannels()
+{
+  return GetFormat().m_channelLayout.Count();
 }
 
 int64_t CAudioDecoder::Seek(int64_t time)
@@ -328,10 +335,21 @@ int CAudioDecoder::ReadSamples(int numsamples)
   return RET_SLEEP; // nothing to do
 }
 
+bool CAudioDecoder::CanSeek()
+{
+  if (m_codec)
+    return m_codec->CanSeek();
+  else
+    return false;
+}
+
 float CAudioDecoder::GetReplayGain(float &peakVal)
 {
 #define REPLAY_GAIN_DEFAULT_LEVEL 89.0f
-  const auto& replayGainSettings = g_application.GetReplayGainSettings();
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+
+  const auto& replayGainSettings = appVolume->GetReplayGainSettings();
   if (replayGainSettings.iType == ReplayGain::NONE)
     return 1.0f;
 
