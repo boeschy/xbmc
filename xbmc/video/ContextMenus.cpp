@@ -9,6 +9,7 @@
 #include "ContextMenus.h"
 
 #include "Autorun.h"
+#include "GUIUserMessages.h"
 #include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "application/Application.h"
@@ -20,7 +21,9 @@
 #include "guilib/LocalizeStrings.h"
 #include "playlists/PlayList.h"
 #include "settings/MediaSettings.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+#include "video/VideoUtils.h"
 #include "video/dialogs/GUIDialogVideoInfo.h"
 #include "video/windows/GUIWindowVideoBase.h"
 #include "view/GUIViewState.h"
@@ -52,22 +55,23 @@ bool CVideoInfo::Execute(const std::shared_ptr<CFileItem>& item) const
   return true;
 }
 
-bool CRemoveResumePoint::IsVisible(const CFileItem& itemIn) const
+bool CVideoRemoveResumePoint::IsVisible(const CFileItem& itemIn) const
 {
   CFileItem item(itemIn.GetItemToPlay());
   if (item.IsDeleted()) // e.g. trashed pvr recording
     return false;
 
-  return CGUIWindowVideoBase::HasResumeItemOffset(&item);
+  // Folders don't have a resume point
+  return !item.m_bIsFolder && VIDEO_UTILS::GetItemResumeInformation(item).isResumable;
 }
 
-bool CRemoveResumePoint::Execute(const std::shared_ptr<CFileItem>& item) const
+bool CVideoRemoveResumePoint::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   CVideoLibraryQueue::GetInstance().ResetResumePoint(item);
   return true;
 }
 
-bool CMarkWatched::IsVisible(const CFileItem& item) const
+bool CVideoMarkWatched::IsVisible(const CFileItem& item) const
 {
   if (item.IsDeleted()) // e.g. trashed pvr recording
     return false;
@@ -87,13 +91,13 @@ bool CMarkWatched::IsVisible(const CFileItem& item) const
   return item.GetVideoInfoTag()->GetPlayCount() == 0;
 }
 
-bool CMarkWatched::Execute(const std::shared_ptr<CFileItem>& item) const
+bool CVideoMarkWatched::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   CVideoLibraryQueue::GetInstance().MarkAsWatched(item, true);
   return true;
 }
 
-bool CMarkUnWatched::IsVisible(const CFileItem& item) const
+bool CVideoMarkUnWatched::IsVisible(const CFileItem& item) const
 {
   if (item.IsDeleted()) // e.g. trashed pvr recording
     return false;
@@ -113,24 +117,57 @@ bool CMarkUnWatched::IsVisible(const CFileItem& item) const
   return item.GetVideoInfoTag()->GetPlayCount() > 0;
 }
 
-bool CMarkUnWatched::Execute(const std::shared_ptr<CFileItem>& item) const
+bool CVideoMarkUnWatched::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   CVideoLibraryQueue::GetInstance().MarkAsWatched(item, false);
   return true;
 }
 
-std::string CResume::GetLabel(const CFileItem& item) const
+bool CVideoBrowse::IsVisible(const CFileItem& item) const
+{
+  if (item.IsFileFolder(EFILEFOLDER_MASK_ONBROWSE))
+    return false; // handled by CMediaWindow
+
+  return item.m_bIsFolder && VIDEO_UTILS::IsItemPlayable(item);
+}
+
+bool CVideoBrowse::Execute(const std::shared_ptr<CFileItem>& item) const
+{
+  int target = WINDOW_INVALID;
+  if (URIUtils::IsPVRRadioRecordingFileOrFolder(item->GetPath()))
+    target = WINDOW_RADIO_RECORDINGS;
+  else if (URIUtils::IsPVRTVRecordingFileOrFolder(item->GetPath()))
+    target = WINDOW_TV_RECORDINGS;
+  else
+    target = WINDOW_VIDEO_NAV;
+
+  auto& windowMgr = CServiceBroker::GetGUI()->GetWindowManager();
+
+  if (target == windowMgr.GetActiveWindow())
+  {
+    CGUIMessage msg(GUI_MSG_NOTIFY_ALL, target, 0, GUI_MSG_UPDATE);
+    msg.SetStringParam(item->GetPath());
+    windowMgr.SendMessage(msg);
+  }
+  else
+  {
+    windowMgr.ActivateWindow(target, {item->GetPath(), "return"});
+  }
+  return true;
+}
+
+std::string CVideoResume::GetLabel(const CFileItem& item) const
 {
   return CGUIWindowVideoBase::GetResumeString(item.GetItemToPlay());
 }
 
-bool CResume::IsVisible(const CFileItem& itemIn) const
+bool CVideoResume::IsVisible(const CFileItem& itemIn) const
 {
   CFileItem item(itemIn.GetItemToPlay());
   if (item.IsDeleted()) // e.g. trashed pvr recording
     return false;
 
-  return CGUIWindowVideoBase::HasResumeItemOffset(&item);
+  return VIDEO_UTILS::GetItemResumeInformation(item).isResumable;
 }
 
 namespace
@@ -180,31 +217,6 @@ void AddRecordingsToPlayListAndSort(const std::shared_ptr<CFileItem>& item,
   }
 }
 
-void QueueRecordings(const std::shared_ptr<CFileItem>& item, bool bPlayNext)
-{
-  CFileItemList queuedItems;
-  AddRecordingsToPlayListAndSort(item, queuedItems);
-
-  PLAYLIST::CPlayListPlayer& player = CServiceBroker::GetPlaylistPlayer();
-
-  // Determine the proper list to queue this element
-  PLAYLIST::Id playlistId = player.GetCurrentPlaylist();
-  const auto& components = CServiceBroker::GetAppComponents();
-  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-
-  if (playlistId == PLAYLIST::TYPE_NONE)
-    playlistId = appPlayer->GetPreferredPlaylist();
-  if (playlistId == PLAYLIST::TYPE_NONE)
-    playlistId = PLAYLIST::TYPE_VIDEO;
-
-  if (bPlayNext && appPlayer && appPlayer->IsPlaying())
-    player.Insert(playlistId, queuedItems, player.GetCurrentSong() + 1);
-  else
-    player.Add(playlistId, queuedItems);
-
-  player.SetCurrentPlaylist(playlistId);
-}
-
 void PlayAndQueueRecordings(const std::shared_ptr<CFileItem>& item, int windowId)
 {
   const std::shared_ptr<CFileItem> parentFolderItem =
@@ -243,23 +255,9 @@ void PlayAndQueueRecordings(const std::shared_ptr<CFileItem>& item, int windowId
   player.Play(itemToPlay, "");
 }
 
-bool IsActiveRecordingsFolder(const CFileItem& item)
-{
-  if (item.m_bIsFolder && !item.IsParentFolder() &&
-      URIUtils::IsPVRRecordingFileOrFolder(item.GetPath()))
-  {
-    // Note: Recordings contained in the folder must be sorted properly, thus this
-    //       item is only available if one of the recordings windows is active.
-    const int windowId = CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow();
-    return windowId == WINDOW_TV_RECORDINGS || windowId == WINDOW_RADIO_RECORDINGS;
-  }
-
-  return false;
-}
-
 void SetPathAndPlay(CFileItem& item)
 {
-  if (item.IsVideoDb())
+  if (!item.m_bIsFolder && item.IsVideoDb())
   {
     item.SetProperty("original_listitem_url", item.GetPath());
     item.SetPath(item.GetVideoInfoTag()->m_strFileNameAndPath);
@@ -270,31 +268,16 @@ void SetPathAndPlay(CFileItem& item)
   {
     g_application.PlayMedia(item, "", PLAYLIST::TYPE_VIDEO);
   }
-  else if (IsActiveRecordingsFolder(item))
-  {
-    // recursively add items to play list
-    CFileItemList queuedItems;
-    AddRecordingsToPlayListAndSort(std::make_shared<CFileItem>(item), queuedItems);
-
-    PLAYLIST::CPlayListPlayer& player = CServiceBroker::GetPlaylistPlayer();
-
-    player.ClearPlaylist(PLAYLIST::TYPE_VIDEO);
-    player.Reset();
-    player.Add(PLAYLIST::TYPE_VIDEO, queuedItems);
-    player.SetCurrentPlaylist(PLAYLIST::TYPE_VIDEO);
-
-    player.Play();
-  }
   else
   {
     item.SetProperty("playlist_type_hint", PLAYLIST::TYPE_VIDEO);
-    CServiceBroker::GetPlaylistPlayer().Play(std::make_shared<CFileItem>(item), "");
+    VIDEO_UTILS::PlayItem(std::make_shared<CFileItem>(item));
   }
 }
 
 } // unnamed namespace
 
-bool CResume::Execute(const std::shared_ptr<CFileItem>& itemIn) const
+bool CVideoResume::Execute(const std::shared_ptr<CFileItem>& itemIn) const
 {
   CFileItem item(itemIn->GetItemToPlay());
 #ifdef HAS_DVD_DRIVE
@@ -307,38 +290,22 @@ bool CResume::Execute(const std::shared_ptr<CFileItem>& itemIn) const
   return true;
 };
 
-std::string CPlay::GetLabel(const CFileItem& itemIn) const
+std::string CVideoPlay::GetLabel(const CFileItem& itemIn) const
 {
   CFileItem item(itemIn.GetItemToPlay());
   if (item.IsLiveTV())
     return g_localizeStrings.Get(19000); // Switch to channel
-  if (CGUIWindowVideoBase::HasResumeItemOffset(&item))
+  if (VIDEO_UTILS::GetItemResumeInformation(item).isResumable)
     return g_localizeStrings.Get(12021); // Play from beginning
   return g_localizeStrings.Get(208); // Play
 }
 
-bool CPlay::IsVisible(const CFileItem& itemIn) const
+bool CVideoPlay::IsVisible(const CFileItem& item) const
 {
-  CFileItem item(itemIn.GetItemToPlay());
-  if (item.IsDeleted()) // e.g. trashed pvr recording
-    return false;
-
-  if (IsActiveRecordingsFolder(item))
-    return true;
-
-  // Music nav window has own "Play" context menu button, do not show this one. Playlist files
-  // like .m3u and .strm return IsVideo() true but from music nav window play with paplayer.
-  const int currentWindow = CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow();
-  if (currentWindow == WINDOW_MUSIC_NAV)
-    return false;
-
-  if (item.m_bIsFolder)
-    return false; //! @todo implement
-
-  return item.IsVideo() || item.IsLiveTV() || item.IsDVD() || item.IsCDDA();
+  return VIDEO_UTILS::IsItemPlayable(item);
 }
 
-bool CPlay::Execute(const std::shared_ptr<CFileItem>& itemIn) const
+bool CVideoPlay::Execute(const std::shared_ptr<CFileItem>& itemIn) const
 {
   CFileItem item(itemIn->GetItemToPlay());
 #ifdef HAS_DVD_DRIVE
@@ -349,59 +316,47 @@ bool CPlay::Execute(const std::shared_ptr<CFileItem>& itemIn) const
   return true;
 };
 
-bool CQueue::IsVisible(const CFileItem& item) const
+bool CVideoQueue::IsVisible(const CFileItem& item) const
 {
   if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_PLAYLIST)
     return false; // Already queued
 
-  if (item.IsUsablePVRRecording() || IsActiveRecordingsFolder(item))
-    return true;
+  if (!item.CanQueue())
+    return false;
 
-  return false; //! @todo implement
+  return VIDEO_UTILS::IsItemPlayable(item);
 }
 
-bool CQueue::Execute(const std::shared_ptr<CFileItem>& item) const
+bool CVideoQueue::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_PLAYLIST)
     return false; // Already queued
 
-  if (item->IsUsablePVRRecording() || IsActiveRecordingsFolder(*item))
-  {
-    // recursively add items to play list
-    QueueRecordings(item, false);
-    return true;
-  }
-
-  return true; //! @todo implement
+  VIDEO_UTILS::QueueItem(item, VIDEO_UTILS::QueuePosition::POSITION_END);
+  return true;
 };
 
-bool CPlayNext::IsVisible(const CFileItem& item) const
+bool CVideoPlayNext::IsVisible(const CFileItem& item) const
 {
   if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_PLAYLIST)
     return false; // Already queued
 
-  if (item.IsUsablePVRRecording() || IsActiveRecordingsFolder(item))
-    return true;
+  if (!item.CanQueue())
+    return false;
 
-  return false; //! @todo implement
+  return VIDEO_UTILS::IsItemPlayable(item);
 }
 
-bool CPlayNext::Execute(const std::shared_ptr<CFileItem>& item) const
+bool CVideoPlayNext::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_PLAYLIST)
     return false; // Already queued
 
-  if (item->IsUsablePVRRecording() || IsActiveRecordingsFolder(*item))
-  {
-    // recursively add items to play list
-    QueueRecordings(item, true);
-    return true;
-  }
-
-  return true; //! @todo implement
+  VIDEO_UTILS::QueueItem(item, VIDEO_UTILS::QueuePosition::POSITION_BEGIN);
+  return true;
 };
 
-bool CPlayAndQueue::IsVisible(const CFileItem& item) const
+bool CVideoPlayAndQueue::IsVisible(const CFileItem& item) const
 {
   const int windowId = CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow();
   if (windowId == WINDOW_VIDEO_PLAYLIST)
@@ -414,7 +369,7 @@ bool CPlayAndQueue::IsVisible(const CFileItem& item) const
   return false; //! @todo implement
 }
 
-bool CPlayAndQueue::Execute(const std::shared_ptr<CFileItem>& item) const
+bool CVideoPlayAndQueue::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   const int windowId = CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow();
   if (windowId == WINDOW_VIDEO_PLAYLIST)

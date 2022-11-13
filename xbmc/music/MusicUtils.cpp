@@ -564,12 +564,19 @@ void CAsyncGetItemsForPlaylist::GetItemsForPlaylist(const std::shared_ptr<CFileI
 
 void ShowToastNotification(const CFileItem& item, int titleId)
 {
-  const std::string localizedMediaType =
-      CMediaTypes::GetCapitalLocalization(item.GetMusicInfoTag()->GetType());
+  std::string localizedMediaType;
+  std::string title;
 
-  std::string title = item.GetMusicInfoTag()->GetTitle();
+  if (item.HasMusicInfoTag())
+  {
+    localizedMediaType = CMediaTypes::GetCapitalLocalization(item.GetMusicInfoTag()->GetType());
+    title = item.GetMusicInfoTag()->GetTitle();
+  }
+
   if (title.empty())
     title = item.GetLabel();
+  if (title.empty())
+    return; // no meaningful toast possible.
 
   const std::string message =
       localizedMediaType.empty() ? title : localizedMediaType + ": " + title;
@@ -718,27 +725,55 @@ bool IsItemPlayable(const CFileItem& item)
   if (item.IsPVR() || item.IsPlugin() || item.IsScript() || item.IsAddonsPath())
     return false;
 
-  // Check for right window
-  const int winID = CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow();
-  if (winID != WINDOW_MUSIC_NAV && winID != WINDOW_HOME)
+  // Exclude special items
+  if (StringUtils::StartsWithNoCase(item.GetPath(), "newsmartplaylist://") ||
+      StringUtils::StartsWithNoCase(item.GetPath(), "newplaylist://"))
     return false;
 
-  if (item.m_bIsFolder)
+  // Exclude unwanted windows
+  if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_MUSIC_PLAYLIST)
+    return false;
+
+  // Include playlists located at one of the possible music playlist locations
+  if (item.IsPlayList())
+  {
+    if (StringUtils::StartsWithNoCase(item.GetPath(), "special://musicplaylists/") ||
+        StringUtils::StartsWithNoCase(item.GetPath(), "special://profile/playlists/music/"))
+      return true;
+
+    // Has user changed default playlists location and the list is located there?
+    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+    std::string path = settings->GetString(CSettings::SETTING_SYSTEM_PLAYLISTSPATH);
+    StringUtils::TrimRight(path, "/");
+    if (StringUtils::StartsWith(item.GetPath(), StringUtils::Format("{}/music/", path)))
+      return true;
+
+    // Unknown location. Type cannot be determined.
+    return false;
+  }
+
+  if (item.m_bIsFolder &&
+      (item.IsMusicDb() || StringUtils::StartsWithNoCase(item.GetPath(), "library://music/")))
   {
     // Exclude top level nodes - eg can't play 'genres' just a specific genre etc
     const XFILE::MUSICDATABASEDIRECTORY::NODE_TYPE node =
         XFILE::CMusicDatabaseDirectory::GetDirectoryParentType(item.GetPath());
     if (node == XFILE::MUSICDATABASEDIRECTORY::NODE_TYPE_OVERVIEW)
       return false;
+
+    return true;
   }
 
-  if (item.HasMusicInfoTag() && item.CanQueue() && !item.IsParentFolder())
+  if (item.HasMusicInfoTag() && item.CanQueue())
     return true;
-  else if (item.IsPlayList() && item.IsAudio())
+  else if (!item.m_bIsFolder && item.IsAudio())
     return true;
-  else if (!item.m_bIsShareOrDrive && item.m_bIsFolder && !item.IsParentFolder())
-    return true;
-
+  else if (!item.m_bIsShareOrDrive && item.m_bIsFolder)
+  {
+    // Not a music-specific folder (just file:// or nfs://). Allow play if context is Music window.
+    if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_MUSIC_NAV)
+      return true;
+  }
   return false;
 }
 

@@ -2138,6 +2138,19 @@ bool CVideoDatabase::GetTvShowInfo(const std::string& strPath, CVideoInfoTag& de
 
 bool CVideoDatabase::GetSeasonInfo(int idSeason, CVideoInfoTag& details, bool allDetails /* = true */)
 {
+  return GetSeasonInfo(idSeason, details, allDetails, nullptr);
+}
+
+bool CVideoDatabase::GetSeasonInfo(int idSeason, CVideoInfoTag& details, CFileItem* item)
+{
+  return GetSeasonInfo(idSeason, details, true, item);
+}
+
+bool CVideoDatabase::GetSeasonInfo(int idSeason,
+                                   CVideoInfoTag& details,
+                                   bool allDetails,
+                                   CFileItem* item)
+{
   if (idSeason < 0)
     return false;
 
@@ -2175,6 +2188,8 @@ bool CVideoDatabase::GetSeasonInfo(int idSeason, CVideoInfoTag& details, bool al
         if (season->HasVideoInfoTag() && season->GetVideoInfoTag()->m_iDbId == idSeason && season->GetVideoInfoTag()->m_iIdShow == idShow)
         {
           details = *season->GetVideoInfoTag();
+          if (item)
+            *item = *season;
           return true;
         }
       }
@@ -2283,7 +2298,7 @@ bool CVideoDatabase::GetMusicVideoInfo(const std::string& strFilenameAndPath, CV
   return false;
 }
 
-bool CVideoDatabase::GetSetInfo(int idSet, CVideoInfoTag& details)
+bool CVideoDatabase::GetSetInfo(int idSet, CVideoInfoTag& details, CFileItem* item /* = nullptr */)
 {
   try
   {
@@ -2299,6 +2314,8 @@ bool CVideoDatabase::GetSetInfo(int idSet, CVideoInfoTag& details)
       return false;
 
     details = *(items[0]->GetVideoInfoTag());
+    if (item)
+      *item = *items[0];
     return !details.IsEmpty();
   }
   catch (...)
@@ -3822,7 +3839,7 @@ void CVideoDatabase::GetDetailsFromDB(const dbiplus::sql_record* const record, i
   }
 }
 
-CVideoInfoTag CVideoDatabase::GetDetailsByTypeAndId(VideoDbContentType type, int id)
+bool CVideoDatabase::GetDetailsByTypeAndId(CFileItem& item, VideoDbContentType type, int id)
 {
   CVideoInfoTag details;
   details.Reset();
@@ -3833,7 +3850,7 @@ CVideoInfoTag CVideoDatabase::GetDetailsByTypeAndId(VideoDbContentType type, int
       GetMovieInfo("", details, id);
       break;
     case VideoDbContentType::TVSHOWS:
-      GetTvShowInfo("", details, id);
+      GetTvShowInfo("", details, id, &item);
       break;
     case VideoDbContentType::EPISODES:
       GetEpisodeInfo("", details, id);
@@ -3842,10 +3859,20 @@ CVideoInfoTag CVideoDatabase::GetDetailsByTypeAndId(VideoDbContentType type, int
       GetMusicVideoInfo("", details, id);
       break;
     default:
-      break;
+      return false;
   }
 
-  return details;
+  item.SetFromVideoInfoTag(details);
+  return true;
+}
+
+CVideoInfoTag CVideoDatabase::GetDetailsByTypeAndId(VideoDbContentType type, int id)
+{
+  CFileItem item;
+  if (GetDetailsByTypeAndId(item, type, id))
+    return CVideoInfoTag(*item.GetVideoInfoTag());
+
+  return {};
 }
 
 bool CVideoDatabase::GetStreamDetails(CFileItem& item)
@@ -6025,6 +6052,42 @@ int CVideoDatabase::GetPlayCount(const CFileItem &item)
   return GetPlayCount(GetFileId(item));
 }
 
+CDateTime CVideoDatabase::GetLastPlayed(int iFileId)
+{
+  if (iFileId < 0)
+    return {}; // not in db, so not watched
+
+  try
+  {
+    // error!
+    if (nullptr == m_pDB)
+      return {};
+    if (nullptr == m_pDS)
+      return {};
+
+    std::string strSQL = PrepareSQL("select lastPlayed from files WHERE idFile=%i", iFileId);
+    CDateTime lastPlayed;
+    if (m_pDS->query(strSQL))
+    {
+      // there should only ever be one row returned
+      if (m_pDS->num_rows() == 1)
+        lastPlayed.SetFromDBDateTime(m_pDS->fv(0).get_asString());
+      m_pDS->close();
+    }
+    return lastPlayed;
+  }
+  catch (...)
+  {
+    CLog::Log(LOGERROR, "{} failed", __FUNCTION__);
+  }
+  return {};
+}
+
+CDateTime CVideoDatabase::GetLastPlayed(const std::string& strFilenameAndPath)
+{
+  return GetLastPlayed(GetFileId(strFilenameAndPath));
+}
+
 void CVideoDatabase::UpdateFanart(const CFileItem& item, VideoDbContentType type)
 {
   if (nullptr == m_pDB)
@@ -6054,7 +6117,7 @@ void CVideoDatabase::UpdateFanart(const CFileItem& item, VideoDbContentType type
   }
 }
 
-void CVideoDatabase::SetPlayCount(const CFileItem &item, int count, const CDateTime &date)
+CDateTime CVideoDatabase::SetPlayCount(const CFileItem& item, int count, const CDateTime& date)
 {
   int id;
   if (item.HasProperty("original_listitem_url") &&
@@ -6067,30 +6130,31 @@ void CVideoDatabase::SetPlayCount(const CFileItem &item, int count, const CDateT
   else
     id = AddFile(item);
   if (id < 0)
-    return;
+    return {};
 
   // and mark as watched
   try
   {
+    const CDateTime lastPlayed(date.IsValid() ? date : CDateTime::GetCurrentDateTime());
+
     if (nullptr == m_pDB)
-      return;
+      return {};
     if (nullptr == m_pDS)
-      return;
+      return {};
 
     std::string strSQL;
     if (count)
     {
-      if (!date.IsValid())
-        strSQL = PrepareSQL("update files set playCount=%i,lastPlayed='%s' where idFile=%i", count, CDateTime::GetCurrentDateTime().GetAsDBDateTime().c_str(), id);
-      else
-        strSQL = PrepareSQL("update files set playCount=%i,lastPlayed='%s' where idFile=%i", count, date.GetAsDBDateTime().c_str(), id);
+      strSQL = PrepareSQL("update files set playCount=%i,lastPlayed='%s' where idFile=%i", count,
+                          lastPlayed.GetAsDBDateTime().c_str(), id);
     }
     else
     {
       if (!date.IsValid())
         strSQL = PrepareSQL("update files set playCount=NULL,lastPlayed=NULL where idFile=%i", id);
       else
-        strSQL = PrepareSQL("update files set playCount=NULL,lastPlayed='%s' where idFile=%i", date.GetAsDBDateTime().c_str(), id);
+        strSQL = PrepareSQL("update files set playCount=NULL,lastPlayed='%s' where idFile=%i",
+                            lastPlayed.GetAsDBDateTime().c_str(), id);
     }
 
     m_pDS->exec(strSQL);
@@ -6107,21 +6171,25 @@ void CVideoDatabase::SetPlayCount(const CFileItem &item, int count, const CDateT
       CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::VideoLibrary, "OnUpdate",
                                                          CFileItemPtr(new CFileItem(item)), data);
     }
+
+    return lastPlayed;
   }
   catch (...)
   {
     CLog::Log(LOGERROR, "{} failed", __FUNCTION__);
   }
+
+  return {};
 }
 
-void CVideoDatabase::IncrementPlayCount(const CFileItem &item)
+CDateTime CVideoDatabase::IncrementPlayCount(const CFileItem& item)
 {
-  SetPlayCount(item, GetPlayCount(item) + 1);
+  return SetPlayCount(item, GetPlayCount(item) + 1);
 }
 
-void CVideoDatabase::UpdateLastPlayed(const CFileItem &item)
+CDateTime CVideoDatabase::UpdateLastPlayed(const CFileItem& item)
 {
-  SetPlayCount(item, GetPlayCount(item), CDateTime::GetCurrentDateTime());
+  return SetPlayCount(item, GetPlayCount(item), CDateTime::GetCurrentDateTime());
 }
 
 void CVideoDatabase::UpdateMovieTitle(int idMovie,

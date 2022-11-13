@@ -430,21 +430,24 @@ public:
   int AddNewEpisode(int idShow, CVideoInfoTag& details);
 
   // editing functions
-  /*! \brief Set the playcount of an item
+  /*! \brief Set the playcount of an item, update last played time
    Sets the playcount and last played date to a given value
    \param item CFileItem to set the playcount for
    \param count The playcount to set.
-   \param date The date the file was last viewed (does not denote the video was watched to completion).  If empty we current datetime (if count > 0) or never viewed (if count = 0).
+   \param date The date the file was last viewed (does not denote the video was watched to completion).
+   If empty we use current datetime (if count > 0) or never viewed (if count = 0).
+   \return on success, the new last played time set, invalid datetime otherwise.
    \sa GetPlayCount, IncrementPlayCount, UpdateLastPlayed
    */
-  void SetPlayCount(const CFileItem &item, int count, const CDateTime &date = CDateTime());
+  CDateTime SetPlayCount(const CFileItem& item, int count, const CDateTime& date = CDateTime());
 
   /*! \brief Increment the playcount of an item
    Increments the playcount and updates the last played date
    \param item CFileItem to increment the playcount for
+   \return on success, the new last played time set, invalid datetime otherwise.
    \sa GetPlayCount, SetPlayCount, GetPlayCounts
    */
-  void IncrementPlayCount(const CFileItem &item);
+  CDateTime IncrementPlayCount(const CFileItem& item);
 
   /*! \brief Get the playcount of an item
    \param item CFileItem to get the playcount for
@@ -460,12 +463,20 @@ public:
    */
   int GetPlayCount(const std::string& strFilenameAndPath);
 
+  /*! \brief Get the last played time of a filename and path
+   \param strFilenameAndPath filename and path to get the last played time for
+   \return the last played time of the item, or an invalid CDateTime on error
+   \sa UpdateLastPlayed
+   */
+  CDateTime GetLastPlayed(const std::string& strFilenameAndPath);
+
   /*! \brief Update the last played time of an item
    Updates the last played date
    \param item CFileItem to update the last played time for
+   \return on success, the last played time set, invalid datetime otherwise.
    \sa GetPlayCount, SetPlayCount, IncrementPlayCount, GetPlayCounts
    */
-  void UpdateLastPlayed(const CFileItem &item);
+  CDateTime UpdateLastPlayed(const CFileItem& item);
 
   /*! \brief Get the playcount and resume point of a list of items
    Note that if the resume point is already set on an item, it won't be overridden.
@@ -502,11 +513,12 @@ public:
   bool LoadVideoInfo(const std::string& strFilenameAndPath, CVideoInfoTag& details, int getDetails = VideoDbDetailsAll);
   bool GetMovieInfo(const std::string& strFilenameAndPath, CVideoInfoTag& details, int idMovie = -1, int getDetails = VideoDbDetailsAll);
   bool GetTvShowInfo(const std::string& strPath, CVideoInfoTag& details, int idTvShow = -1, CFileItem* item = NULL, int getDetails = VideoDbDetailsAll);
+  bool GetSeasonInfo(int idSeason, CVideoInfoTag& details, CFileItem* item);
   bool GetSeasonInfo(int idSeason, CVideoInfoTag& details, bool allDetails = true);
   bool GetEpisodeBasicInfo(const std::string& strFilenameAndPath, CVideoInfoTag& details, int idEpisode  = -1);
   bool GetEpisodeInfo(const std::string& strFilenameAndPath, CVideoInfoTag& details, int idEpisode = -1, int getDetails = VideoDbDetailsAll);
   bool GetMusicVideoInfo(const std::string& strFilenameAndPath, CVideoInfoTag& details, int idMVideo = -1, int getDetails = VideoDbDetailsAll);
-  bool GetSetInfo(int idSet, CVideoInfoTag& details);
+  bool GetSetInfo(int idSet, CVideoInfoTag& details, CFileItem* item = nullptr);
   bool GetFileInfo(const std::string& strFilenameAndPath, CVideoInfoTag& details, int idFile = -1);
 
   int GetPathId(const std::string& strPath);
@@ -642,6 +654,7 @@ public:
   bool GetResumePoint(CVideoInfoTag& tag);
   bool GetStreamDetails(CFileItem& item);
   bool GetStreamDetails(CVideoInfoTag& tag) const;
+  bool GetDetailsByTypeAndId(CFileItem& item, VideoDbContentType type, int id);
   CVideoInfoTag GetDetailsByTypeAndId(VideoDbContentType type, int id);
 
   // scraper settings
@@ -1096,6 +1109,15 @@ private:
    \sa SetPlayCount, IncrementPlayCount, GetPlayCounts
    */
   int GetPlayCount(int iFileId);
+
+  /*! \brief Get the last played time of a filename and path
+   \param iFileId file id to get the playcount for
+   \return the last played time of the item, or an invalid CDateTime on error
+   \sa UpdateLastPlayed
+   */
+  CDateTime GetLastPlayed(int iFileId);
+
+  bool GetSeasonInfo(int idSeason, CVideoInfoTag& details, bool allDetails, CFileItem* item);
 
   int GetMinSchemaVersion() const override { return 75; }
   int GetSchemaVersion() const override;

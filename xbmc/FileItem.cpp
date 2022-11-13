@@ -159,6 +159,7 @@ CFileItem::CFileItem(const std::shared_ptr<CPVREpgInfoTag>& tag)
   m_bIsFolder = false;
   m_epgInfoTag = tag;
   m_strPath = tag->Path();
+  m_bCanQueue = false;
   SetLabel(GetEpgTagTitle(tag));
   m_dateTime = tag->StartAsLocalTime();
 
@@ -193,6 +194,7 @@ CFileItem::CFileItem(const std::shared_ptr<PVR::CPVREpgSearchFilter>& filter)
   m_bIsFolder = true;
   m_epgSearchFilter = filter;
   m_strPath = filter->GetPath();
+  m_bCanQueue = false;
   SetLabel(filter->GetTitle());
 
   const CDateTime lastExec = filter->GetLastExecutedDateTime();
@@ -217,7 +219,7 @@ CFileItem::CFileItem(const std::shared_ptr<CPVRChannelGroupMember>& channelGroup
 
   m_strPath = channelGroupMember->Path();
   m_bIsFolder = false;
-
+  m_bCanQueue = false;
   SetLabel(channel->ChannelName());
 
   if (!channel->IconPath().empty())
@@ -252,6 +254,7 @@ CFileItem::CFileItem(const std::shared_ptr<CPVRRecording>& record)
   SetLabel(record->m_strTitle);
   m_dateTime = record->RecordingTimeAsLocalTime();
   m_dwSize = record->GetSizeInBytes();
+  m_bCanQueue = true;
 
   // Set art
   if (!record->IconPath().empty())
@@ -288,6 +291,7 @@ CFileItem::CFileItem(const std::shared_ptr<CPVRTimerInfoTag>& timer)
   m_strPath = timer->Path();
   SetLabel(timer->Title());
   m_dateTime = timer->StartAsLocalTime();
+  m_bCanQueue = false;
 
   if (!timer->ChannelIcon().empty())
     SetArt("icon", timer->ChannelIcon());
@@ -3677,6 +3681,80 @@ bool CFileItem::LoadGameTag()
 
   m_gameInfoTag->SetLoaded(true);
 
+  return false;
+}
+
+bool CFileItem::LoadDetails()
+{
+  if (IsVideoDb())
+  {
+    if (HasVideoInfoTag())
+      return true;
+
+    CVideoDatabase db;
+    if (!db.Open())
+      return false;
+
+    VIDEODATABASEDIRECTORY::CQueryParams params;
+    VIDEODATABASEDIRECTORY::CDirectoryNode::GetDatabaseInfo(GetPath(), params);
+
+    if (params.GetMovieId() >= 0)
+      db.GetMovieInfo(GetPath(), *GetVideoInfoTag(), static_cast<int>(params.GetMovieId()));
+    else if (params.GetMVideoId() >= 0)
+      db.GetMusicVideoInfo(GetPath(), *GetVideoInfoTag(), static_cast<int>(params.GetMVideoId()));
+    else if (params.GetEpisodeId() >= 0)
+      db.GetEpisodeInfo(GetPath(), *GetVideoInfoTag(), static_cast<int>(params.GetEpisodeId()));
+    else if (params.GetSetId() >= 0) // movie set
+      db.GetSetInfo(static_cast<int>(params.GetSetId()), *GetVideoInfoTag(), this);
+    else if (params.GetTvShowId() >= 0)
+    {
+      if (params.GetSeason() >= 0)
+      {
+        const int idSeason = db.GetSeasonId(static_cast<int>(params.GetTvShowId()),
+                                            static_cast<int>(params.GetSeason()));
+        if (idSeason >= 0)
+          db.GetSeasonInfo(idSeason, *GetVideoInfoTag(), this);
+      }
+      else
+        db.GetTvShowInfo(GetPath(), *GetVideoInfoTag(), static_cast<int>(params.GetTvShowId()),
+                         this);
+    }
+    else
+    {
+      db.Close();
+      return false;
+    }
+    db.Close();
+    return true;
+  }
+
+  if (m_bIsFolder && URIUtils::IsPVRRecordingFileOrFolder(GetPath()))
+  {
+    if (HasProperty("watchedepisodes") || HasProperty("watched"))
+      return true;
+
+    const std::string parentPath = URIUtils::GetParentPath(GetPath());
+
+    //! @todo optimize, find a way to set the details of the directory without loading its content.
+    CFileItemList items;
+    if (CDirectory::GetDirectory(parentPath, items, "", XFILE::DIR_FLAG_DEFAULTS))
+    {
+      const std::string path = GetPath();
+      const auto it = std::find_if(items.cbegin(), items.cend(),
+                                   [path](const auto& entry) { return entry->GetPath() == path; });
+      if (it != items.cend())
+      {
+        *this = *(*it);
+        return true;
+      }
+    }
+
+    CLog::LogF(LOGERROR, "Error filling item details (path={})", GetPath());
+    return false;
+  }
+
+  //! @todo add support for other types on demand.
+  CLog::LogF(LOGDEBUG, "Unsupported item type (path={})", GetPath());
   return false;
 }
 

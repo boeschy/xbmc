@@ -47,8 +47,6 @@ endif
 # libc++
 STLLIB=$(TOOLCHAIN)/sysroot/usr/lib/$(HOST)/libc++_shared.so
 
-GDBPATH=$(NDKROOT)/prebuilt/android-$(ARCH)/gdbserver/gdbserver
-
 # check for java 1.8
 JAVA8=$(shell java -version 2>&1 | grep -q '1.8.[0-9]' && echo yes)
 ifeq ($(JAVA8),yes)
@@ -91,7 +89,7 @@ sharedobb: shared
 python: | xbmc/assets
 	mkdir -p xbmc/assets/python@PYTHON_VERSION@/lib/
 	cp -rfp $(PREFIX)/lib/python@PYTHON_VERSION@ xbmc/assets/python@PYTHON_VERSION@/lib/
-	cd xbmc/assets/python@PYTHON_VERSION@/lib/python@PYTHON_VERSION@/; rm -rf test config lib-dynload ; find . -name "*.so" -exec rm -f {} \;
+	cd xbmc/assets/python@PYTHON_VERSION@/lib/python@PYTHON_VERSION@/; rm -rf test config config-@PYTHON_VERSION@ lib-dynload ; find . -name "*.so" -exec rm -f {} \;
 
 res:
 	mkdir -p xbmc/res xbmc/res/raw xbmc/res/values images
@@ -125,10 +123,6 @@ libs: $(PREFIX)/lib/@APP_NAME_LC@/lib@APP_NAME_LC@.so
 	cp -fp xbmc/obj/local/$(CPU)/*.so xbmc/lib/$(CPU)/
 	$(STRIP) --strip-unneeded xbmc/lib/$(CPU)/*.so
 	(test -s $(STLLIB) && install -p $(STLLIB) ./xbmc/lib/$(CPU)/) || true
-	install -p $(GDBPATH) ./xbmc/lib/$(CPU)/gdbserver
-	echo "set solib-search-path ./obj/local/$(CPU)" > ./xbmc/lib/$(CPU)/gdb.setup
-	echo "directory $(TOOLCHAIN)/sysroot/usr/include $(NDKROOT)/sources/android/native_app_glue" \
-             "$(NDKROOT)/sources/cxx-stl/gnu-libstdc++/$(GCC_VERSION)/include $(CORE_SOURCE_DIR)  $(PREFIX)/include jni" >> ./xbmc/lib/$(CPU)/gdb.setup
 
 java: res
 	mkdir -p xbmc/java/$(APP_PACKAGE_DIR) xbmc/obj
