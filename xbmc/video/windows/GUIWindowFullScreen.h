@@ -9,6 +9,8 @@
 #pragma once
 
 #include "guilib/GUIWindow.h"
+#include "utils/Stopwatch.h"
+#include "video/VideoInfoTag.h"
 
 #include <chrono>
 
@@ -34,6 +36,15 @@ protected:
 
 private:
   void SeekChapter(int iChapter);
+
+  enum class ShowInfoMode
+  {
+    SHOW_INFO,
+    HIDE_INFO,
+    TOGGLE_INFO
+  };
+  void ShowInfo(ShowInfoMode mode);
+
   void ToggleOSD();
   void TriggerOSD();
   CGUIDialog *GetOSD();
@@ -41,5 +52,7 @@ private:
   bool m_viewModeChanged;
   std::chrono::time_point<std::chrono::steady_clock> m_dwShowViewModeTimeout;
 
+  CStopWatch m_initTimer;
+  const CVideoInfoTag* m_tag{nullptr};
   bool m_bShowCurrentTime;
 };
