@@ -703,6 +703,7 @@ void CTeletextDecoder::EndDecoder()
   /* close freetype */
   if (m_Manager)
   {
+    FTC_Node_Unref(m_anode, m_Manager);
     FTC_Manager_Done(m_Manager);
   }
   if (m_Library)
@@ -1165,7 +1166,7 @@ void CTeletextDecoder::RenderPage()
         if (c == NULL)
           return;
 
-        c = {};
+        *c = {};
         m_RenderInfo.SubtitleCache[j] = c;
       }
       c->Valid = true;
@@ -1292,16 +1293,37 @@ void CTeletextDecoder::RenderPage()
         }
       }
 
-      /* Update on every changed second */
-      if (m_txtCache->TimeString[7] != prevTimeSec)
+      if (!IsSubtitlePage(m_txtCache->Page))
       {
-        prevTimeSec = m_txtCache->TimeString[7];
+        /* Update on every changed second */
+        if (m_txtCache->TimeString[7] != prevTimeSec)
+        {
+          prevTimeSec = m_txtCache->TimeString[7];
+          m_updateTexture = true;
+        }
+      }
+      else
+      {
         m_updateTexture = true;
       }
     }
     DoFlashing(StartRow);
     m_txtCache->NationalSubset = national_subset_bak;
   }
+}
+
+bool CTeletextDecoder::IsSubtitlePage(int pageNumber) const
+{
+  if (!m_txtCache)
+    return false;
+
+  for (const auto subPage : m_txtCache->SubtitlePages)
+  {
+    if (subPage.page == pageNumber)
+      return true;
+  }
+
+  return false;
 }
 
 void CTeletextDecoder::DoFlashing(int startrow)
@@ -2255,7 +2277,7 @@ void CTeletextDecoder::RenderCharIntern(TextRenderInfo_t* RenderInfo, int Char, 
     return;
   }
 
-  if (FTC_SBitCache_Lookup(m_Cache, &m_TypeTTF, glyph, &m_sBit, NULL) != 0)
+  if (FTC_SBitCache_Lookup(m_Cache, &m_TypeTTF, glyph, &m_sBit, &m_anode) != 0)
   {
     FillRect(m_TextureBuffer, m_RenderInfo.Width, m_RenderInfo.PosX, m_RenderInfo.PosY + yoffset, curfontwidth, m_RenderInfo.FontHeight, bgcolor);
     m_RenderInfo.PosX += curfontwidth;
@@ -2282,7 +2304,7 @@ void CTeletextDecoder::RenderCharIntern(TextRenderInfo_t* RenderInfo, int Char, 
       Char = G2table[0][0x20+ Attribute->diacrit];
     if ((glyph = FT_Get_Char_Index(m_Face, Char)))
     {
-      if (FTC_SBitCache_Lookup(m_Cache, &m_TypeTTF, glyph, &sbit_diacrit, NULL) == 0)
+      if (FTC_SBitCache_Lookup(m_Cache, &m_TypeTTF, glyph, &sbit_diacrit, &m_anode) == 0)
       {
         sbitbuffer = localbuffer;
         memcpy(sbitbuffer,m_sBit->buffer,m_sBit->pitch*m_sBit->height);
