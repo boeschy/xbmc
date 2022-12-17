@@ -136,14 +136,14 @@ diff --git a/src/libbluray/bluray.h b/src/libbluray/bluray.h
 index 01d4671..85f70f3 100644
 --- a/src/libbluray/bluray.h
 +++ b/src/libbluray/bluray.h
-@@ -1079,6 +1079,7 @@ void bd_free_clpi(struct clpi_cl *cl);
+@@ -1079,6 +1079,7 @@ int64_t bd_clip_size(struct bd_file_s* file);
+  */
+ void bd_clip_close(struct bd_file_s* file);
  
- 
- struct mpls_pl;
 +struct mpls_pl *bd_get_title_mpls(BLURAY *bd);
+ /** Testing/debugging: Parse playlist (MPLS) file */
  struct mpls_pl *bd_read_mpls(const char *mpls_file);
- void bd_free_mpls(struct mpls_pl *);
- 
+ /** Testing/debugging: Free parsed playlist */
 @@ -1095,6 +1096,15 @@ void bd_free_bdjo(struct bdjo_data *);
  int  bd_start_bdj(BLURAY *bd, const char* start_object); // start BD-J from the specified BD-J object (should be a 5 character string)
  void bd_stop_bdj(BLURAY *bd); // shutdown BD-J and clean up resources
