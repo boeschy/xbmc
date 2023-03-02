@@ -129,6 +129,8 @@ public:
   static constexpr auto SETTING_VIDEOPLAYER_USESTAGEFRIGHT = "videoplayer.usestagefright";
   static constexpr auto SETTING_VIDEOPLAYER_LIMITGUIUPDATE = "videoplayer.limitguiupdate";
   static constexpr auto SETTING_VIDEOPLAYER_SUPPORTMVC = "videoplayer.supportmvc";
+  static constexpr auto SETTING_VIDEOPLAYER_MFXLEVEL = "videoplayer.mfxlevel";
+  static constexpr auto SETTING_VIDEOPLAYER_STEREOHWLOCKSINGLEFPS = "videoplayer.stereohwlocksinglefps";
   static constexpr auto SETTING_MYVIDEOS_SELECTACTION = "myvideos.selectaction";
   static constexpr auto SETTING_MYVIDEOS_USETAGS = "myvideos.usetags";
   static constexpr auto SETTING_MYVIDEOS_EXTRACTFLAGS = "myvideos.extractflags";
@@ -354,6 +356,7 @@ public:
   static constexpr auto SETTING_VIDEOSCREEN_SCREENMODE = "videoscreen.screenmode";
   static constexpr auto SETTING_VIDEOSCREEN_FAKEFULLSCREEN = "videoscreen.fakefullscreen";
   static constexpr auto SETTING_VIDEOSCREEN_BLANKDISPLAYS = "videoscreen.blankdisplays";
+  static constexpr auto SETTING_VIDEOSCREEN_AUTO3DDISPLAY = "videoscreen.auto3ddisplay";
   static constexpr auto SETTING_VIDEOSCREEN_STEREOSCOPICMODE = "videoscreen.stereoscopicmode";
   static constexpr auto SETTING_VIDEOSCREEN_PREFEREDSTEREOSCOPICMODE =
       "videoscreen.preferedstereoscopicmode";

@@ -28,8 +28,15 @@
 #include "guilib/GUIShaderDX.h"
 #include "guilib/GUITextureD3D.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/GUIComponent.h"
+#include "guilib/StereoscopicsManager.h"
 #include "utils/MathUtils.h"
 #include "utils/log.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
+#ifdef HAVE_LIBMFX
+#include "DVDCodecs/Video/MFXCodec.h"
+#endif
 
 #include <DirectXPackedVector.h>
 
@@ -75,6 +82,9 @@ bool CRenderSystemDX::InitRenderSystem()
 #endif
   CDVDFactoryCodec::ClearHWAccels();
   DXVA::CDecoder::Register();
+#ifdef HAVE_LIBMFX
+  CMFXCodec::Register();
+#endif
   VIDEOPLAYER::CRendererFactory::ClearRenderer();
   CWinRenderer::Register();
 #if defined(TARGET_WINDOWS_DESKTOP)
@@ -164,7 +174,7 @@ void CRenderSystemDX::CheckInterlacedStereoView()
     if (!m_rightEyeTex.Create(outputSize.Width, outputSize.Height, 1, D3D11_USAGE_DEFAULT, texFormat))
     {
       CLog::Log(LOGERROR, "{} - Failed to create right eye buffer.", __FUNCTION__);
-      CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoMode(RENDER_STEREO_MODE_SPLIT_HORIZONTAL); // try fallback to split horizontal
+      CServiceBroker::GetGUI()->GetStereoscopicsManager().ApplyHWFallbackStereoMode(); //  apply hw fallback stereo mode 
     }
     else
       m_deviceResources->Unregister(&m_rightEyeTex); // we will handle its health
@@ -631,10 +641,20 @@ bool CRenderSystemDX::SupportsStereo(RENDER_STEREO_MODE mode) const
     case RENDER_STEREO_MODE_CHECKERBOARD:
       return true;
     case RENDER_STEREO_MODE_HARDWAREBASED:
-      return m_deviceResources->IsStereoAvailable();
+      return CServiceBroker::GetGUI()->GetStereoscopicsManager().IsAuto3DEnabled() || m_deviceResources->IsStereoAvailable();
     default:
       return CRenderSystemBase::SupportsStereo(mode);
   }
+}
+
+void CRenderSystemDX::Enable3DDisplay(bool is3D) const
+{
+    m_deviceResources->Enable3DDisplay(is3D);
+}
+
+bool CRenderSystemDX::Is3DDisplayEnabled() const
+{
+	return m_deviceResources->IsStereoAvailable() && m_deviceResources->Is3DDisplayEnabled();
 }
 
 void CRenderSystemDX::FlushGPU() const

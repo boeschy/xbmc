@@ -60,7 +60,7 @@ public:
 
   unsigned GetWidth() const { return m_widthTex; }
   unsigned GetHeight() const { return m_heightTex; }
-  bool IsLoaded() { return m_bLoaded; }
+  virtual bool IsLoaded() { return m_bLoaded; }
 
   virtual void AppendPicture(const VideoPicture& picture);
   virtual void ReleasePicture();

@@ -14,6 +14,10 @@
 #
 #   Bluray::Bluray   - The libbluray library
 
+if(ENABLE_BUILD_BLURAY)
+  include(${CMAKE_SOURCE_DIR}/tools/depends/target/libbluray/build_bluray.cmake)
+else()
+
 set(Bluray_FIND_VERSION 0.9.3)
 if(PKG_CONFIG_FOUND)
   pkg_check_modules(PC_BLURAY libbluray>=${Bluray_FIND_VERSION} QUIET)
@@ -65,3 +69,4 @@ if(BLURAY_FOUND)
 endif()
 
 mark_as_advanced(BLURAY_INCLUDE_DIR BLURAY_LIBRARY)
+endif()

@@ -173,6 +173,29 @@
           <default>true</default>
           <control type="toggle" />
         </setting>
+        <setting id="videoplayer.supportmvc" type="boolean" label="60000" help="60001">
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle" />
+          <requirement>HAS_MVC</requirement>
+        </setting>
+        <setting id="videoplayer.mfxlevel" type="integer" label="60002" help="60003">
+          <level>2</level>
+          <default>20</default>
+          <constraints>
+            <minimum>0</minimum>
+            <step>1</step>
+            <maximum>35</maximum>
+          </constraints>
+          <control type="spinner" format="integer" delayed="true"/>
+          <requirement>HAS_MVC</requirement>
+        </setting>
+        <setting id="videoplayer.stereohwlocksinglefps" type="boolean" label="60006" help="60007">
+          <level>2</level>
+          <default>false</default>
+          <control type="toggle" />
+          <requirement>HAS_MVC</requirement>
+        </setting>
       </group>
       <group id="5" label="14233">
         <setting id="videoplayer.teletextenabled" type="boolean" label="23050" help="36174">
@@ -2852,6 +2875,12 @@
         </setting>
       </group>
       <group id="3" label="14232">
+        <setting id="videoscreen.auto3ddisplay" type="boolean" label="60004" help="60005">
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle" />
+          <requirement>HAS_DX</requirement>
+        </setting>
         <setting id="videoscreen.stereoscopicmode" type="integer" label="36500" help="36539">
           <level>2</level>
           <default>0</default>

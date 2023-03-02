@@ -69,11 +69,16 @@ public:
    */
   bool OnAction(const CAction &action);
 
+  void ApplyHWFallbackStereoMode();
+
+  bool IsAuto3DEnabled();
+
 private:
   RENDER_STEREO_MODE GetNextSupportedStereoMode(const RENDER_STEREO_MODE &currentMode, int step = 1) const;
   RENDER_STEREO_MODE GetStereoModeByUserChoice() const;
   RENDER_STEREO_MODE GetStereoModeOfPlayingVideo(void) const;
   RENDER_STEREO_MODE GetPreferredPlaybackMode(void) const;
+  RENDER_STEREO_MODE GetFallbackStereoMode(void) const;
   std::string GetVideoStereoMode() const;
   bool IsVideoStereoscopic() const;
 

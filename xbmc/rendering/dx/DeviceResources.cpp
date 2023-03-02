@@ -13,7 +13,9 @@
 #include "ServiceBroker.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/StereoscopicsManager.h"
 #include "messaging/ApplicationMessenger.h"
+#include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/SystemInfo.h"
@@ -106,6 +108,9 @@ void DX::DeviceResources::Release()
   OnDeviceLost(true);
   DestroySwapChain();
 
+
+
+  m_displayControl = nullptr;
   m_adapter = nullptr;
   m_dxgiFactory = nullptr;
   m_output = nullptr;
@@ -222,7 +227,7 @@ bool DX::DeviceResources::SetFullScreen(bool fullscreen, RESOLUTION_INFO& res)
 
   CLog::LogF(LOGDEBUG, "switching from {}({:.0f} x {:.0f}) to {}({} x {})",
              bFullScreen ? "fullscreen " : "", m_outputSize.Width, m_outputSize.Height,
-             fullscreen ? "fullscreen " : "", res.iWidth, res.iHeight);
+             fullscreen  ? "fullscreen " : "", res.iWidth, res.iHeight);
 
   bool recreate = m_stereoEnabled != (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_HARDWAREBASED);
   if (!!bFullScreen && !fullscreen)
@@ -391,6 +396,26 @@ void DX::DeviceResources::CreateDeviceResources()
     }
   }
 
+  ID3D10Multithread       *pD10Multithread = nullptr;
+  hr = context->QueryInterface(&pD10Multithread);
+  if (FAILED(hr))
+  {
+      CLog::LogF(LOGERROR, "unable to create multithread object. 3D Rendering in not possible.");
+  }
+  else
+  {
+      hr = pD10Multithread->SetMultithreadProtected(true);
+      if (FAILED(hr))
+      {
+          CLog::LogF(LOGERROR, "unable to enable multithread mode for DX11. 3D Rendering in not possible.");
+      }
+      if (pD10Multithread != nullptr)
+      {
+          pD10Multithread->Release();
+          pD10Multithread = nullptr;
+      }
+  }
+
   // Store pointers to the Direct3D 11.1 API device and immediate context.
   hr = device.As(&m_d3dDevice); CHECK_ERR();
 
@@ -428,6 +453,11 @@ void DX::DeviceResources::CreateDeviceResources()
     hr = m_d3dDevice.As(&dxgiDevice); CHECK_ERR();
     hr = dxgiDevice->GetAdapter(&adapter); CHECK_ERR();
     hr = adapter.As(&m_adapter); CHECK_ERR();
+  }
+
+  if (!m_displayControl)
+  {
+      hr = m_dxgiFactory->QueryInterface(__uuidof(IDXGIDisplayControl), (void **)&m_displayControl);
   }
 
   DXGI_ADAPTER_DESC aDesc;
@@ -563,6 +593,7 @@ void DX::DeviceResources::ResizeBuffers()
   bool bHWStereoEnabled = RENDER_STEREO_MODE_HARDWAREBASED ==
                           CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
   bool windowed = true;
+
   HRESULT hr = E_FAIL;
   DXGI_SWAP_CHAIN_DESC1 scDesc = {};
 
@@ -571,16 +602,31 @@ void DX::DeviceResources::ResizeBuffers()
     BOOL bFullcreen = 0;
     m_swapChain->GetFullscreenState(&bFullcreen, nullptr);
     if (!!bFullcreen)
+
       windowed = false;
 
     m_swapChain->GetDesc1(&scDesc);
-    if ((scDesc.Stereo == TRUE) != bHWStereoEnabled) // check if swapchain needs to be recreated
-      DestroySwapChain();
+
+	// make sure device, swap and setting are synced
+	if ((scDesc.Stereo == TRUE) != bHWStereoEnabled) // check if swapchain needs to be recreated
+    {
+		DestroySwapChain();
+		Enable3DDisplay(bHWStereoEnabled);
+		bool bHWStereoEnabledPost = IsStereoAvailable() && Is3DDisplayEnabled();
+		if (bHWStereoEnabled && !bHWStereoEnabledPost)
+      {
+			// did not transisition to HW stereo - fallback
+			bHWStereoEnabled = false;
+			CServiceBroker::GetGUI()->GetStereoscopicsManager().ApplyHWFallbackStereoMode();
+      }
+    }
   }
 
   if (m_swapChain) // If the swap chain already exists, resize it.
   {
+
     m_swapChain->GetDesc1(&scDesc);
+
     hr = m_swapChain->ResizeBuffers(scDesc.BufferCount, lround(m_outputSize.Width),
                                     lround(m_outputSize.Height), scDesc.Format,
                                     windowed ? 0 : DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
@@ -680,9 +726,8 @@ void DX::DeviceResources::ResizeBuffers()
 
       hr = CreateSwapChain(swapChainDesc, scFSDesc, &swapChain); CHECK_ERR();
 
-      // fallback to split_horizontal mode.
-      CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoMode(
-          RENDER_STEREO_MODE_SPLIT_HORIZONTAL);
+      // apply fallback 3d alternative
+	  CServiceBroker::GetGUI()->GetStereoscopicsManager().ApplyHWFallbackStereoMode();
     }
 
     if (FAILED(hr))
@@ -1100,6 +1145,24 @@ bool DX::DeviceResources::IsStereoAvailable() const
     return m_dxgiFactory->IsWindowedStereoEnabled();
 
   return false;
+}
+
+void DX::DeviceResources::Enable3DDisplay(bool is3D)
+{
+	if (m_displayControl &&
+		CServiceBroker::GetGUI()->GetStereoscopicsManager().IsAuto3DEnabled())
+    {
+        if ((m_displayControl->IsStereoEnabled() == TRUE) != is3D)
+        {
+            m_displayControl->SetStereoEnabled(is3D);
+        }
+    }
+}
+
+bool DX::DeviceResources::Is3DDisplayEnabled()
+{
+	return m_displayControl && m_displayControl->IsStereoEnabled();
+
 }
 
 void DX::DeviceResources::CheckNV12SharedTexturesSupport()

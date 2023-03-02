@@ -13,7 +13,7 @@
 
 #include <list>
 #include <memory>
-
+#include <queue>
 extern "C"
 {
 #include <libbluray/bluray.h>
@@ -49,6 +49,7 @@ class CDVDInputStreamBluray
   , public CDVDInputStream::IChapter
   , public CDVDInputStream::IPosTime
   , public CDVDInputStream::IMenus
+  , public CDVDInputStream::IExtensionStream
 {
 public:
   CDVDInputStreamBluray() = delete;
@@ -102,7 +103,7 @@ public:
   bool OnMouseClick(const CPoint &point) override { return MouseClick(point); }
   void SkipStill() override;
   bool GetState(std::string& xmlstate) override;
-  bool SetState(const std::string& xmlstate) override;
+  bool SetState(const std::string &xmlstate) override;
   bool CanSeek() override;
 
 
@@ -134,6 +135,15 @@ public:
   BLURAY_TITLE_INFO* GetTitleFile(const std::string& name);
 
   void ProcessEvent();
+
+  /* IExtensionStream */
+  bool HasExtension() override;
+  bool AreEyesFlipped() override;
+  struct DemuxPacket* ReadDemux() override;
+  struct AVStream* GetAVStream() override;
+  void DisableExtension() override;
+  bool NeedMoreData() override;
+  void AlignContext(struct AVFormatContext* context) override;
 
 protected:
   struct SPlane;
@@ -181,12 +191,53 @@ protected:
 #endif
 
   private:
-    bool OpenStream(CFileItem &item);
-    void SetupPlayerSettings();
-    void FreeTitleInfo();
-    std::unique_ptr<CDVDInputStreamFile> m_pstream = nullptr;
-    std::string m_rootPath;
+  int m_nTitles = -1;
+  
+  // extension related members
+  class CExtensionStreamReader final
+  {
+  public:
+    CExtensionStreamReader(BLURAY* bd, int nSubPathIndex, bool isNav);
+    ~CExtensionStreamReader();
 
-    /*! Bluray state serializer handler */
-    CBlurayStateSerializer m_blurayStateSerializer;
+    void Push(int clip);
+    void Clear();
+    void OpenNextStream();
+    struct DemuxPacket* ReadDemux() const;
+    bool SeekTime(double time) const;
+    struct AVStream* GetAVStream();
+
+    void AlignContext(struct AVFormatContext* context);
+
+  private:
+    bool OpenClip(const std::string& strClipName);
+    void Dispose();
+    double ConvertTimestamp(int64_t pts, int den, int num) const;
+
+    bool m_bOpened = false;
+    int m_nAVStreamIndex = -1;
+    int m_nSubPathIndex = -1;
+    int m_nClip = -1;
+
+    BLURAY* m_bd = nullptr;
+    std::queue<int> m_clipQueue;
+    struct bd_file_s* m_bd_file = nullptr;
+
+    struct AVIOContext* m_ioContext = nullptr;
+    struct AVFormatContext* m_pFormatContext = nullptr;
+    const bool m_isNav = false;
+  };
+
+  bool OpenStream(CFileItem &item);
+  void SetupPlayerSettings();
+  void FreeTitleInfo();
+  bool ProcessPlaylist(int playitem);
+  std::unique_ptr<CDVDInputStreamFile> m_pstream = nullptr;
+  std::string m_rootPath;
+  std::unique_ptr<CExtensionStreamReader> m_pExtensionReader = nullptr;
+  bool m_bExtensionDisabled = false;
+  bool m_bFlipEyes = false;
+  
+  /*! Bluray state serializer handler */
+  CBlurayStateSerializer m_blurayStateSerializer;
 };

@@ -61,8 +61,10 @@ static const struct StereoModeMap VideoModeToGuiModeMap[] =
   { "anaglyph_cyan_red",        RENDER_STEREO_MODE_ANAGLYPH_RED_CYAN },
   { "anaglyph_green_magenta",   RENDER_STEREO_MODE_ANAGLYPH_GREEN_MAGENTA },
   { "anaglyph_yellow_blue",     RENDER_STEREO_MODE_ANAGLYPH_YELLOW_BLUE },
-  { "block_lr",                 RENDER_STEREO_MODE_OFF }, // unsupported
-  { "block_rl",                 RENDER_STEREO_MODE_OFF }, // unsupported
+  { "block_lr",                 RENDER_STEREO_MODE_HARDWAREBASED },
+  { "block_rl",                 RENDER_STEREO_MODE_HARDWAREBASED },
+  { "block_lr",                 RENDER_STEREO_MODE_SPLIT_HORIZONTAL }, // fallback
+  { "block_rl",                 RENDER_STEREO_MODE_SPLIT_HORIZONTAL }, // fallback
   {}
 };
 
@@ -131,7 +133,7 @@ void CStereoscopicsManager::SetStereoMode(const RENDER_STEREO_MODE &mode)
   RENDER_STEREO_MODE applyMode = mode;
 
   // resolve automatic mode before applying
-  if (mode == RENDER_STEREO_MODE_AUTO)
+  if (applyMode == RENDER_STEREO_MODE_AUTO)
     applyMode = GetStereoModeOfPlayingVideo();
 
   if (applyMode != currentMode && applyMode >= RENDER_STEREO_MODE_OFF)
@@ -197,6 +199,15 @@ std::string CStereoscopicsManager::DetectStereoModeByString(const std::string &n
 
   if (re.RegFind(searchString) > -1)
     stereoMode = "top_bottom";
+
+  if (!re.RegComp(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_mvc.c_str()))
+  {
+    CLog::Log(LOGERROR, "{}: Invalid RegExp for matching 3d MVC content:'{}'", __FUNCTION__, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_mvc.c_str());
+    return stereoMode;
+  }
+
+  if (re.RegFind(searchString) > -1)
+    stereoMode = "block_lr";
 
   return stereoMode;
 }
@@ -304,7 +315,7 @@ int CStereoscopicsManager::ConvertVideoToGuiStereoMode(const std::string &mode)
   size_t i = 0;
   while (VideoModeToGuiModeMap[i].name)
   {
-    if (mode == VideoModeToGuiModeMap[i].name)
+    if (mode == VideoModeToGuiModeMap[i].name && CServiceBroker::GetRenderSystem()->SupportsStereo(VideoModeToGuiModeMap[i].mode))
       return VideoModeToGuiModeMap[i].mode;
     i++;
   }
@@ -321,6 +332,27 @@ int CStereoscopicsManager::ConvertStringToGuiStereoMode(const std::string &mode)
     i++;
   }
   return ConvertVideoToGuiStereoMode(mode);
+}
+
+RENDER_STEREO_MODE CStereoscopicsManager::GetFallbackStereoMode(void) const
+{
+	RENDER_STEREO_MODE fallbackMode = GetStereoModeOfPlayingVideo();
+	if (fallbackMode == RENDER_STEREO_MODE_HARDWAREBASED)
+	{
+		fallbackMode = RENDER_STEREO_MODE_SPLIT_HORIZONTAL;
+	}
+
+	return fallbackMode;
+}
+
+void CStereoscopicsManager::ApplyHWFallbackStereoMode()
+{
+	ApplyStereoMode(GetFallbackStereoMode());
+}
+
+bool CStereoscopicsManager::IsAuto3DEnabled()
+{
+	return CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOSCREEN_AUTO3DDISPLAY);
 }
 
 const char* CStereoscopicsManager::ConvertGuiStereoModeToString(const RENDER_STEREO_MODE &mode)
@@ -611,7 +643,14 @@ void CStereoscopicsManager::OnStreamChange()
     }
     break;
   case STEREOSCOPIC_PLAYBACK_MODE_PREFERRED: // Stereoscopic
-    SetStereoMode(preferred);
+	  if (IsAuto3DEnabled() && preferred == RENDER_STEREO_MODE_HARDWAREBASED)
+	  {
+		  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_MEDIA_PAUSE);
+		  SetStereoModeByUser(preferred); // we dont use setstereomode to overcome audio sync issues on stop 
+		  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_MEDIA_UNPAUSE);
+	  }
+	  else
+		SetStereoMode(preferred);
     break;
   case 2: // Mono
     SetStereoMode(RENDER_STEREO_MODE_MONO);

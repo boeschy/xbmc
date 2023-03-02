@@ -152,6 +152,19 @@ public:
     }
   };
 
+  class IExtensionStream
+  {
+  public:
+    virtual ~IExtensionStream() = default;
+    virtual bool HasExtension() = 0;
+    virtual bool AreEyesFlipped() = 0;
+    virtual DemuxPacket* ReadDemux() = 0;
+    virtual struct AVStream* GetAVStream() = 0;
+    virtual void DisableExtension() = 0;
+    virtual bool NeedMoreData() = 0;
+    virtual void AlignContext(struct AVFormatContext* context) = 0;
+  };
+
   enum ENextStream
   {
     NEXTSTREAM_NONE,
