@@ -9,15 +9,19 @@
 
 #include "FileItem.h"
 #include "FileItemList.h"
+#include "ServiceBroker.h"
 #include "URL.h"
 #include "Util.h"
 #include "cores/FFmpeg.h"
 #include "filesystem/File.h"
-#include "guilib/LocalizeStrings.h"
 #include "imagefiles/ImageFileURL.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/Mp4ChplReader.h"
 #include "utils/StringUtils.h"
+#include "utils/log.h"
 
 using namespace XFILE;
 using namespace MUSIC_INFO;
@@ -165,10 +169,35 @@ bool CAudioBookFileDirectory::GetDirectory(const CURL& url,
   if (m_fctx->nb_chapters > 1)
     thumb = IMAGE_FILES::URLFromFile(url.Get(), "music");
 
+  ChplChapterResult neroChapterResult{chplNone};
+  std::vector<ChplChapter> nero;
+
+  if (isAudioBook)
+  {
+    neroChapterResult = CChplChapterReader::ScanNeroChapters(url, nero);
+    if (neroChapterResult.IsError())
+    {
+      CLog::Log(LOGERROR,
+                "AudioBookFileDirectory: Error scanning for Nero style chapters in file {}. The "
+                "error returned was {}",
+                url.GetRedacted(), *neroChapterResult.errorMessage);
+    }
+    else if (neroChapterResult.IsNone())
+    { // can't get here without some form of chapter so must be QT style chapters (chap atom)
+      CLog::Log(
+          LOGDEBUG,
+          "AudioBookFileDirectory: Scanned for nero style chapters but didn't find any in {}, "
+          "using QT chapters",
+          url.GetRedacted());
+    }
+  }
+  const size_t ns = nero.size();
+
   for (size_t i=0;i<m_fctx->nb_chapters;++i)
   {
     tag=nullptr;
-    std::string chaptitle = StringUtils::Format(g_localizeStrings.Get(25010), i + 1);
+    std::string chaptitle = StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(25010), i + 1);
     std::string chapauthor;
     std::string chapalbum;
 
@@ -191,6 +220,9 @@ bool CAudioBookFileDirectory::GetDirectory(const CURL& url,
           chapauthor = tag->value;
         else if (StringUtils::CompareNoCase(tag->key, "album") == 0)
           chapalbum = tag->value;
+        // Prefer nero titles if we have them over QT titles and they are different
+        if (neroChapterResult.IsFound() && (i < ns) && (nero[i].title != chaptitle))
+          chaptitle = nero[i].title;
       }
       else
       {

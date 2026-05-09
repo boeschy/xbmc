@@ -16,7 +16,6 @@
 #include "application/ApplicationPlayer.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/guiinfo/GUIInfo.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "pvr/PVRItem.h"
@@ -41,6 +40,8 @@
 #include "pvr/recordings/PVRRecordings.h"
 #include "pvr/timers/PVRTimerInfoTag.h"
 #include "pvr/timers/PVRTimers.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -105,12 +106,12 @@ void CPVRGUIInfo::ResetProperties()
   ClearDescrambleInfo(m_descrambleInfo);
 
   m_updateBackendCacheRequested = false;
-  m_bRegistered = false;
 }
 
 void CPVRGUIInfo::ClearQualityInfo(CPVRSignalStatus& qualityInfo) const
 {
-  qualityInfo = {g_localizeStrings.Get(13106), g_localizeStrings.Get(13106)};
+  qualityInfo = {CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13106),
+                 CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13106)};
 }
 
 void CPVRGUIInfo::ClearDescrambleInfo(CPVRDescrambleInfo& descrambleInfo) const
@@ -120,6 +121,7 @@ void CPVRGUIInfo::ClearDescrambleInfo(CPVRDescrambleInfo& descrambleInfo) const
 
 void CPVRGUIInfo::Start()
 {
+  Stop();
   ResetProperties();
   Create();
   SetPriority(ThreadPriority::BELOW_NORMAL);
@@ -128,19 +130,18 @@ void CPVRGUIInfo::Start()
 void CPVRGUIInfo::Stop()
 {
   StopThread();
+}
 
-  auto& mgr = CServiceBroker::GetPVRManager();
-  auto& channels = mgr.Get<PVR::GUI::Channels>();
-  channels.GetChannelNavigator().Unsubscribe(this);
-  channels.Events().Unsubscribe(this);
-  mgr.Events().Unsubscribe(this);
+void CPVRGUIInfo::OnSleep()
+{
+  CPowerState::OnSleep();
+  Stop();
+}
 
-  CGUIComponent* gui = CServiceBroker::GetGUI();
-  if (gui)
-  {
-    gui->GetInfoManager().UnregisterInfoProvider(this);
-    m_bRegistered = false;
-  }
+void CPVRGUIInfo::OnWake()
+{
+  CPowerState::OnWake();
+  Start();
 }
 
 void CPVRGUIInfo::Process()
@@ -178,18 +179,12 @@ void CPVRGUIInfo::Process()
   /* update the backend cache once initially */
   m_updateBackendCacheRequested = true;
 
+  CGUIComponent* gui{CServiceBroker::GetGUI()};
+  if (gui)
+    gui->GetInfoManager().RegisterInfoProvider(this);
+
   while (!g_application.m_bStop && !m_bStop)
   {
-    if (!m_bRegistered)
-    {
-      CGUIComponent* gui = CServiceBroker::GetGUI();
-      if (gui)
-      {
-        gui->GetInfoManager().RegisterInfoProvider(this);
-        m_bRegistered = true;
-      }
-    }
-
     if (!m_bStop)
       UpdateQualityData();
     std::this_thread::yield();
@@ -224,6 +219,13 @@ void CPVRGUIInfo::Process()
     if (!m_bStop)
       CThread::Sleep(500ms);
   }
+
+  if (gui)
+    gui->GetInfoManager().UnregisterInfoProvider(this);
+
+  channels.GetChannelNavigator().Unsubscribe(this);
+  channels.Events().Unsubscribe(this);
+  mgr.Events().Unsubscribe(this);
 }
 
 void CPVRGUIInfo::UpdateQualityData()
@@ -643,7 +645,8 @@ bool CPVRGUIInfo::GetListItemAndPlayerLabel(const CFileItem* item,
         lastExecLocal.SetFromUTCDateTime(filter->GetLastExecutedDateTime());
         strValue = GetAsLocalizedDateTimeString(lastExecLocal);
         if (strValue.empty())
-          strValue = g_localizeStrings.Get(10006); // "N/A"
+          strValue =
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(10006); // "N/A"
         return true;
       }
       default:
@@ -668,13 +671,16 @@ bool CPVRGUIInfo::GetListItemAndPlayerLabel(const CFileItem* item,
             using enum CPVRChannelGroup::Origin;
 
             case CLIENT:
-              strValue = g_localizeStrings.Get(856); // Client
+              strValue =
+                  CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(856); // Client
               return true;
             case SYSTEM:
-              strValue = g_localizeStrings.Get(857); // System
+              strValue =
+                  CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(857); // System
               return true;
             case USER:
-              strValue = g_localizeStrings.Get(858); // User
+              strValue =
+                  CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(858); // User
               return true;
             default:
               break;
@@ -1969,10 +1975,11 @@ void CPVRGUIInfo::CharInfoBackendNumber(std::string& strValue) const
   size_t numBackends = m_backendProperties.size();
 
   if (numBackends > 0)
-    strValue = StringUtils::Format("{0} {1} {2}", m_iCurrentActiveClient + 1,
-                                   g_localizeStrings.Get(20163), numBackends);
+    strValue = StringUtils::Format(
+        "{0} {1} {2}", m_iCurrentActiveClient + 1,
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(20163), numBackends);
   else
-    strValue = g_localizeStrings.Get(14023);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(14023);
 }
 
 void CPVRGUIInfo::CharInfoTotalDiskSpace(std::string& strValue) const
@@ -2004,14 +2011,14 @@ void CPVRGUIInfo::CharInfoFrontendName(std::string& strValue) const
 {
   strValue = m_qualityInfo.AdapterName();
   if (strValue.empty())
-    strValue = g_localizeStrings.Get(13205);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
 }
 
 void CPVRGUIInfo::CharInfoFrontendStatus(std::string& strValue) const
 {
   strValue = m_qualityInfo.AdapterStatus();
   if (strValue.empty())
-    strValue = g_localizeStrings.Get(13205);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
 }
 
 void CPVRGUIInfo::CharInfoClientName(std::string& strValue) const
@@ -2053,12 +2060,12 @@ void CPVRGUIInfo::CharInfoBackendDiskspace(std::string& strValue) const
 
   if (diskTotal > 0)
   {
-    strValue = StringUtils::Format(g_localizeStrings.Get(802),
-                                   StringUtils::SizeToString(diskTotal - diskUsed),
-                                   StringUtils::SizeToString(diskTotal));
+    strValue = StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(802),
+        StringUtils::SizeToString(diskTotal - diskUsed), StringUtils::SizeToString(diskTotal));
   }
   else
-    strValue = g_localizeStrings.Get(13205);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
 }
 
 void CPVRGUIInfo::CharInfoBackendProviders(std::string& strValue) const
@@ -2100,7 +2107,7 @@ void CPVRGUIInfo::CharInfoBackendDeletedRecordings(std::string& strValue) const
 void CPVRGUIInfo::CharInfoPlayingClientName(std::string& strValue) const
 {
   if (m_strPlayingClientName.empty())
-    strValue = g_localizeStrings.Get(13205);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
   else
     strValue = m_strPlayingClientName;
 }
@@ -2131,21 +2138,21 @@ void CPVRGUIInfo::CharInfoService(std::string& strValue) const
 {
   strValue = m_qualityInfo.ServiceName();
   if (strValue.empty())
-    strValue = g_localizeStrings.Get(13205);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
 }
 
 void CPVRGUIInfo::CharInfoMux(std::string& strValue) const
 {
   strValue = m_qualityInfo.MuxName();
   if (strValue.empty())
-    strValue = g_localizeStrings.Get(13205);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
 }
 
 void CPVRGUIInfo::CharInfoProvider(std::string& strValue) const
 {
   strValue = m_qualityInfo.ProviderName();
   if (strValue.empty())
-    strValue = g_localizeStrings.Get(13205);
+    strValue = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
 }
 
 void CPVRGUIInfo::UpdateBackendCache()
@@ -2167,17 +2174,19 @@ void CPVRGUIInfo::UpdateBackendCache()
   }
 
   // Store some defaults
-  m_strClientName = g_localizeStrings.Get(13205);
-  m_strInstanceName = g_localizeStrings.Get(13205);
-  m_strBackendName = g_localizeStrings.Get(13205);
-  m_strBackendVersion = g_localizeStrings.Get(13205);
-  m_strBackendHost = g_localizeStrings.Get(13205);
-  m_strBackendProviders = g_localizeStrings.Get(13205);
-  m_strBackendChannelGroups = g_localizeStrings.Get(13205);
-  m_strBackendChannels = g_localizeStrings.Get(13205);
-  m_strBackendTimers = g_localizeStrings.Get(13205);
-  m_strBackendRecordings = g_localizeStrings.Get(13205);
-  m_strBackendDeletedRecordings = g_localizeStrings.Get(13205);
+  m_strClientName = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strInstanceName = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendName = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendVersion = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendHost = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendProviders = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendChannelGroups =
+      CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendChannels = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendTimers = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendRecordings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
+  m_strBackendDeletedRecordings =
+      CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205);
   m_iBackendDiskTotal = 0;
   m_iBackendDiskUsed = 0;
 

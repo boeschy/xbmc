@@ -18,9 +18,9 @@
 #include "input/actions/ActionIDs.h"
 #include "input/actions/ActionTranslator.h"
 #include "input/keyboard/Key.h"
-#include "input/keyboard/KeyIDs.h"
 #include "input/keymaps/interfaces/IKeyMapper.h"
 #include "input/keymaps/joysticks/GamepadTranslator.h"
+#include "input/keymaps/keyboard/KeyIDs.h"
 #include "input/keymaps/keyboard/KeyboardTranslator.h"
 #include "input/keymaps/remote/CustomControllerTranslator.h"
 #include "input/keymaps/remote/IRTranslator.h"
@@ -86,7 +86,7 @@ bool CButtonTranslator::Load()
       CFileItemList files;
       XFILE::CDirectory::GetDirectory(dir, files, ".xml", XFILE::DIR_FLAG_DEFAULTS);
       // Sort the list for filesystem based priorities, e.g. 01-keymap.xml, 02-keymap-overrides.xml
-      files.Sort(SortByFile, SortOrderAscending);
+      files.Sort(SortBy::FILE, SortOrder::ASCENDING);
       for (int fileIndex = 0; fileIndex < files.Size(); ++fileIndex)
       {
         if (!files[fileIndex]->IsFolder())
@@ -105,7 +105,7 @@ bool CButtonTranslator::Load()
           XFILE::CDirectory::GetDirectory(devicedir, files, ".xml", XFILE::DIR_FLAG_DEFAULTS);
           // Sort the list for filesystem based priorities, e.g. 01-keymap.xml,
           // 02-keymap-overrides.xml
-          files.Sort(SortByFile, SortOrderAscending);
+          files.Sort(SortBy::FILE, SortOrder::ASCENDING);
           for (int fileIndex = 0; fileIndex < files.Size(); ++fileIndex)
           {
             if (!files[fileIndex]->IsFolder())
@@ -217,17 +217,6 @@ bool CButtonTranslator::HasLongpressMapping_Internal(int window, const CKey& key
 
     if (it2 != (*it).second.end())
       return it2->second.id != ACTION_NOOP;
-
-#ifdef TARGET_POSIX
-    // Some buttoncodes changed in Hardy
-    if ((code & KEY_VKEY) == KEY_VKEY && (code & 0x0F00))
-    {
-      code &= ~0x0F00;
-      it2 = (*it).second.find(code);
-      if (it2 != (*it).second.end())
-        return true;
-    }
-#endif
   }
 
   // no key mapping found for the current window do the fallback handling
@@ -269,21 +258,6 @@ unsigned int CButtonTranslator::GetActionCode(int window,
     action = (*it2).second.id;
     strAction = (*it2).second.strID;
   }
-
-#ifdef TARGET_POSIX
-  // Some buttoncodes changed in Hardy
-  if (action == ACTION_NONE && (code & KEY_VKEY) == KEY_VKEY && (code & 0x0F00))
-  {
-    CLog::Log(LOGDEBUG, "{}: Trying Hardy keycode for {:#04x}", __FUNCTION__, code);
-    code &= ~0x0F00;
-    it2 = (*it).second.find(code);
-    if (it2 != (*it).second.end())
-    {
-      action = (*it2).second.id;
-      strAction = (*it2).second.strID;
-    }
-  }
-#endif
 
   return action;
 }

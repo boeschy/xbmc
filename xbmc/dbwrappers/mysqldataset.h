@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -15,7 +15,7 @@
 #ifdef HAS_MYSQL
 #include <mysql/mysql.h>
 #elif defined(HAS_MARIADB)
-#include <mariadb/mysql.h>
+#include <mysql.h>
 #endif
 
 namespace dbiplus
@@ -31,7 +31,6 @@ protected:
   /* connect descriptor */
   MYSQL* conn{nullptr};
   bool _in_transaction{false};
-  int last_err;
 
 public:
   /* default constructor */
@@ -46,8 +45,6 @@ public:
   /* func. returns current status about MySQL-server connection */
   int status() override;
   int setErr(int err_code, const char* qry) override;
-  /* func. returns error message if error occurs */
-  const char* getErrorMsg() override;
 
   /* func. connects to database-server */
   int connect(bool create) override;
@@ -75,7 +72,7 @@ public:
   void rollback_transaction() override;
 
   /* virtual methods for formatting */
-  std::string vprepare(const char* format, va_list args) override;
+  std::string vprepare(std::string_view format, va_list args) override;
 
   bool in_transaction() override { return _in_transaction; }
   int query_with_reconnect(const char* query);

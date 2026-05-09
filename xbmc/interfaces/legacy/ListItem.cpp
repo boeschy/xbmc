@@ -974,9 +974,9 @@ namespace XBMCAddon
       return item->GetMusicInfoTag();
     }
 
-    void ListItem::setTitleRaw(std::string title)
+    void ListItem::setTitleRaw(const std::string& title)
     {
-      item->SetTitle(std::move(title));
+      item->SetTitle(title);
     }
 
     void ListItem::setPathRaw(const std::string& path)
@@ -1034,9 +1034,9 @@ namespace XBMCAddon
       StringUtils::ToLower(specialSort);
 
       if (specialSort == "bottom")
-        item->SetSpecialSort(SortSpecialOnBottom);
+        item->SetSpecialSort(SortSpecial::BOTTOM);
       else if (specialSort == "top")
-        item->SetSpecialSort(SortSpecialOnTop);
+        item->SetSpecialSort(SortSpecial::TOP);
     }
 
     void ListItem::setContentLookupRaw(bool enable)

@@ -166,7 +166,7 @@ std::unique_ptr<CXBMCApp> CXBMCApp::m_appinstance;
 
 CXBMCApp::CXBMCApp(ANativeActivity* nativeActivity, IInputHandler& inputHandler)
   : CJNIMainActivity(nativeActivity),
-    CJNIBroadcastReceiver(CJNIContext::getPackageName() + ".XBMCBroadcastReceiver"),
+    CJNIBroadcastReceiver("/XBMCBroadcastReceiver"),
     m_inputHandler(inputHandler)
 {
   m_activity = nativeActivity;
@@ -240,7 +240,7 @@ void CXBMCApp::Announce(ANNOUNCEMENT::AnnouncementFlag flag,
 
 void CXBMCApp::onStart()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 
   if (m_firstrun)
   {
@@ -302,7 +302,7 @@ bool isHeadsetPlugged()
 
 void CXBMCApp::onResume()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 
   if (g_application.IsInitialized() &&
       CServiceBroker::GetWinSystem()->GetOSScreenSaver()->IsInhibited())
@@ -350,7 +350,7 @@ void CXBMCApp::onResume()
 
 void CXBMCApp::onPause()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   m_bResumePlayback = false;
 
   const auto& components = CServiceBroker::GetAppComponents();
@@ -383,7 +383,7 @@ void CXBMCApp::onPause()
 
 void CXBMCApp::onStop()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 
   if ((m_playback_state & PLAYBACK_STATE_PLAYING) && !m_hasReqVisible)
   {
@@ -398,7 +398,7 @@ void CXBMCApp::onStop()
 
 void CXBMCApp::onDestroy()
 {
-  android_printf("%s", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 
   unregisterReceiver(*this);
 
@@ -410,42 +410,42 @@ void CXBMCApp::onDestroy()
 
 void CXBMCApp::onSaveState(void **data, size_t *size)
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   // no need to save anything as XBMC is running in its own thread
 }
 
 void CXBMCApp::onConfigurationChanged()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   // ignore any configuration changes like screen rotation etc
 }
 
 void CXBMCApp::onLowMemory()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   // can't do much as we don't want to close completely
 }
 
 void CXBMCApp::onCreateWindow(ANativeWindow* window)
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 }
 
 void CXBMCApp::onResizeWindow()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   m_window.reset();
   // no need to do anything because we are fixed in fullscreen landscape mode
 }
 
 void CXBMCApp::onDestroyWindow()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 }
 
 void CXBMCApp::onGainFocus()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   m_hasFocus = true;
   auto& components = CServiceBroker::GetAppComponents();
   const auto appPower = components.GetComponent<CApplicationPowerHandling>();
@@ -454,7 +454,7 @@ void CXBMCApp::onGainFocus()
 
 void CXBMCApp::onLostFocus()
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   m_hasFocus = false;
 }
 
@@ -538,7 +538,7 @@ void CXBMCApp::Quit()
   m_thread.join();
 
   // Note: CLog no longer available here.
-  android_printf("%s: Application stopped!", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s: Application stopped!", __FUNCTION__);
 }
 
 void CXBMCApp::KeepScreenOnCallback(void* onVariant)
@@ -557,7 +557,7 @@ void CXBMCApp::KeepScreenOnCallback(void* onVariant)
 
 void CXBMCApp::KeepScreenOn(bool on)
 {
-  android_printf("%s: %s", __PRETTY_FUNCTION__, on ? "true" : "false");
+  android_printf("CXBMCApp::%s: %s", __FUNCTION__, on ? "true" : "false");
   // this object is deallocated in the callback
   CVariant* variant = new CVariant(on);
   runNativeOnUiThread(KeepScreenOnCallback, variant);
@@ -718,16 +718,20 @@ void CXBMCApp::SetDisplayModeCallback(void* modeVariant)
 void CXBMCApp::SetDisplayMode(int mode, float rate)
 {
   if (mode < 1.0)
+  {
+    CLog::LogF(LOGDEBUG, "Invalid mode: {}", mode);
     return;
-
+  }
   CJNIWindow window = getWindow();
   if (window)
   {
     CJNIWindowManagerLayoutParams params = window.getAttributes();
     if (params.getpreferredDisplayModeId() == mode)
+    {
+      CLog::LogF(LOGDEBUG, "Requested mode and preferred mode match");
       return;
+    }
   }
-
   m_displayChangeEvent.Reset();
 
   if (m_hdmiSource)
@@ -891,7 +895,7 @@ void CXBMCApp::UpdateSessionState()
 
 void CXBMCApp::OnPlayBackStarted()
 {
-  CLog::Log(LOGDEBUG, "{}", __PRETTY_FUNCTION__);
+  CLog::Log(LOGDEBUG, "CXBMCApp::{}", __FUNCTION__);
   const auto& components = CServiceBroker::GetAppComponents();
   const auto appPlayer = components.GetComponent<CApplicationPlayer>();
 
@@ -918,7 +922,7 @@ void CXBMCApp::OnPlayBackStarted()
 
 void CXBMCApp::OnPlayBackPaused()
 {
-  CLog::Log(LOGDEBUG, "{}", __PRETTY_FUNCTION__);
+  CLog::Log(LOGDEBUG, "CXBMCApp::{}", __FUNCTION__);
 
   m_playback_state &= ~PLAYBACK_STATE_PLAYING;
   m_mediaSessionUpdated = false;
@@ -930,7 +934,7 @@ void CXBMCApp::OnPlayBackPaused()
 
 void CXBMCApp::OnPlayBackStopped()
 {
-  CLog::Log(LOGDEBUG, "{}", __PRETTY_FUNCTION__);
+  CLog::Log(LOGDEBUG, "CXBMCApp::{}", __FUNCTION__);
 
   m_playback_state = PLAYBACK_STATE_STOPPED;
   m_mediaSessionUpdated = false;
@@ -1039,8 +1043,9 @@ bool CXBMCApp::StartActivity(const std::string& package,
     if (!pathname.empty() && StringUtils::StartsWith(pathname, "/storage/"))
     {
       // generate a content URI
-      jniURI = CJNIFileProvider::getUriForFile(CXBMCApp::Get(), "org.xbmc.kodi.fileprovider",
-                                               CJNIFile(pathname));
+      std::string authority{CCompileInfo::GetPackage()};
+      authority.append(".fileprovider");
+      jniURI = CJNIFileProvider::getUriForFile(CXBMCApp::Get(), authority, CJNIFile(pathname));
 
       CLog::LogF(LOGINFO, "Share using FileProvider: {}", jniURI.toString());
 
@@ -1091,8 +1096,26 @@ bool CXBMCApp::StartActivity(const std::string& package,
       if (e["type"] == "string")
       {
         newIntent.putExtra(e["key"].asString(), e["value"].asString());
-        CLog::LogF(LOGDEBUG, "Putting extra key: {}, value: {}", e["key"].asString(),
+        CLog::LogF(LOGDEBUG, "Putting extra key: {}, string value: {}", e["key"].asString(),
                    e["value"].asString());
+      }
+      else if (e["type"] == "boolean")
+      {
+        newIntent.putExtra(e["key"].asString(), e["value"].asBoolean());
+        CLog::LogF(LOGDEBUG, "Putting extra key: {}, boolean value: {}", e["key"].asString(),
+                   e["value"].asBoolean());
+      }
+      else if (e["type"] == "int")
+      {
+        newIntent.putExtra(e["key"].asString(), e["value"].asInteger32());
+        CLog::LogF(LOGDEBUG, "Putting extra key: {}, int value: {}", e["key"].asString(),
+                   e["value"].asInteger32());
+      }
+      else if (e["type"] == "long")
+      {
+        newIntent.putExtra(e["key"].asString(), e["value"].asInteger());
+        CLog::LogF(LOGDEBUG, "Putting extra key: {}, long value: {}", e["key"].asString(),
+                   e["value"].asInteger());
       }
       else
         CLog::LogF(LOGDEBUG, "Intent extras data type ({}) not implemented", e["type"].asString());
@@ -1377,7 +1400,7 @@ void CXBMCApp::onNewIntent(CJNIIntent intent)
       CFileItem* item = new CFileItem(targetFile, false);
       if (IsVideoDb(*item))
       {
-        *(item->GetVideoInfoTag()) = XFILE::CVideoDatabaseFile::GetVideoTag(CURL(item->GetPath()));
+        *(item->GetVideoInfoTag()) = XFILE::CVideoDatabaseFile::GetVideoTag(item->GetURL());
         item->SetPath(item->GetVideoInfoTag()->m_strFileNameAndPath);
       }
       CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_PLAY, 0, 0, static_cast<void*>(item));
@@ -1490,7 +1513,7 @@ void CXBMCApp::SetupEnv()
   StringUtils::ToLower(appName);
   std::string className = CCompileInfo::GetPackage();
 
-  std::string cacheDir = getCacheDir().getAbsolutePath();
+  std::string cacheDir = getFilesDir().getAbsolutePath();
   std::string xbmcTemp = CJNISystem::getProperty("xbmc.temp", "");
   if (!xbmcTemp.empty())
   {
@@ -1665,7 +1688,7 @@ bool CXBMCApp::onInputDeviceEvent(const AInputEvent* event)
 
 void CXBMCApp::onDisplayAdded(int displayId)
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 }
 
 void CXBMCApp::onDisplayChanged(int displayId)
@@ -1683,22 +1706,22 @@ void CXBMCApp::onDisplayChanged(int displayId)
 
   m_displayChangeEvent.Set();
   m_inputHandler.setDPI(GetDPI());
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 }
 
 void CXBMCApp::onDisplayRemoved(int displayId)
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 }
 
 void CXBMCApp::surfaceChanged(CJNISurfaceHolder holder, int format, int width, int height)
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 }
 
 void CXBMCApp::surfaceCreated(CJNISurfaceHolder holder)
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
 
   m_window = CNativeWindow::CreateFromSurface(holder);
   if (m_window == nullptr)
@@ -1717,7 +1740,7 @@ void CXBMCApp::surfaceCreated(CJNISurfaceHolder holder)
 
 void CXBMCApp::surfaceDestroyed(CJNISurfaceHolder holder)
 {
-  android_printf("%s: ", __PRETTY_FUNCTION__);
+  android_printf("CXBMCApp::%s", __FUNCTION__);
   // If we have exited XBMC, it no longer exists.
   auto& components = CServiceBroker::GetAppComponents();
   const auto appPower = components.GetComponent<CApplicationPowerHandling>();

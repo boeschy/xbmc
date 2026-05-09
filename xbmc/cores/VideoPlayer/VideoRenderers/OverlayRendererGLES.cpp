@@ -17,6 +17,7 @@
 #include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h"
 #include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlaySSA.h"
 #include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlaySpu.h"
+#include "rendering/GLExtensions.h"
 #include "rendering/MatrixGL.h"
 #include "rendering/gles/RenderSystemGLES.h"
 #include "utils/GLUtils.h"
@@ -53,18 +54,16 @@ static void LoadTexture(GLenum target,
   int bytesPerPixel = KODI::UTILS::GL::glFormatElementByteCount(externalFormat);
 
   bool bgraSupported = false;
-  CRenderSystemGLES* renderSystem =
-      dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
 
   if (!alpha)
   {
-    if (renderSystem->IsExtSupported("GL_EXT_texture_format_BGRA8888") ||
-        renderSystem->IsExtSupported("GL_IMG_texture_format_BGRA8888"))
+    if (CGLExtensions::IsExtensionSupported(CGLExtensions::EXT_texture_format_BGRA8888) ||
+        CGLExtensions::IsExtensionSupported(CGLExtensions::IMG_texture_format_BGRA8888))
     {
       bgraSupported = true;
       internalFormat = externalFormat = GL_BGRA_EXT;
     }
-    else if (renderSystem->IsExtSupported("GL_APPLE_texture_format_BGRA8888"))
+    else if (CGLExtensions::IsExtensionSupported(CGLExtensions::APPLE_texture_format_BGRA8888))
     {
       // Apple's implementation does not conform to spec. Instead, they require
       // differing format/internalformat, more like GL.
@@ -446,27 +445,21 @@ void COverlayTextureGLES::Render(SRenderState& state)
 
   CRenderSystemGLES* renderSystem =
       dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
-  renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE);
+  renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE_NOBLEND);
   GLint posLoc = renderSystem->GUIShaderGetPos();
-  GLint colLoc = renderSystem->GUIShaderGetCol();
   GLint tex0Loc = renderSystem->GUIShaderGetCoord0();
-  GLint uniColLoc = renderSystem->GUIShaderGetUniCol();
   GLint depthLoc = renderSystem->GUIShaderGetDepth();
 
-  GLfloat col[4] = {1.0f, 1.0f, 1.0f, 1.0f};
   GLfloat ver[4][2];
   GLfloat tex[4][2];
   GLubyte idx[4] = {0, 1, 3, 2}; //determines order of triangle strip
 
   glVertexAttribPointer(posLoc, 2, GL_FLOAT, 0, 0, ver);
-  glVertexAttribPointer(colLoc, 4, GL_FLOAT, 0, 0, col);
   glVertexAttribPointer(tex0Loc, 2, GL_FLOAT, 0, 0, tex);
 
   glEnableVertexAttribArray(posLoc);
-  glEnableVertexAttribArray(colLoc);
   glEnableVertexAttribArray(tex0Loc);
 
-  glUniform4f(uniColLoc, (col[0]), (col[1]), (col[2]), (col[3]));
   glUniform1f(depthLoc, 1.0f);
   // Setup vertex position values
   ver[0][0] = ver[3][0] = rd.x1;
@@ -482,7 +475,6 @@ void COverlayTextureGLES::Render(SRenderState& state)
   glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, idx);
 
   glDisableVertexAttribArray(posLoc);
-  glDisableVertexAttribArray(colLoc);
   glDisableVertexAttribArray(tex0Loc);
 
   renderSystem->DisableGUIShader();

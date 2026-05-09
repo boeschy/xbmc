@@ -24,16 +24,15 @@ CShaderGLES::CShaderGLES() = default;
 
 CShaderGLES::~CShaderGLES()
 {
-  glDeleteBuffers(1, &m_shaderIndexVBO);
-  glDeleteBuffers(3, m_shaderVertexVBO.data());
+  Destroy();
 }
 
-bool CShaderGLES::Create(std::string shaderSource,
+bool CShaderGLES::Create(unsigned int passIdx,
+                         std::string passAlias,
                          std::string shaderPath,
+                         std::string shaderSource,
                          ShaderParameterMap shaderParameters,
                          std::vector<std::shared_ptr<IShaderLut>> luts,
-                         float2 viewPortSize,
-                         unsigned int passIdx,
                          unsigned int frameCountMod)
 {
   if (shaderPath.empty())
@@ -42,19 +41,18 @@ bool CShaderGLES::Create(std::string shaderSource,
     return false;
   }
 
-  m_shaderSource = CShaderUtils::StripParameterPragmas(std::move(shaderSource));
+  m_passIdx = passIdx;
+  m_passAlias = std::move(passAlias);
   m_shaderPath = std::move(shaderPath);
+  m_shaderSource = CShaderUtils::StripParameterPragmas(std::move(shaderSource));
   m_shaderParameters = std::move(shaderParameters);
   m_luts = std::move(luts);
-  m_viewportSize = viewPortSize;
-  m_passIdx = passIdx;
   m_frameCountMod = frameCountMod;
   m_shaderProgram = glCreateProgram();
 
   std::string defineVersion = CShaderUtilsGLES::GetGLSLVersion(m_shaderSource);
   std::string defineVertex = "#define VERTEX\n#define PARAMETER_UNIFORM\n";
   std::string defineFragment = "#define FRAGMENT\n#define PARAMETER_UNIFORM\n";
-
   std::string vertexShaderSourceStr = defineVersion + defineVertex + m_shaderSource;
   std::string fragmentShaderSourceStr = defineVersion + defineFragment + m_shaderSource;
   const GLchar* vertexShaderSource = vertexShaderSourceStr.c_str();
@@ -94,15 +92,18 @@ bool CShaderGLES::Create(std::string shaderSource,
               std::string(errorLog.begin(), errorLog.end()));
   }
 
+  glAttachShader(m_shaderProgram, vShader);
+  glAttachShader(m_shaderProgram, fShader);
+
   glBindAttribLocation(m_shaderProgram, 0, "VertexCoord");
   glBindAttribLocation(m_shaderProgram, 1, "COLOR");
   glBindAttribLocation(m_shaderProgram, 2, "TexCoord");
 
-  glAttachShader(m_shaderProgram, vShader);
-  glAttachShader(m_shaderProgram, fShader);
   glLinkProgram(m_shaderProgram);
+
   glDeleteShader(vShader);
   glDeleteShader(fShader);
+
   glGetProgramiv(m_shaderProgram, GL_LINK_STATUS, &status);
 
   if (status == GL_FALSE)
@@ -118,15 +119,24 @@ bool CShaderGLES::Create(std::string shaderSource,
   }
 
   glUseProgram(m_shaderProgram);
-  GLint paramLoc = glGetUniformLocation(m_shaderProgram, "Texture");
-  glUniform1i(paramLoc, 0);
-  glUseProgram(0);
 
   GetUniformLocs();
 
-  glGenBuffers(3, m_shaderVertexVBO.data());
-  glGenBuffers(1, &m_shaderIndexVBO);
+  GLint paramLoc = glGetUniformLocation(m_shaderProgram, "Texture");
+  glUniform1i(paramLoc, 0);
 
+  const GLubyte idx[4] = {0, 1, 3, 2}; // Determines order of triangle strip
+
+  // Set up VBO
+  glGenBuffers(3, m_shaderVertexVBO.data());
+
+  glGenBuffers(1, &m_shaderIndexVBO);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_shaderIndexVBO);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLubyte) * 4, idx, GL_STATIC_DRAW);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+  glUseProgram(0);
   return true;
 }
 
@@ -136,25 +146,27 @@ void CShaderGLES::Render(IShaderTexture& source, IShaderTexture& target)
 
   glUseProgram(m_shaderProgram);
 
-  SetShaderParameters(sourceGL.GetTexture());
+  SetShaderParameters(sourceGL);
 
   glBindBuffer(GL_ARRAY_BUFFER, m_shaderVertexVBO[0]);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(m_VertexCoords), m_VertexCoords.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(0);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(m_VertexCoords), m_VertexCoords.data(), GL_DYNAMIC_DRAW);
+
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  glEnableVertexAttribArray(0);
 
   glBindBuffer(GL_ARRAY_BUFFER, m_shaderVertexVBO[1]);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(m_colors), m_colors.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(1);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(m_colors), m_colors.data(), GL_DYNAMIC_DRAW);
+
   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  glEnableVertexAttribArray(1);
 
   glBindBuffer(GL_ARRAY_BUFFER, m_shaderVertexVBO[2]);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(m_TexCoords), m_TexCoords.data(), GL_STATIC_DRAW);
-  glEnableVertexAttribArray(2);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(m_TexCoords), m_TexCoords.data(), GL_DYNAMIC_DRAW);
+
   glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
+  glEnableVertexAttribArray(2);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_shaderIndexVBO);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(m_indices), m_indices.data(), GL_STATIC_DRAW);
 
   glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, nullptr);
 
@@ -179,6 +191,7 @@ void CShaderGLES::SetSizes(const float2& prevSize,
 
 void CShaderGLES::PrepareParameters(
     const RETRO::ViewportCoordinates& dest,
+    const float2 fullDestSize,
     IShaderTexture& sourceTexture,
     const std::vector<std::unique_ptr<IShaderTexture>>& pShaderTextures,
     const std::vector<std::unique_ptr<IShader>>& pShaders,
@@ -218,7 +231,7 @@ void CShaderGLES::PrepareParameters(
     m_VertexCoords[3][1] = dest[0].y - m_outputSize.y / 2;
 
     // Set destination rectangle size for the last pass
-    m_destSize = {dest[2].x - dest[0].x, dest[2].y - dest[0].y};
+    m_destSize = fullDestSize;
   }
 
   // bottom left z, tu, tv, r, g, b
@@ -250,12 +263,6 @@ void CShaderGLES::PrepareParameters(
   m_TexCoords[3][0] = 0.0f;
   m_TexCoords[3][1] = 0.0f;
 
-  // Determines order of triangle strip
-  m_indices[0] = 0;
-  m_indices[1] = 1;
-  m_indices[2] = 3;
-  m_indices[3] = 2;
-
   UpdateUniformInputs(sourceTexture, pShaderTextures, pShaders, frameCount);
 }
 
@@ -266,6 +273,17 @@ void CShaderGLES::UpdateMVP()
 
   // Update projection matrix
   m_MVP = {{{xScale, 0, 0, 0}, {0, yScale, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}};
+}
+
+void CShaderGLES::Destroy()
+{
+  glDeleteProgram(m_shaderProgram);
+  m_shaderProgram = 0;
+
+  glDeleteBuffers(1, &m_shaderIndexVBO);
+  glDeleteBuffers(3, m_shaderVertexVBO.data());
+  m_shaderIndexVBO = 0;
+  m_shaderVertexVBO = {0, 0, 0};
 }
 
 void CShaderGLES::UpdateUniformInputs(
@@ -279,12 +297,12 @@ void CShaderGLES::UpdateUniformInputs(
   if (m_passIdx > 0) // Not first pass
   {
     auto& shaderTextureGL = static_cast<CShaderTextureGLES&>(*pShaderTextures[m_passIdx - 1]);
-    m_uniformFrameInputs = GetFrameInputData(shaderTextureGL.GetTexture().GetTextureID());
+    m_uniformFrameInputs = GetFrameInputData(shaderTextureGL.GetTextureID());
   }
   else // First pass
   {
     auto& sourceTextureGL = static_cast<CShaderTextureGLES&>(sourceTexture);
-    m_uniformFrameInputs = GetFrameInputData(sourceTextureGL.GetTexture().GetTextureID());
+    m_uniformFrameInputs = GetFrameInputData(sourceTextureGL.GetTextureID());
   }
 
   // Set frame uniforms of previous passes
@@ -298,7 +316,7 @@ void CShaderGLES::UpdateUniformInputs(
   }
 }
 
-CShaderGLES::UniformInputs CShaderGLES::GetInputData(uint64_t frameCount)
+CShaderGLES::UniformInputs CShaderGLES::GetInputData(uint64_t frameCount) const
 {
   if (m_frameCountMod != 0)
     frameCount %= m_frameCountMod;
@@ -310,17 +328,18 @@ CShaderGLES::UniformInputs CShaderGLES::GetInputData(uint64_t frameCount)
       // Current frame count that can be modulo'ed
       static_cast<GLint>(frameCount), // frame_count
       // Time always flows forward
-      1.0f // frame_direction
+      1 // frame_direction
   };
   return input;
 }
 
-CShaderGLES::UniformFrameInputs CShaderGLES::GetFrameInputData(GLuint texture)
+CShaderGLES::UniformFrameInputs CShaderGLES::GetFrameInputData(GLuint texture) const
 {
   const UniformFrameInputs frameInput = {
       {m_inputSize}, // input_size
       {m_inputTextureSize}, // texture_size
-      texture // texture
+      texture, // texture
+      m_passAlias // alias
   };
   return frameInput;
 }
@@ -335,10 +354,10 @@ void CShaderGLES::GetUniformLocs()
   m_MVPMatrixLoc = glGetUniformLocation(m_shaderProgram, "MVPMatrix");
 }
 
-void CShaderGLES::SetShaderParameters(CGLESTexture& sourceTexture)
+void CShaderGLES::SetShaderParameters(CShaderTextureGLES& sourceTexture)
 {
   // Set shader uniforms
-  glUniform1f(m_FrameDirectionLoc, m_uniformInputs.frame_direction);
+  glUniform1i(m_FrameDirectionLoc, m_uniformInputs.frame_direction);
   glUniform1i(m_FrameCountLoc, m_uniformInputs.frame_count);
   glUniform2f(m_OutputSizeLoc, m_uniformInputs.output_size.x, m_uniformInputs.output_size.y);
   glUniform2f(m_TextureSizeLoc, m_uniformInputs.texture_size.x, m_uniformInputs.texture_size.y);
@@ -346,10 +365,10 @@ void CShaderGLES::SetShaderParameters(CGLESTexture& sourceTexture)
   glUniformMatrix4fv(m_MVPMatrixLoc, 1, GL_FALSE, reinterpret_cast<const GLfloat*>(&m_MVP));
 
   // Set #pragma parameters
-  for (const auto& param : m_shaderParameters)
+  for (const auto& [paramName, paramValue] : m_shaderParameters)
   {
-    GLint paramLoc = glGetUniformLocation(m_shaderProgram, param.first.c_str());
-    glUniform1f(paramLoc, param.second);
+    GLint paramLoc = glGetUniformLocation(m_shaderProgram, paramName.c_str());
+    glUniform1f(paramLoc, paramValue);
   }
 
   // Set source texture
@@ -378,29 +397,48 @@ void CShaderGLES::SetShaderParameters(CGLESTexture& sourceTexture)
   for (unsigned int i = 0; i < m_passIdx + 1; ++i)
   {
     GLint paramLoc;
+
     std::string paramPass = i ? "Pass" + std::to_string(i) : "Orig";
-    std::string paramPassPrev = "PassPrev" + std::to_string(m_passIdx + 1 - i);
-
-    paramLoc = glGetUniformLocation(m_shaderProgram, (paramPass + "Texture").c_str());
-    glUniform1i(paramLoc, textureUnit);
-    paramLoc = glGetUniformLocation(m_shaderProgram, (paramPassPrev + "Texture").c_str());
-    glUniform1i(paramLoc, textureUnit);
-    glActiveTexture(GL_TEXTURE0 + textureUnit);
-    glBindTexture(GL_TEXTURE_2D, m_passesUniformFrameInputs[i].texture);
-    textureUnit++;
-
-    paramLoc = glGetUniformLocation(m_shaderProgram, (paramPass + "TextureSize").c_str());
-    glUniform2f(paramLoc, m_passesUniformFrameInputs[i].texture_size.x,
-                m_passesUniformFrameInputs[i].texture_size.y);
-    paramLoc = glGetUniformLocation(m_shaderProgram, (paramPassPrev + "TextureSize").c_str());
-    glUniform2f(paramLoc, m_passesUniformFrameInputs[i].texture_size.x,
-                m_passesUniformFrameInputs[i].texture_size.y);
-
     paramLoc = glGetUniformLocation(m_shaderProgram, (paramPass + "InputSize").c_str());
     glUniform2f(paramLoc, m_passesUniformFrameInputs[i].input_size.x,
                 m_passesUniformFrameInputs[i].input_size.y);
-    paramLoc = glGetUniformLocation(m_shaderProgram, (paramPassPrev + "InputSize").c_str());
-    glUniform2f(paramLoc, m_passesUniformFrameInputs[i].input_size.x,
-                m_passesUniformFrameInputs[i].input_size.y);
+    paramLoc = glGetUniformLocation(m_shaderProgram, (paramPass + "TextureSize").c_str());
+    glUniform2f(paramLoc, m_passesUniformFrameInputs[i].texture_size.x,
+                m_passesUniformFrameInputs[i].texture_size.y);
+    paramLoc = glGetUniformLocation(m_shaderProgram, (paramPass + "Texture").c_str());
+    glUniform1i(paramLoc, textureUnit);
+
+    if (i < m_passIdx)
+    {
+      std::string paramPassPrev = "PassPrev" + std::to_string(m_passIdx + 1 - i);
+      paramLoc = glGetUniformLocation(m_shaderProgram, (paramPassPrev + "InputSize").c_str());
+      glUniform2f(paramLoc, m_passesUniformFrameInputs[i].input_size.x,
+                  m_passesUniformFrameInputs[i].input_size.y);
+      paramLoc = glGetUniformLocation(m_shaderProgram, (paramPassPrev + "TextureSize").c_str());
+      glUniform2f(paramLoc, m_passesUniformFrameInputs[i].texture_size.x,
+                  m_passesUniformFrameInputs[i].texture_size.y);
+      paramLoc = glGetUniformLocation(m_shaderProgram, (paramPassPrev + "Texture").c_str());
+      glUniform1i(paramLoc, textureUnit);
+
+      if (i > 0)
+      {
+        std::string paramAlias = m_passesUniformFrameInputs[i - 1].alias;
+        if (!paramAlias.empty())
+        {
+          paramLoc = glGetUniformLocation(m_shaderProgram, (paramAlias + "InputSize").c_str());
+          glUniform2f(paramLoc, m_passesUniformFrameInputs[i].input_size.x,
+                      m_passesUniformFrameInputs[i].input_size.y);
+          paramLoc = glGetUniformLocation(m_shaderProgram, (paramAlias + "TextureSize").c_str());
+          glUniform2f(paramLoc, m_passesUniformFrameInputs[i].texture_size.x,
+                      m_passesUniformFrameInputs[i].texture_size.y);
+          paramLoc = glGetUniformLocation(m_shaderProgram, (paramAlias + "Texture").c_str());
+          glUniform1i(paramLoc, textureUnit);
+        }
+      }
+    }
+
+    glActiveTexture(GL_TEXTURE0 + textureUnit);
+    glBindTexture(GL_TEXTURE_2D, m_passesUniformFrameInputs[i].texture);
+    textureUnit++;
   }
 }

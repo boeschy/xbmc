@@ -19,9 +19,10 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIKeyboardFactory.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "input/actions/ActionIDs.h"
 #include "profiles/ProfileManager.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/SortUtils.h"
@@ -227,7 +228,10 @@ void CGUIDialogSmartPlaylistEditor::OnOK()
   {
     std::string filename(CUtil::MakeLegalFileName(m_playlist.m_playlistName));
     std::string path;
-    if (CGUIKeyboardFactory::ShowAndGetInput(filename, CVariant{g_localizeStrings.Get(16013)}, false))
+    if (CGUIKeyboardFactory::ShowAndGetInput(
+            filename,
+            CVariant{CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(16013)},
+            false))
     {
       path = URIUtils::AddFileToFolder(systemPlaylistsPath, m_playlist.GetSaveLocation(),
                                        CUtil::MakeLegalFileName(std::move(filename)));
@@ -271,10 +275,11 @@ void CGUIDialogSmartPlaylistEditor::OnCancel()
 void CGUIDialogSmartPlaylistEditor::OnMatch()
 {
   // toggle between AND and OR setting
-  if (m_playlist.m_ruleCombination.GetType() == CDatabaseQueryRuleCombination::Type::COMBINATION_OR)
-    m_playlist.m_ruleCombination.SetType(CDatabaseQueryRuleCombination::Type::COMBINATION_AND);
+  using enum CDatabaseQueryRuleCombination::Type;
+  if (m_playlist.m_ruleCombination.GetType() == COMBINATION_OR)
+    m_playlist.m_ruleCombination.SetType(COMBINATION_AND);
   else
-    m_playlist.m_ruleCombination.SetType(CDatabaseQueryRuleCombination::Type::COMBINATION_OR);
+    m_playlist.m_ruleCombination.SetType(COMBINATION_OR);
   UpdateButtons();
 }
 
@@ -299,9 +304,10 @@ void CGUIDialogSmartPlaylistEditor::OnLimit()
     if (*limit == static_cast<int>(m_playlist.m_limit))
       selected = std::distance(limits.begin(), limit);
     if (*limit == 0)
-      dialog->Add(g_localizeStrings.Get(21428));
+      dialog->Add(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21428));
     else
-      dialog->Add(StringUtils::Format(g_localizeStrings.Get(21436), *limit));
+      dialog->Add(StringUtils::Format(
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21436), *limit));
   }
   dialog->SetHeading(CVariant{ 21427 });
   dialog->SetSelected(selected);
@@ -331,11 +337,11 @@ void CGUIDialogSmartPlaylistEditor::OnType()
   
   // Remove any invalid grouping left over when changing the type
   Field currentGroup = PLAYLIST::CSmartPlaylistRule::TranslateGroup(m_playlist.GetGroup().c_str());
-  if (currentGroup != FieldNone && currentGroup != FieldUnknown)
+  if (currentGroup != Field::NONE && currentGroup != Field::UNKNOWN)
   {
     std::vector<Field> groups = PLAYLIST::CSmartPlaylistRule::GetGroups(m_playlist.GetType());
-    if (std::find(groups.begin(), groups.end(), currentGroup) == groups.end())
-      m_playlist.SetGroup(PLAYLIST::CSmartPlaylistRule::TranslateGroup(FieldUnknown));
+    if (std::ranges::find(groups, currentGroup) == groups.end())
+      m_playlist.SetGroup(PLAYLIST::CSmartPlaylistRule::TranslateGroup(Field::UNKNOWN));
   }
 
   UpdateButtons();
@@ -347,9 +353,11 @@ void CGUIDialogSmartPlaylistEditor::OnOrder()
   CGUIDialogSelect* dialog = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
   dialog->Reset();
   for (auto order: orders)
-    dialog->Add(g_localizeStrings.Get(SortUtils::GetSortLabel(order)));
+    dialog->Add(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+        SortUtils::GetSortLabel(order)));
   dialog->SetHeading(CVariant{ 21429 });
-  dialog->SetSelected(g_localizeStrings.Get(SortUtils::GetSortLabel(m_playlist.m_orderField)));
+  dialog->SetSelected(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+      SortUtils::GetSortLabel(m_playlist.m_orderField)));
   dialog->Open();
   int newSelected = dialog->GetSelectedItem();
   if (!dialog->IsConfirmed() || newSelected < 0 || orders[newSelected] == m_playlist.m_orderField)
@@ -360,10 +368,10 @@ void CGUIDialogSmartPlaylistEditor::OnOrder()
 
 void CGUIDialogSmartPlaylistEditor::OnOrderDirection()
 {
-  if (m_playlist.m_orderDirection == SortOrderDescending)
-    m_playlist.m_orderDirection = SortOrderAscending;
+  if (m_playlist.m_orderDirection == SortOrder::DESCENDING)
+    m_playlist.m_orderDirection = SortOrder::ASCENDING;
   else
-    m_playlist.m_orderDirection = SortOrderDescending;
+    m_playlist.m_orderDirection = SortOrder::DESCENDING;
   UpdateButtons();
 }
 
@@ -402,7 +410,8 @@ void CGUIDialogSmartPlaylistEditor::UpdateButtons()
 
   if (m_mode == "partyvideo" || m_mode == "partymusic")
   {
-    SET_CONTROL_LABEL2(CONTROL_NAME, g_localizeStrings.Get(16035));
+    SET_CONTROL_LABEL2(CONTROL_NAME,
+                       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(16035));
     CONTROL_DISABLE(CONTROL_NAME);
   }
   else
@@ -411,15 +420,23 @@ void CGUIDialogSmartPlaylistEditor::UpdateButtons()
   UpdateRuleControlButtons();
 
   if (m_playlist.m_ruleCombination.GetType() == CDatabaseQueryRuleCombination::Type::COMBINATION_OR)
-    SET_CONTROL_LABEL2(CONTROL_MATCH, g_localizeStrings.Get(21426)); // one or more of the rules
+    SET_CONTROL_LABEL2(CONTROL_MATCH,
+                       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                           21426)); // one or more of the rules
   else
-    SET_CONTROL_LABEL2(CONTROL_MATCH, g_localizeStrings.Get(21425)); // all of the rules
+    SET_CONTROL_LABEL2(CONTROL_MATCH,
+                       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                           21425)); // all of the rules
   CONTROL_ENABLE_ON_CONDITION(CONTROL_MATCH, m_playlist.m_ruleCombination.GetRulesAmount() > 1);
   if (m_playlist.m_limit == 0)
-    SET_CONTROL_LABEL2(CONTROL_LIMIT, g_localizeStrings.Get(21428)); // no limit
+    SET_CONTROL_LABEL2(
+        CONTROL_LIMIT,
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21428)); // no limit
   else
-    SET_CONTROL_LABEL2(CONTROL_LIMIT,
-                       StringUtils::Format(g_localizeStrings.Get(21436), m_playlist.m_limit));
+    SET_CONTROL_LABEL2(
+        CONTROL_LIMIT,
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21436),
+                            m_playlist.m_limit));
   int currentItem = GetSelectedItem();
   CGUIMessage msgReset(GUI_MSG_LABEL_RESET, GetID(), CONTROL_RULE_LIST);
   OnMessage(msgReset);
@@ -432,22 +449,26 @@ void CGUIDialogSmartPlaylistEditor::UpdateButtons()
     m_ruleLabels->Add(item);
   }
   CFileItemPtr item(new CFileItem("", false));
-  item->SetLabel(g_localizeStrings.Get(21423));
+  item->SetLabel(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21423));
   m_ruleLabels->Add(item);
   CGUIMessage msg(GUI_MSG_LABEL_BIND, GetID(), CONTROL_RULE_LIST, 0, 0, m_ruleLabels);
   OnMessage(msg);
   SendMessage(GUI_MSG_ITEM_SELECT, GetID(), CONTROL_RULE_LIST, currentItem);
 
-  if (m_playlist.m_orderDirection != SortOrderDescending)
+  if (m_playlist.m_orderDirection != SortOrder::DESCENDING)
   {
-    SET_CONTROL_LABEL2(CONTROL_ORDER_DIRECTION, g_localizeStrings.Get(21430));
+    SET_CONTROL_LABEL2(CONTROL_ORDER_DIRECTION,
+                       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21430));
   }
   else
   {
-    SET_CONTROL_LABEL2(CONTROL_ORDER_DIRECTION, g_localizeStrings.Get(21431));
+    SET_CONTROL_LABEL2(CONTROL_ORDER_DIRECTION,
+                       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21431));
   }
 
-  SET_CONTROL_LABEL2(CONTROL_ORDER_FIELD, g_localizeStrings.Get(SortUtils::GetSortLabel(m_playlist.m_orderField)));
+  SET_CONTROL_LABEL2(CONTROL_ORDER_FIELD,
+                     CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                         SortUtils::GetSortLabel(m_playlist.m_orderField)));
   SET_CONTROL_LABEL2(CONTROL_TYPE, GetLocalizedType(ConvertType(m_playlist.GetType())));
 
   // setup groups
@@ -485,7 +506,7 @@ void CGUIDialogSmartPlaylistEditor::UpdateRuleControlButtons()
                               iSize > 0 && // there is at least one item
                                   iItem >= 0 && iItem < iSize && // and a valid item is selected
                                   m_playlist.m_ruleCombination.GetRules()[iItem]->m_field !=
-                                      FieldNone); // and it is not be empty
+                                      static_cast<int>(Field::NONE)); // and it is not be empty
 }
 
 void CGUIDialogSmartPlaylistEditor::OnInitWindow()
@@ -532,7 +553,7 @@ std::string CGUIDialogSmartPlaylistEditor::GetLocalizedType(PLAYLIST_TYPE type)
 {
   for (const translateType& t : types)
     if (t.type == type)
-      return g_localizeStrings.Get(t.localizedString);
+      return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(t.localizedString);
   assert(false);
   return "";
 }

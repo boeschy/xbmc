@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -11,6 +11,7 @@
 #include "ServiceManager.h"
 #include "application/Application.h"
 #include "profiles/ProfileManager.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/SettingsComponent.h"
 #include "utils/log.h"
 #include "windowing/WinSystem.h"
@@ -19,6 +20,7 @@
 #include <utility>
 
 using namespace KODI;
+using namespace KODI::UTILS::I18N;
 
 CServiceBroker::CServiceBroker()
 {
@@ -303,6 +305,11 @@ CGUIComponent* CServiceBroker::GetGUI()
   return g_serviceBroker.m_pGUI;
 }
 
+const CGUIComponent* CServiceBroker::GetGUIConst()
+{
+  return g_serviceBroker.m_pGUI;
+}
+
 void CServiceBroker::RegisterGUI(CGUIComponent* gui)
 {
   g_serviceBroker.m_pGUI = gui;
@@ -311,6 +318,21 @@ void CServiceBroker::RegisterGUI(CGUIComponent* gui)
 void CServiceBroker::UnregisterGUI()
 {
   g_serviceBroker.m_pGUI = nullptr;
+}
+
+CResourcesComponent& CServiceBroker::GetResourcesComponent()
+{
+  return *g_serviceBroker.m_pResourcesComponent;
+}
+
+void CServiceBroker::RegisterResourcesComponent(std::unique_ptr<CResourcesComponent> resources)
+{
+  g_serviceBroker.m_pResourcesComponent = std::move(resources);
+}
+
+void CServiceBroker::UnregisterResourcesComponent()
+{
+  g_serviceBroker.m_pResourcesComponent.reset();
 }
 
 // audio
@@ -472,4 +494,9 @@ void CServiceBroker::UnregisterBlurayDiscCache()
 std::shared_ptr<XFILE::CBlurayDiscCache> CServiceBroker::GetBlurayDiscCache()
 {
   return g_serviceBroker.m_blurayDiscCache;
+}
+
+CSubTagRegistryManager& CServiceBroker::GetSubTagRegistry()
+{
+  return g_application.m_ServiceManager->GetSubTagRegistryManager();
 }

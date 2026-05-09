@@ -10,11 +10,11 @@
 
 #include "addons/IAddon.h"
 #include "utils/Artwork.h"
+#include "utils/Locale.h"
 
 #include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 class CDateTime;
@@ -46,13 +46,17 @@ public:
   static AddonInfoPtr Generate(const tinyxml2::XMLElement* baseElement,
                                const RepositoryDirInfo& repo,
                                bool platformCheck = true);
+  static AddonInfoPtr Generate(IAddon& addon);
 
   /*!
     * @brief Parts used from CAddonDatabase
     */
   //@{
-  static void SetInstallData(const AddonInfoPtr& addon, const CDateTime& installDate,
-                             const CDateTime& lastUpdated, const CDateTime& lastUsed, const std::string& origin);
+  static void SetInstallData(const AddonInfoPtr& addon,
+                             const CDateTime& installDate,
+                             const CDateTime& lastUpdated,
+                             const CDateTime& lastUsed,
+                             std::string_view origin);
   //@}
 
 private:
@@ -69,7 +73,7 @@ private:
   static bool ParseXMLExtension(CAddonExtensions& addonExt, const tinyxml2::XMLElement* element);
   static bool GetTextList(const tinyxml2::XMLElement* element,
                           const std::string& tag,
-                          std::unordered_map<std::string, std::string>& translatedValues);
+                          CLocale::LocalizedStringsMap& translatedValues);
   static const char* GetPlatformLibraryName(const tinyxml2::XMLElement* element);
   static bool PlatformSupportsAddon(const AddonInfoPtr& addon);
 };
@@ -108,7 +112,7 @@ public:
   void SetPackageSize(uint64_t size);
   void SetExtensions(CAddonType addonType);
 
-  const AddonInfoPtr& get() { return m_addonInfo; }
+  const AddonInfoPtr& get() const { return m_addonInfo; }
 
 private:
   AddonInfoPtr m_addonInfo;

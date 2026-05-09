@@ -12,10 +12,11 @@
 #include "cores/VideoPlayer/VideoRenderers/ColorManager.h"
 #include "dialogs/GUIDialogFileBrowser.h"
 #include "guilib/GUIComponent.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/StereoscopicsManager.h"
 #include "messaging/helpers/DialogHelper.h"
 #include "rendering/RenderSystem.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -227,7 +228,9 @@ void CDisplaySettings::OnSettingAction(const std::shared_ptr<const CSetting>& se
     std::string path = std::static_pointer_cast<const CSettingString>(setting)->GetValue();
     std::vector<CMediaSource> shares;
     CServiceBroker::GetMediaManager().GetLocalDrives(shares);
-    if (CGUIDialogFileBrowser::ShowAndGetFile(shares, ".3dlut", g_localizeStrings.Get(36580), path))
+    if (CGUIDialogFileBrowser::ShowAndGetFile(
+            shares, ".3dlut",
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36580), path))
     {
       std::static_pointer_cast<CSettingString>(std::const_pointer_cast<CSetting>(setting))->SetValue(path);
     }
@@ -237,7 +240,9 @@ void CDisplaySettings::OnSettingAction(const std::shared_ptr<const CSetting>& se
     std::string path = std::static_pointer_cast<const CSettingString>(setting)->GetValue();
     std::vector<CMediaSource> shares;
     CServiceBroker::GetMediaManager().GetLocalDrives(shares);
-    if (CGUIDialogFileBrowser::ShowAndGetFile(shares, ".icc|.icm", g_localizeStrings.Get(36581), path))
+    if (CGUIDialogFileBrowser::ShowAndGetFile(
+            shares, ".icc|.icm",
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36581), path))
     {
       std::static_pointer_cast<CSettingString>(std::const_pointer_cast<CSetting>(setting))->SetValue(path);
     }
@@ -378,19 +383,19 @@ bool CDisplaySettings::OnSettingUpdate(const std::shared_ptr<CSetting>& setting,
     const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
     const auto playbackMode = static_cast<STEREOSCOPIC_PLAYBACK_MODE>(
         settings->GetInt(CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE));
-    if (stereomodeSetting->GetValue() == RENDER_STEREO_MODE_OFF)
+    if (stereomodeSetting->GetValue() == static_cast<int>(RenderStereoMode::OFF))
     {
       // if preferred playback mode was OFF, update playback mode to ignore
       if (playbackMode == STEREOSCOPIC_PLAYBACK_MODE_PREFERRED)
         settings->SetInt(CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE, STEREOSCOPIC_PLAYBACK_MODE_IGNORE);
-      return stereomodeSetting->SetValue(RENDER_STEREO_MODE_AUTO);
+      return stereomodeSetting->SetValue(static_cast<int>(RenderStereoMode::AUTO));
     }
-    else if (stereomodeSetting->GetValue() == RENDER_STEREO_MODE_MONO)
+    else if (stereomodeSetting->GetValue() == static_cast<int>(RenderStereoMode::MONO))
     {
       // if preferred playback mode was MONO, update playback mode
       if (playbackMode == STEREOSCOPIC_PLAYBACK_MODE_PREFERRED)
         settings->SetInt(CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE, STEREOSCOPIC_PLAYBACK_MODE_MONO);
-      return stereomodeSetting->SetValue(RENDER_STEREO_MODE_AUTO);
+      return stereomodeSetting->SetValue(static_cast<int>(RenderStereoMode::AUTO));
     }
   }
 
@@ -734,11 +739,13 @@ void CDisplaySettings::SettingOptionsModesFiller(const std::shared_ptr<const CSe
 void CDisplaySettings::SettingOptionsRefreshChangeDelaysFiller(
     const SettingConstPtr& /*setting*/, std::vector<IntegerSettingOption>& list, int& /*current*/)
 {
-  list.emplace_back(g_localizeStrings.Get(13551), 0);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13551), 0);
 
   for (int i = 1; i <= MAX_REFRESH_CHANGE_DELAY; i++)
     list.emplace_back(
-        StringUtils::Format(g_localizeStrings.Get(13553), static_cast<double>(i) / 10.0), i);
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13553),
+                            static_cast<double>(i) / 10.0),
+        i);
 }
 
 void CDisplaySettings::SettingOptionsRefreshRatesFiller(const SettingConstPtr& setting,
@@ -754,7 +761,8 @@ void CDisplaySettings::SettingOptionsRefreshRatesFiller(const SettingConstPtr& s
   if (res == RES_WINDOW)
   {
     current = "WINDOW";
-    list.emplace_back(g_localizeStrings.Get(242), current);
+    list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(242),
+                      current);
     return;
   }
 
@@ -785,7 +793,7 @@ void CDisplaySettings::SettingOptionsResolutionsFiller(const SettingConstPtr& se
   if (res == RES_WINDOW)
   {
     current = res;
-    list.emplace_back(g_localizeStrings.Get(242), res);
+    list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(242), res);
   }
   else
   {
@@ -836,9 +844,11 @@ void CDisplaySettings::SettingOptionsDispModeFiller(const SettingConstPtr& /*set
   // does not support windowed modes, we would just shoot ourselves in the foot
   // by offering the option.
   if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_canWindowed && CServiceBroker::GetWinSystem()->CanDoWindowed())
-    list.emplace_back(g_localizeStrings.Get(242), DM_WINDOWED);
+    list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(242),
+                      DM_WINDOWED);
 
-  list.emplace_back(g_localizeStrings.Get(244), DM_FULLSCREEN);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(244),
+                    DM_FULLSCREEN);
 }
 
 void CDisplaySettings::SettingOptionsStereoscopicModesFiller(
@@ -849,11 +859,12 @@ void CDisplaySettings::SettingOptionsStereoscopicModesFiller(
   {
     const CStereoscopicsManager &stereoscopicsManager = gui->GetStereoscopicsManager();
 
-    for (int i = RENDER_STEREO_MODE_OFF; i < RENDER_STEREO_MODE_COUNT; i++)
+    for (int i = static_cast<int>(RenderStereoMode::OFF);
+         i < static_cast<int>(RenderStereoMode::COUNT); ++i)
     {
-      const auto mode = static_cast<RENDER_STEREO_MODE>(i);
+      const auto mode = static_cast<RenderStereoMode>(i);
       if (CServiceBroker::GetRenderSystem()->SupportsStereo(mode))
-        list.emplace_back(stereoscopicsManager.GetLabelForStereoMode(mode), mode);
+        list.emplace_back(stereoscopicsManager.GetLabelForStereoMode(mode), i);
     }
   }
 }
@@ -863,15 +874,16 @@ void CDisplaySettings::SettingOptionsPreferredStereoscopicViewModesFiller(
 {
   const CStereoscopicsManager &stereoscopicsManager = CServiceBroker::GetGUI()->GetStereoscopicsManager();
 
-  list.emplace_back(stereoscopicsManager.GetLabelForStereoMode(RENDER_STEREO_MODE_AUTO),
-                    RENDER_STEREO_MODE_AUTO); // option for autodetect
+  list.emplace_back(stereoscopicsManager.GetLabelForStereoMode(RenderStereoMode::AUTO),
+                    static_cast<int>(RenderStereoMode::AUTO)); // option for autodetect
   // don't add "off" to the list of preferred modes as this doesn't make sense
-  for (int i = RENDER_STEREO_MODE_OFF +1; i < RENDER_STEREO_MODE_COUNT; i++)
+  for (int i = static_cast<int>(RenderStereoMode::OFF) + 1;
+       i < static_cast<int>(RenderStereoMode::COUNT); ++i)
   {
-    const auto mode = static_cast<RENDER_STEREO_MODE>(i);
+    const auto mode = static_cast<RenderStereoMode>(i);
     // also skip "mono" mode which is no real stereoscopic mode
-    if (mode != RENDER_STEREO_MODE_MONO && CServiceBroker::GetRenderSystem()->SupportsStereo(mode))
-      list.emplace_back(stereoscopicsManager.GetLabelForStereoMode(mode), mode);
+    if (mode != RenderStereoMode::MONO && CServiceBroker::GetRenderSystem()->SupportsStereo(mode))
+      list.emplace_back(stereoscopicsManager.GetLabelForStereoMode(mode), i);
   }
 }
 
@@ -926,9 +938,11 @@ void CDisplaySettings::SettingOptionsCmsModesFiller(const SettingConstPtr& /*set
                                                     std::vector<IntegerSettingOption>& list,
                                                     int& /*current*/)
 {
-  list.emplace_back(g_localizeStrings.Get(36580), CMS_MODE_3DLUT);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36580),
+                    CMS_MODE_3DLUT);
 #ifdef HAVE_LCMS2
-  list.emplace_back(g_localizeStrings.Get(36581), CMS_MODE_PROFILE);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36581),
+                    CMS_MODE_PROFILE);
 #endif
 }
 
@@ -936,30 +950,43 @@ void CDisplaySettings::SettingOptionsCmsWhitepointsFiller(const SettingConstPtr&
                                                           std::vector<IntegerSettingOption>& list,
                                                           int& /*current*/)
 {
-  list.emplace_back(g_localizeStrings.Get(36586), CMS_WHITEPOINT_D65);
-  list.emplace_back(g_localizeStrings.Get(36587), CMS_WHITEPOINT_D93);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36586),
+                    CMS_WHITEPOINT_D65);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36587),
+                    CMS_WHITEPOINT_D93);
 }
 
 void CDisplaySettings::SettingOptionsCmsPrimariesFiller(const SettingConstPtr& /*setting*/,
                                                         std::vector<IntegerSettingOption>& list,
                                                         int& /*current*/)
 {
-  list.emplace_back(g_localizeStrings.Get(36588), CMS_PRIMARIES_AUTO);
-  list.emplace_back(g_localizeStrings.Get(36589), CMS_PRIMARIES_BT709);
-  list.emplace_back(g_localizeStrings.Get(36579), CMS_PRIMARIES_BT2020);
-  list.emplace_back(g_localizeStrings.Get(36590), CMS_PRIMARIES_170M);
-  list.emplace_back(g_localizeStrings.Get(36591), CMS_PRIMARIES_BT470M);
-  list.emplace_back(g_localizeStrings.Get(36592), CMS_PRIMARIES_BT470BG);
-  list.emplace_back(g_localizeStrings.Get(36593), CMS_PRIMARIES_240M);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36588),
+                    CMS_PRIMARIES_AUTO);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36589),
+                    CMS_PRIMARIES_BT709);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36579),
+                    CMS_PRIMARIES_BT2020);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36590),
+                    CMS_PRIMARIES_170M);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36591),
+                    CMS_PRIMARIES_BT470M);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36592),
+                    CMS_PRIMARIES_BT470BG);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36593),
+                    CMS_PRIMARIES_240M);
 }
 
 void CDisplaySettings::SettingOptionsCmsGammaModesFiller(const SettingConstPtr& /*setting*/,
                                                          std::vector<IntegerSettingOption>& list,
                                                          int& /*current*/)
 {
-  list.emplace_back(g_localizeStrings.Get(36582), CMS_TRC_BT1886);
-  list.emplace_back(g_localizeStrings.Get(36583), CMS_TRC_INPUT_OFFSET);
-  list.emplace_back(g_localizeStrings.Get(36584), CMS_TRC_OUTPUT_OFFSET);
-  list.emplace_back(g_localizeStrings.Get(36585), CMS_TRC_ABSOLUTE);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36582),
+                    CMS_TRC_BT1886);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36583),
+                    CMS_TRC_INPUT_OFFSET);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36584),
+                    CMS_TRC_OUTPUT_OFFSET);
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36585),
+                    CMS_TRC_ABSOLUTE);
 }
 

@@ -19,6 +19,7 @@
 //
 //------------------------------------------------------------------------
 
+#include <algorithm>
 #include <chrono>
 #include <locale>
 #include <span>
@@ -106,9 +107,9 @@ public:
   static void ToCapitalize(std::string& str) noexcept;
   static void ToCapitalize(std::wstring& str) noexcept;
   [[nodiscard]] static bool EqualsNoCase(std::string_view str1, std::string_view str2) noexcept;
-  [[nodiscard]] static int CompareNoCase(std::string_view str1,
-                                         std::string_view str2,
-                                         size_t n = 0) noexcept;
+  [[nodiscard]] static constexpr int CompareNoCase(std::string_view str1,
+                                                   std::string_view str2,
+                                                   size_t n = 0) noexcept;
   [[nodiscard]] static int ReturnDigits(std::string_view str) noexcept;
   [[nodiscard]] static std::string Left(std::string_view str, size_t count);
   [[nodiscard]] static std::string Mid(std::string_view str,
@@ -345,9 +346,18 @@ public:
   {
     return isasciiuppercaseletter(chr) || isasciilowercaseletter(chr);
   }
+  [[nodiscard]] inline static bool IsAsciiLetters(
+      std::string_view str) noexcept // locale independent
+  {
+    return std::ranges::all_of(str, [](char c) { return StringUtils::isasciiletter(c); }, {});
+  }
   [[nodiscard]] inline static bool isasciialphanum(char chr) noexcept // locale independent
   {
     return isasciiletter(chr) || isasciidigit(chr);
+  }
+  [[nodiscard]] constexpr static char ToLowerAscii(char c) noexcept // locale independent
+  {
+    return 'A' <= c && c <= 'Z' ? c - 'A' + 'a' : c;
   }
   [[nodiscard]] static std::string SizeToString(int64_t size);
   static const std::string Empty;
@@ -519,6 +529,23 @@ struct sortstringbyname
     return StringUtils::CompareNoCase(strItem1, strItem2) < 0;
   }
 };
+
+[[nodiscard]] constexpr int StringUtils::CompareNoCase(std::string_view str1,
+                                                       std::string_view str2,
+                                                       size_t n) noexcept
+{
+  str1 = n ? str1.substr(0, std::min(n, str1.length())) : str1;
+  str2 = n ? str2.substr(0, std::min(n, str2.length())) : str2;
+  auto diff = std::ranges::mismatch(str1, str2, [](char c1, char c2)
+                                    { return c1 == c2 || ToLowerAscii(c1) == ToLowerAscii(c2); });
+  if (diff.in1 == str1.end() && diff.in2 == str2.end())
+    return 0;
+  if (diff.in1 == str1.end())
+    return '\0' - ToLowerAscii(*diff.in2);
+  if (diff.in2 == str2.end())
+    return ToLowerAscii(*diff.in1) - '\0';
+  return ToLowerAscii(*diff.in1) - ToLowerAscii(*diff.in2);
+}
 
 } // namespace KODI::UTILS
 

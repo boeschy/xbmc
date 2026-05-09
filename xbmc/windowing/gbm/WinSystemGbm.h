@@ -39,7 +39,7 @@ public:
   CWinSystemGbm();
   ~CWinSystemGbm() override;
 
-  const std::string GetName() override { return "gbm"; }
+  const std::string GetName() override;
 
   bool InitWindowSystem() override;
   bool DestroyWindowSystem() override;
@@ -58,6 +58,8 @@ public:
   bool Show(bool raise = true) override;
   void Register(IDispResource* resource) override;
   void Unregister(IDispResource* resource) override;
+
+  bool SetVideoOutput(const VideoPicture* videoPicture) override;
 
   bool SetHDR(const VideoPicture* videoPicture) override;
   bool IsHDRDisplay() override;

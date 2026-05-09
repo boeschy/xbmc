@@ -27,7 +27,10 @@ CAddonButtonMap::CAddonButtonMap(CPeripheral* device,
                                  const std::weak_ptr<CPeripheralAddon>& addon,
                                  const std::string& strControllerId,
                                  CPeripherals& manager)
-  : m_device(device), m_addon(addon), m_strControllerId(strControllerId), m_manager(manager)
+  : m_device(device),
+    m_addon(addon),
+    m_strControllerId(strControllerId),
+    m_manager(manager)
 {
   auto peripheralAddon = m_addon.lock();
   assert(peripheralAddon != nullptr);
@@ -516,8 +519,7 @@ void CAddonButtonMap::SetIgnoredPrimitives(
 
 bool CAddonButtonMap::IsIgnored(const JOYSTICK::CDriverPrimitive& primitive)
 {
-  return std::find(m_ignoredPrimitives.begin(), m_ignoredPrimitives.end(), primitive) !=
-         m_ignoredPrimitives.end();
+  return std::ranges::find(m_ignoredPrimitives, primitive) != m_ignoredPrimitives.end();
 }
 
 bool CAddonButtonMap::GetAxisProperties(unsigned int axisIndex, int& center, unsigned int& range)

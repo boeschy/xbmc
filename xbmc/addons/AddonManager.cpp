@@ -29,6 +29,9 @@
 #include "events/NotificationEvent.h"
 #include "filesystem/Directory.h"
 #include "filesystem/SpecialProtocol.h"
+#include "jobs/JobManager.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
@@ -670,7 +673,7 @@ bool CAddonMgr::FindAddon(const std::string& addonId,
   std::unique_lock lock(m_critSection);
 
   m_database->GetInstallData(it->second);
-  CLog::Log(LOGINFO, "Addon Mananger: Found addon: '{} v{}'", addonId, addonVersion.asString());
+  CLog::Log(LOGINFO, "Addon Manager: Found addon: '{} v{}'", addonId, addonVersion.asString());
 
   m_installedAddons[addonId] = it->second; // insert/replace entry
   m_database->AddInstalledAddon(it->second, origin);
@@ -705,7 +708,7 @@ bool CAddonMgr::FindAddons()
   for (const auto& [_, addon] : installedAddons)
   {
     m_database->GetInstallData(addon);
-    CLog::Log(LOGINFO, "Addon Mananger: Found addon: '{} v{}'", addon->ID(),
+    CLog::Log(LOGINFO, "Addon Manager: Found addon: '{} v{}'", addon->ID(),
               addon->Version().asString());
   }
 
@@ -793,6 +796,7 @@ void CAddonMgr::OnPostUnInstall(const std::string& id)
   std::unique_lock lock(m_critSection);
   m_disabled.erase(id);
   RemoveAllUpdateRulesFromList(id);
+  CServiceBroker::GetResourcesComponent().GetLocalizeStrings().ClearAddonStrings(id);
   m_events.Publish(AddonEvents::UnInstalled(id));
 }
 

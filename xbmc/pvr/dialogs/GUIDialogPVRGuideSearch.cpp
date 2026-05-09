@@ -12,7 +12,6 @@
 #include "guilib/GUIEditControl.h"
 #include "guilib/GUIKeyboardFactory.h"
 #include "guilib/GUIMessage.h"
-#include "guilib/LocalizeStrings.h"
 #include "pvr/PVRManager.h"
 #include "pvr/channels/PVRChannel.h"
 #include "pvr/channels/PVRChannelGroupMember.h"
@@ -20,6 +19,8 @@
 #include "pvr/channels/PVRChannelGroupsContainer.h"
 #include "pvr/epg/EpgContainer.h"
 #include "pvr/epg/EpgSearchFilter.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/StringUtils.h"
 
 #include <cstdio>
@@ -74,11 +75,13 @@ void CGUIDialogPVRGuideSearch::UpdateChannelSpin()
 {
   int iChannelGroup = GetSpinValue(CONTROL_SPIN_GROUPS);
 
-  std::vector< std::pair<std::string, int> > labels;
+  std::vector<std::pair<std::string, int>> labels;
   if (m_searchFilter->IsRadio())
-    labels.emplace_back(g_localizeStrings.Get(19216), EPG_SEARCH_UNSET); // All radio channels
+    labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19216),
+                        EPG_SEARCH_UNSET); // All radio channels
   else
-    labels.emplace_back(g_localizeStrings.Get(19217), EPG_SEARCH_UNSET); // All TV channels
+    labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19217),
+                        EPG_SEARCH_UNSET); // All TV channels
 
   std::shared_ptr<CPVRChannelGroup> group;
   if (iChannelGroup != EPG_SEARCH_UNSET)
@@ -128,20 +131,33 @@ void CGUIDialogPVRGuideSearch::UpdateGroupsSpin()
 
 void CGUIDialogPVRGuideSearch::UpdateGenreSpin()
 {
-  std::vector< std::pair<std::string, int> > labels;
-  labels.emplace_back(g_localizeStrings.Get(593), EPG_SEARCH_UNSET);
-  labels.emplace_back(g_localizeStrings.Get(19500), EPG_EVENT_CONTENTMASK_MOVIEDRAMA);
-  labels.emplace_back(g_localizeStrings.Get(19516), EPG_EVENT_CONTENTMASK_NEWSCURRENTAFFAIRS);
-  labels.emplace_back(g_localizeStrings.Get(19532), EPG_EVENT_CONTENTMASK_SHOW);
-  labels.emplace_back(g_localizeStrings.Get(19548), EPG_EVENT_CONTENTMASK_SPORTS);
-  labels.emplace_back(g_localizeStrings.Get(19564), EPG_EVENT_CONTENTMASK_CHILDRENYOUTH);
-  labels.emplace_back(g_localizeStrings.Get(19580), EPG_EVENT_CONTENTMASK_MUSICBALLETDANCE);
-  labels.emplace_back(g_localizeStrings.Get(19596), EPG_EVENT_CONTENTMASK_ARTSCULTURE);
-  labels.emplace_back(g_localizeStrings.Get(19612), EPG_EVENT_CONTENTMASK_SOCIALPOLITICALECONOMICS);
-  labels.emplace_back(g_localizeStrings.Get(19628), EPG_EVENT_CONTENTMASK_EDUCATIONALSCIENCE);
-  labels.emplace_back(g_localizeStrings.Get(19644), EPG_EVENT_CONTENTMASK_LEISUREHOBBIES);
-  labels.emplace_back(g_localizeStrings.Get(19660), EPG_EVENT_CONTENTMASK_SPECIAL);
-  labels.emplace_back(g_localizeStrings.Get(19499), EPG_EVENT_CONTENTMASK_USERDEFINED);
+  std::vector<std::pair<std::string, int>> labels;
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(593),
+                      EPG_SEARCH_UNSET);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19500),
+                      EPG_EVENT_CONTENTMASK_MOVIEDRAMA);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19516),
+                      EPG_EVENT_CONTENTMASK_NEWSCURRENTAFFAIRS);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19532),
+                      EPG_EVENT_CONTENTMASK_SHOW);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19548),
+                      EPG_EVENT_CONTENTMASK_SPORTS);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19564),
+                      EPG_EVENT_CONTENTMASK_CHILDRENYOUTH);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19580),
+                      EPG_EVENT_CONTENTMASK_MUSICBALLETDANCE);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19596),
+                      EPG_EVENT_CONTENTMASK_ARTSCULTURE);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19612),
+                      EPG_EVENT_CONTENTMASK_SOCIALPOLITICALECONOMICS);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19628),
+                      EPG_EVENT_CONTENTMASK_EDUCATIONALSCIENCE);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19644),
+                      EPG_EVENT_CONTENTMASK_LEISUREHOBBIES);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19660),
+                      EPG_EVENT_CONTENTMASK_SPECIAL);
+  labels.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19499),
+                      EPG_EVENT_CONTENTMASK_USERDEFINED);
 
   SET_CONTROL_LABELS(CONTROL_SPIN_GENRE, m_searchFilter->GetGenreType(), &labels);
 }
@@ -149,11 +165,14 @@ void CGUIDialogPVRGuideSearch::UpdateGenreSpin()
 void CGUIDialogPVRGuideSearch::UpdateDurationSpin()
 {
   /* minimum duration */
-  std::vector< std::pair<std::string, int> > labels;
+  std::vector<std::pair<std::string, int>> labels;
 
   labels.emplace_back("-", EPG_SEARCH_UNSET);
-  for (int i = 1; i < 12*60/5; ++i)
-    labels.emplace_back(StringUtils::Format(g_localizeStrings.Get(14044), i * 5), i * 5);
+  for (int i = 1; i < 12 * 60 / 5; ++i)
+    labels.emplace_back(
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(14044),
+                            i * 5),
+        i * 5);
 
   SET_CONTROL_LABELS(CONTROL_SPIN_MIN_DURATION, m_searchFilter->GetMinimumDuration(), &labels);
 
@@ -161,8 +180,11 @@ void CGUIDialogPVRGuideSearch::UpdateDurationSpin()
   labels.clear();
 
   labels.emplace_back("-", EPG_SEARCH_UNSET);
-  for (int i = 1; i < 12*60/5; ++i)
-    labels.emplace_back(StringUtils::Format(g_localizeStrings.Get(14044), i * 5), i * 5);
+  for (int i = 1; i < 12 * 60 / 5; ++i)
+    labels.emplace_back(
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(14044),
+                            i * 5),
+        i * 5);
 
   SET_CONTROL_LABELS(CONTROL_SPIN_MAX_DURATION, m_searchFilter->GetMaximumDuration(), &labels);
 }
@@ -209,12 +231,15 @@ bool CGUIDialogPVRGuideSearch::OnMessage(CGUIMessage& message)
         {
           title = m_searchFilter->GetSearchTerm();
           if (title.empty())
-            title = g_localizeStrings.Get(137); // "Search"
+            title =
+                CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(137); // "Search"
           else
             StringUtils::Trim(title, "\"");
 
           if (!CGUIKeyboardFactory::ShowAndGetInput(
-                  title, CVariant{g_localizeStrings.Get(528)}, // "Enter title"
+                  title,
+                  CVariant{CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                      528)}, // "Enter title"
                   false))
           {
             return false;
@@ -258,14 +283,16 @@ void CGUIDialogPVRGuideSearch::OnWindowLoaded()
   return CGUIDialog::OnWindowLoaded();
 }
 
-CDateTime CGUIDialogPVRGuideSearch::ReadDateTime(const std::string& strDate, const std::string& strTime) const
+CDateTime CGUIDialogPVRGuideSearch::ReadDateTime(const std::string& strDate,
+                                                 const std::string& strTime) const
 {
   CDateTime dateTime;
   int iHours{0};
   int iMinutes{0};
   std::sscanf(strTime.c_str(), "%d:%d", &iHours, &iMinutes);
   dateTime.SetFromDBDate(strDate);
-  dateTime.SetDateTime(dateTime.GetYear(), dateTime.GetMonth(), dateTime.GetDay(), iHours, iMinutes, 0);
+  dateTime.SetDateTime(dateTime.GetYear(), dateTime.GetMonth(), dateTime.GetDay(), iHours, iMinutes,
+                       0);
   return dateTime.GetAsUTCDateTime();
 }
 
@@ -342,16 +369,20 @@ void CGUIDialogPVRGuideSearch::Update()
 
   SET_CONTROL_LABEL2(CONTROL_EDIT_SEARCH, m_searchFilter->GetSearchTerm());
   {
-    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_SEARCH, CGUIEditControl::INPUT_TYPE_TEXT, 16017);
+    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_SEARCH,
+                    CGUIEditControl::INPUT_TYPE_TEXT, 16017);
     OnMessage(msg);
   }
 
   SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_CASE_SENS, m_searchFilter->IsCaseSensitive());
   SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_INC_DESC, m_searchFilter->ShouldSearchInDescription());
   SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_FTA_ONLY, m_searchFilter->IsFreeToAirOnly());
-  SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_UNK_GENRE, m_searchFilter->ShouldIncludeUnknownGenres());
-  SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_IGNORE_REC, m_searchFilter->ShouldIgnorePresentRecordings());
-  SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_IGNORE_TMR, m_searchFilter->ShouldIgnorePresentTimers());
+  SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_UNK_GENRE,
+                       m_searchFilter->ShouldIncludeUnknownGenres());
+  SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_IGNORE_REC,
+                       m_searchFilter->ShouldIgnorePresentRecordings());
+  SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_IGNORE_TMR,
+                       m_searchFilter->ShouldIgnorePresentTimers());
   SET_CONTROL_SELECTED(GetID(), CONTROL_SPIN_NO_REPEATS, m_searchFilter->ShouldRemoveDuplicates());
   SET_CONTROL_SELECTED(GetID(), CONTROL_BTN_IGNORE_FINISHED,
                        m_searchFilter->ShouldIgnoreFinishedBroadcasts());
@@ -388,22 +419,26 @@ void CGUIDialogPVRGuideSearch::Update()
 
   SET_CONTROL_LABEL2(CONTROL_EDIT_START_TIME, startLocal.GetAsLocalizedTime("", false));
   {
-    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_START_TIME, CGUIEditControl::INPUT_TYPE_TIME, 14066);
+    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_START_TIME,
+                    CGUIEditControl::INPUT_TYPE_TIME, 14066);
     OnMessage(msg);
   }
   SET_CONTROL_LABEL2(CONTROL_EDIT_STOP_TIME, endLocal.GetAsLocalizedTime("", false));
   {
-    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_STOP_TIME, CGUIEditControl::INPUT_TYPE_TIME, 14066);
+    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_STOP_TIME,
+                    CGUIEditControl::INPUT_TYPE_TIME, 14066);
     OnMessage(msg);
   }
   SET_CONTROL_LABEL2(CONTROL_EDIT_START_DATE, startLocal.GetAsDBDate());
   {
-    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_START_DATE, CGUIEditControl::INPUT_TYPE_DATE, 14067);
+    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_START_DATE,
+                    CGUIEditControl::INPUT_TYPE_DATE, 14067);
     OnMessage(msg);
   }
   SET_CONTROL_LABEL2(CONTROL_EDIT_STOP_DATE, endLocal.GetAsDBDate());
   {
-    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_STOP_DATE, CGUIEditControl::INPUT_TYPE_DATE, 14067);
+    CGUIMessage msg(GUI_MSG_SET_TYPE, GetID(), CONTROL_EDIT_STOP_DATE,
+                    CGUIEditControl::INPUT_TYPE_DATE, 14067);
     OnMessage(msg);
   }
 

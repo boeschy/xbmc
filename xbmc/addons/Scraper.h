@@ -44,6 +44,7 @@ using ScraperPtr = std::shared_ptr<CScraper>;
 enum class ContentType
 {
   MOVIES,
+  MOVIE_VERSIONS,
   TVSHOWS,
   MUSICVIDEOS,
   ALBUMS,
@@ -210,19 +211,23 @@ private:
     using namespace std::literals::string_view_literals;
     switch (type)
     {
-      case ADDON::ContentType::MOVIES:
+      using enum ADDON::ContentType;
+
+      case MOVIES:
         return "movies"sv;
-      case ADDON::ContentType::TVSHOWS:
+      case MOVIE_VERSIONS:
+        return "movie versions"sv;
+      case TVSHOWS:
         return "TV shows"sv;
-      case ADDON::ContentType::MUSICVIDEOS:
+      case MUSICVIDEOS:
         return "music videos"sv;
-      case ADDON::ContentType::ALBUMS:
+      case ALBUMS:
         return "albums"sv;
-      case ADDON::ContentType::ARTISTS:
+      case ARTISTS:
         return "artists"sv;
-      case ADDON::ContentType::NONE:
+      case NONE:
         return "none"sv;
-    };
+    }
     throw std::invalid_argument("no content string found");
   }
 };

@@ -12,9 +12,15 @@
 #include "ServiceBroker.h"
 #include "filesystem/SpecialProtocol.h"
 #include "powermanagement/LunaPowerManagement.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
+#include "settings/lib/Setting.h"
 #include "utils/log.h"
 
+#include "platform/linux/WebOSTVPlatformConfig.h"
+
 #include <filesystem>
+#include <memory>
 
 #include <sys/resource.h>
 
@@ -45,6 +51,9 @@ bool CPlatformWebOS::InitStageOne()
   const auto HOME = GetHomePath();
 
   setenv("APPID", CCompileInfo::GetPackage(), 0);
+  setenv("FONTCONFIG_FILE", "/etc/fonts/fonts.conf", 1);
+  setenv("FONTCONFIG_PATH", "/etc/fonts", 1);
+  setenv("GST_PLUGIN_SCANNER_1_0", (HOME + "/lib/gst-plugin-scanner").c_str(), 1);
   setenv("XDG_RUNTIME_DIR", "/tmp/xdg", 1);
   setenv("XKB_CONFIG_ROOT", "/usr/share/X11/xkb", 1);
   setenv("WAYLAND_DISPLAY", "wayland-0", 1);
@@ -69,10 +78,29 @@ bool CPlatformWebOS::InitStageTwo()
   if (setrlimit(RLIMIT_CORE, &limit) != 0)
     CLog::Log(LOGERROR, "Failed to disable core dumps");
 
+  WebOSTVPlatformConfig::Load();
+  WebOSTVPlatformConfig::LoadARCStatus();
   return CPlatformLinux::InitStageTwo();
+}
+
+bool CPlatformWebOS::InitStageThree()
+{
+  // Setting dependencies cannot be removed by XML files
+  const std::shared_ptr<CSetting> passthrough =
+      CServiceBroker::GetSettingsComponent()->GetSettings()->GetSetting(
+          CSettings::SETTING_AUDIOOUTPUT_PASSTHROUGH);
+  if (passthrough)
+    passthrough->SetDependencies({});
+
+  return CPlatformLinux::InitStageThree();
 }
 
 void CPlatformWebOS::RegisterPowerManagement()
 {
   CLunaPowerManagement::Register();
+}
+
+bool CPlatformWebOS::IsConfigureAddonsAtStartupEnabled()
+{
+  return false;
 }

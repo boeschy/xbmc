@@ -8,12 +8,16 @@
 
 #include "GUIDialogProgress.h"
 
+#include "ServiceBroker.h"
 #include "guilib/GUIProgressControl.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
+#include "threads/Event.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
+#include "windowing/WinSystem.h"
 
 #include <mutex>
 
@@ -115,7 +119,8 @@ bool CGUIDialogProgress::OnMessage(CGUIMessage& message)
           {
             std::string strHeading = m_strHeading;
             strHeading.append(" : ");
-            strHeading.append(g_localizeStrings.Get(16024));
+            strHeading.append(
+                CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(16024));
             CGUIDialogBoxBase::SetHeading(CVariant{strHeading});
             m_iChoice = CHOICE_CANCELED;
           }

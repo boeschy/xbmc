@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -108,15 +108,16 @@ public:
   void BeginTransaction();
   virtual bool CommitTransaction();
   void RollbackTransaction();
+  bool InTransaction() const;
   void CopyDB(const std::string& latestDb);
   void DropAnalytics();
 
-  std::string PrepareSQL(std::string strStmt, ...) const;
+  std::string PrepareSQL(std::string_view sqlFormat, ...) const;
 
   /*!
    * @brief Get a single value from a table.
    * @remarks The values of the strWhereClause and strOrderBy parameters have to be FormatSQL'ed when used.
-   * @param strTable The table to get the value from.
+   * @param strTable The table to get the value from. Cannot be a complex expression with joins for example.
    * @param strColumn The column to get.
    * @param strWhereClause If set, use this WHERE clause.
    * @param strOrderBy If set, use this ORDER BY clause.
@@ -138,7 +139,7 @@ public:
   /*!
  * @brief Get a single integer value from a table.
  * @remarks The values of the strWhereClause and strOrderBy parameters have to be FormatSQL'ed when used.
- * @param strTable The table to get the value from.
+ * @param strTable The table to get the value from. Cannot be a complex expression with joins for example.
  * @param strColumn The column to get.
  * @param strWhereClause If set, use this WHERE clause.
  * @param strOrderBy If set, use this ORDER BY clause.

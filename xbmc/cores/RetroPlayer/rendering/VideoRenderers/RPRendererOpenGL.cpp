@@ -12,9 +12,7 @@
 #include "cores/RetroPlayer/buffers/RenderBufferPoolOpenGL.h"
 #include "cores/RetroPlayer/rendering/RenderContext.h"
 #include "cores/RetroPlayer/shaders/gl/ShaderPresetGL.h"
-#include "cores/RetroPlayer/shaders/gl/ShaderTextureGL.h"
-#include "guilib/TextureFormats.h"
-#include "guilib/TextureGL.h"
+#include "cores/RetroPlayer/shaders/gl/ShaderTextureGLRef.h"
 #include "utils/GLUtils.h"
 #include "utils/log.h"
 
@@ -56,29 +54,41 @@ CRPRendererOpenGL::CRPRendererOpenGL(const CRenderSettings& renderSettings,
   m_shaderPreset = std::make_unique<SHADER::CShaderPresetGL>(m_context);
 
   // Initialize CRPRendererOpenGL
-  m_clearColour = m_context.UseLimitedColor() ? (16.0f / 0xff) : 0.0f;
+  m_clearColor = m_context.UseLimitedColor() ? (16.0f / 0xff) : 0.0f;
 
-  // Set up main screen VAO/VBOs
+  m_context.EnableGUIShader(GL_SHADER_METHOD::TEXTURE);
+
+  GLint posLoc = m_context.GUIShaderGetPos();
+  GLint tex0Loc = m_context.GUIShaderGetCoord0();
+
+  const GLubyte idx[4] = {0, 1, 3, 2}; // Determines order of triangle strip
+
+  // Set up main screen VAO/VBO
   glGenVertexArrays(1, &m_mainVAO);
   glBindVertexArray(m_mainVAO);
 
   glGenBuffers(1, &m_mainVertexVBO);
   glBindBuffer(GL_ARRAY_BUFFER, m_mainVertexVBO);
 
+  glVertexAttribPointer(posLoc, 3, GL_FLOAT, 0, sizeof(PackedVertex),
+                        reinterpret_cast<const GLvoid*>(offsetof(PackedVertex, x)));
+  glEnableVertexAttribArray(posLoc);
+  glVertexAttribPointer(tex0Loc, 2, GL_FLOAT, 0, sizeof(PackedVertex),
+                        reinterpret_cast<const GLvoid*>(offsetof(PackedVertex, u1)));
+  glEnableVertexAttribArray(tex0Loc);
+
   glGenBuffers(1, &m_mainIndexVBO);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_mainIndexVBO);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLubyte) * 4, idx, GL_STATIC_DRAW);
 
-  m_context.EnableGUIShader(GL_SHADER_METHOD::TEXTURE);
-  GLint vertLoc = m_context.GUIShaderGetPos();
-  GLint loc = m_context.GUIShaderGetCoord0();
+  glBindVertexArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+
   m_context.DisableGUIShader();
 
-  glEnableVertexAttribArray(vertLoc);
-  glVertexAttribPointer(vertLoc, 3, GL_FLOAT, 0, sizeof(PackedVertex),
-                        reinterpret_cast<const GLvoid*>(offsetof(PackedVertex, x)));
-  glEnableVertexAttribArray(loc);
-  glVertexAttribPointer(loc, 2, GL_FLOAT, 0, sizeof(PackedVertex),
-                        reinterpret_cast<const GLvoid*>(offsetof(PackedVertex, u1)));
+  m_context.EnableGUIShader(GL_SHADER_METHOD::DEFAULT);
+
+  GLint blackbarsPosLoc = m_context.GUIShaderGetPos();
 
   // Set up black bars VAO/VBO
   glGenVertexArrays(1, &m_blackbarsVAO);
@@ -87,15 +97,13 @@ CRPRendererOpenGL::CRPRendererOpenGL(const CRenderSettings& renderSettings,
   glGenBuffers(1, &m_blackbarsVertexVBO);
   glBindBuffer(GL_ARRAY_BUFFER, m_blackbarsVertexVBO);
 
-  m_context.EnableGUIShader(GL_SHADER_METHOD::DEFAULT);
-  GLint posLoc = m_context.GUIShaderGetPos();
-  m_context.DisableGUIShader();
-
-  glEnableVertexAttribArray(posLoc);
-  glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Svertex), 0);
+  glVertexAttribPointer(blackbarsPosLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Svertex), 0);
+  glEnableVertexAttribArray(blackbarsPosLoc);
 
   glBindVertexArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  m_context.DisableGUIShader();
 
   m_context.ApplyStateBlock();
 }
@@ -133,7 +141,6 @@ void CRPRendererOpenGL::RenderInternal(bool clear, uint8_t alpha)
   Render(alpha);
 
   glEnable(GL_BLEND);
-  glFlush();
 }
 
 void CRPRendererOpenGL::FlushInternal()
@@ -158,7 +165,7 @@ bool CRPRendererOpenGL::SupportsScalingMethod(SCALINGMETHOD method)
 
 void CRPRendererOpenGL::ClearBackBuffer()
 {
-  glClearColor(m_clearColour, m_clearColour, m_clearColour, 0.0f);
+  glClearColor(m_clearColor, m_clearColor, m_clearColor, 0.0f);
   glClear(GL_COLOR_BUFFER_BIT);
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -167,13 +174,14 @@ void CRPRendererOpenGL::DrawBlackBars()
 {
   glDisable(GL_BLEND);
 
+  m_context.EnableGUIShader(GL_SHADER_METHOD::DEFAULT);
+
+  GLint uniColLoc = m_context.GUIShaderGetUniCol();
+
+  glUniform4f(uniColLoc, m_clearColor / 255.0f, m_clearColor / 255.0f, m_clearColor / 255.0f, 1.0f);
+
   Svertex vertices[24];
   GLubyte count = 0;
-
-  m_context.EnableGUIShader(GL_SHADER_METHOD::DEFAULT);
-  GLint uniCol = m_context.GUIShaderGetUniCol();
-
-  glUniform4f(uniCol, m_clearColour / 255.0f, m_clearColour / 255.0f, m_clearColour / 255.0f, 1.0f);
 
   // top quad
   if (m_rotatedDestCoords[0].y > 0.0f)
@@ -262,7 +270,7 @@ void CRPRendererOpenGL::DrawBlackBars()
   glBindVertexArray(m_blackbarsVAO);
 
   glBindBuffer(GL_ARRAY_BUFFER, m_blackbarsVertexVBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(Svertex) * count, &vertices[0], GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(Svertex) * count, &vertices[0], GL_DYNAMIC_DRAW);
 
   glDrawArrays(GL_TRIANGLES, 0, count);
 
@@ -274,8 +282,7 @@ void CRPRendererOpenGL::DrawBlackBars()
 
 void CRPRendererOpenGL::Render(uint8_t alpha)
 {
-  CRenderBufferOpenGL* renderBuffer = static_cast<CRenderBufferOpenGL*>(m_renderBuffer);
-
+  auto renderBuffer = static_cast<CRenderBufferOpenGL*>(m_renderBuffer);
   if (renderBuffer == nullptr)
     return;
 
@@ -287,21 +294,21 @@ void CRPRendererOpenGL::Render(uint8_t alpha)
   }
   else
   {
-    // We can't copy or move CGLTexture, so construct source/target in-place
     rbTextures = new RenderBufferTextures{
         // Source texture
-        std::make_shared<CGLTexture>(static_cast<unsigned int>(renderBuffer->GetWidth()),
-                                     static_cast<unsigned int>(renderBuffer->GetHeight()),
-                                     XB_FMT_RGB8, renderBuffer->TextureID()),
-        // Target texture
-        std::make_shared<CGLTexture>(static_cast<unsigned int>(m_context.GetScreenWidth()),
-                                     static_cast<unsigned int>(m_context.GetScreenHeight())),
+        std::make_shared<SHADER::CShaderTextureGLRef>(
+            static_cast<unsigned int>(renderBuffer->GetWidth()),
+            static_cast<unsigned int>(renderBuffer->GetHeight()), renderBuffer->TextureID()),
+        // Target texture is empty wrapper used to pass target width and height
+        std::make_shared<SHADER::CShaderTextureGLRef>(
+            static_cast<unsigned int>(m_context.GetScreenWidth()),
+            static_cast<unsigned int>(m_context.GetScreenHeight())),
     };
     m_RBTexturesMap.emplace(renderBuffer, rbTextures);
   }
 
-  std::shared_ptr<CGLTexture> sourceTexture = rbTextures->source;
-  std::shared_ptr<CGLTexture> targetTexture = rbTextures->target;
+  std::shared_ptr<SHADER::CShaderTextureGLRef> source = rbTextures->source;
+  std::shared_ptr<SHADER::CShaderTextureGLRef> target = rbTextures->target;
 
   Updateshaders();
 
@@ -312,17 +319,14 @@ void CRPRendererOpenGL::Render(uint8_t alpha)
     if (m_shaderPreset->GetPasses()[0].filterType == SHADER::FilterType::LINEAR)
       filter = GL_LINEAR;
 
-    glBindTexture(m_textureTarget, sourceTexture->GetTextureID());
+    glBindTexture(m_textureTarget, source->GetTextureID());
     glTexParameteri(m_textureTarget, GL_TEXTURE_MAG_FILTER, filter);
     glTexParameteri(m_textureTarget, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(m_textureTarget, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(m_textureTarget, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    const ViewportCoordinates destPoints{m_rotatedDestCoords};
-
-    SHADER::CShaderTextureGL source(sourceTexture, false);
-    SHADER::CShaderTextureGL target(targetTexture, false);
-    if (!m_shaderPreset->RenderUpdate(destPoints, source, target))
+    if (!m_shaderPreset->RenderUpdate(m_rotatedDestCoords, {m_fullDestWidth, m_fullDestHeight},
+                                      *source, *target))
     {
       m_bShadersNeedUpdate = false;
       m_bUseShaderPreset = false;
@@ -331,20 +335,11 @@ void CRPRendererOpenGL::Render(uint8_t alpha)
   // Use GUI shader
   else
   {
-    CRect rect = m_sourceRect;
-
-    rect.x1 /= renderBuffer->GetWidth();
-    rect.x2 /= renderBuffer->GetWidth();
-    rect.y1 /= renderBuffer->GetHeight();
-    rect.y2 /= renderBuffer->GetHeight();
-
-    const uint32_t color = (alpha << 24) | 0xFFFFFF;
-
     GLint filter = GL_NEAREST;
     if (GetRenderSettings().VideoSettings().GetScalingMethod() == SCALINGMETHOD::LINEAR)
       filter = GL_LINEAR;
 
-    glBindTexture(m_textureTarget, sourceTexture->GetTextureID());
+    glBindTexture(m_textureTarget, source->GetTextureID());
     glTexParameteri(m_textureTarget, GL_TEXTURE_MAG_FILTER, filter);
     glTexParameteri(m_textureTarget, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(m_textureTarget, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -352,22 +347,33 @@ void CRPRendererOpenGL::Render(uint8_t alpha)
 
     m_context.EnableGUIShader(GL_SHADER_METHOD::TEXTURE);
 
-    GLubyte colour[4];
-    GLubyte idx[4] = {0, 1, 3, 2}; // Determines order of triangle strip
-    PackedVertex vertex[4];
-
     GLint uniColLoc = m_context.GUIShaderGetUniCol();
     GLint depthLoc = m_context.GUIShaderGetDepth();
 
     // Setup color values
-    colour[0] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::R, color);
-    colour[1] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::G, color);
-    colour[2] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::B, color);
-    colour[3] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::A, color);
+    GLubyte col[4];
+    const uint32_t color = (alpha << 24) | 0xFFFFFF;
+    col[0] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::R, color);
+    col[1] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::G, color);
+    col[2] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::B, color);
+    col[3] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::A, color);
 
+    glUniform4f(uniColLoc, (col[0] / 255.0f), (col[1] / 255.0f), (col[2] / 255.0f),
+                (col[3] / 255.0f));
+    glUniform1f(depthLoc, -1.0f);
+
+    // Setup destination rectangle
+    CRect rect = m_sourceRect;
+    rect.x1 /= renderBuffer->GetWidth();
+    rect.x2 /= renderBuffer->GetWidth();
+    rect.y1 /= renderBuffer->GetHeight();
+    rect.y2 /= renderBuffer->GetHeight();
+
+    PackedVertex vertex[4];
+
+    // Setup vertex position values
     for (unsigned int i = 0; i < 4; i++)
     {
-      // Setup vertex position values
       vertex[i].x = m_rotatedDestCoords[i].x;
       vertex[i].y = m_rotatedDestCoords[i].y;
       vertex[i].z = 0.0f;
@@ -382,14 +388,7 @@ void CRPRendererOpenGL::Render(uint8_t alpha)
     glBindVertexArray(m_mainVAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, m_mainVertexVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(PackedVertex) * 4, &vertex[0], GL_STATIC_DRAW);
-
-    // No need to bind the index VBO, it's part of VAO state
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLubyte) * 4, idx, GL_STATIC_DRAW);
-
-    glUniform4f(uniColLoc, (colour[0] / 255.0f), (colour[1] / 255.0f), (colour[2] / 255.0f),
-                (colour[3] / 255.0f));
-    glUniform1f(depthLoc, -1.0f);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(PackedVertex) * 4, &vertex[0], GL_DYNAMIC_DRAW);
 
     glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, nullptr);
 

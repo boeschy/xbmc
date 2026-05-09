@@ -1381,6 +1381,30 @@
     ],
     "returns": "string"
   },
+  "Player.GetChapters": {
+    "type": "method",
+    "description": "Returns the chapters of the currently playing item for the given player",
+    "params": [
+      {
+        "$ref": "Player.Id",
+        "name": "playerid",
+        "required": true
+      }
+    ],
+    "permission": "ReadData",
+    "returns": {
+      "type": "object",
+      "properties": {
+        "chapters": {
+          "type": "array",
+          "items": {
+            "$ref": "Player.Chapter"
+          },
+          "required": true
+        }
+      }
+    }
+  },
   "Files.GetSources": {
     "type": "method",
     "description": "Get the sources of the media windows",
@@ -3065,7 +3089,7 @@
   },
   "AudioLibrary.RefreshArtist": {
     "type": "method",
-    "description": "Refresh the given artist in the library",
+    "description": "Refresh the additional information for the given artist",
     "transport": "Response",
     "permission": "UpdateData",
     "params": [
@@ -3079,7 +3103,7 @@
   },
   "AudioLibrary.RefreshAlbum": {
     "type": "method",
-    "description": "Refresh the given album in the library",
+    "description": "Refresh the additional information for the given album",
     "transport": "Response",
     "permission": "UpdateData",
     "params": [

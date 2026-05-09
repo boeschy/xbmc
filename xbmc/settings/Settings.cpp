@@ -19,13 +19,10 @@
 #include "guilib/GUIFontManager.h"
 #include "guilib/StereoscopicsManager.h"
 #include "input/keyboard/KeyboardLayoutManager.h"
+#include "network/WakeOnAccess.h"
+#include "network/upnp/UPnPSettings.h"
 
 #include <mutex>
-#include "network/upnp/UPnPSettings.h"
-#include "network/WakeOnAccess.h"
-#if defined(TARGET_DARWIN_OSX) and defined(HAS_XBMCHELPER)
-#include "platform/darwin/osx/XBMCHelper.h"
-#endif // defined(TARGET_DARWIN_OSX)
 #if defined(TARGET_DARWIN_TVOS)
 #include "platform/darwin/tvos/TVOSSettingsHandler.h"
 #endif // defined(TARGET_DARWIN_TVOS)
@@ -268,16 +265,17 @@ bool CSettings::InitializeDefinitions()
 #elif defined(TARGET_FREEBSD)
   if (CFile::Exists(SETTINGS_XML_FOLDER "freebsd.xml") && !Initialize(SETTINGS_XML_FOLDER "freebsd.xml"))
     CLog::Log(LOGFATAL, "Unable to load freebsd-specific settings definitions");
+#elif defined(TARGET_WEBOS)
+  if (CFile::Exists(SETTINGS_XML_FOLDER "webos.xml") &&
+      !Initialize(SETTINGS_XML_FOLDER "webos.xml"))
+    CLog::Log(LOGFATAL, "Unable to load webOS-specific settings definitions");
 #elif defined(TARGET_LINUX)
   if (CFile::Exists(SETTINGS_XML_FOLDER "linux.xml") && !Initialize(SETTINGS_XML_FOLDER "linux.xml"))
     CLog::Log(LOGFATAL, "Unable to load linux-specific settings definitions");
 #elif defined(TARGET_DARWIN)
   if (CFile::Exists(SETTINGS_XML_FOLDER "darwin.xml") && !Initialize(SETTINGS_XML_FOLDER "darwin.xml"))
     CLog::Log(LOGFATAL, "Unable to load darwin-specific settings definitions");
-#if defined(TARGET_DARWIN_OSX)
-  if (CFile::Exists(SETTINGS_XML_FOLDER "darwin_osx.xml") && !Initialize(SETTINGS_XML_FOLDER "darwin_osx.xml"))
-    CLog::Log(LOGFATAL, "Unable to load osx-specific settings definitions");
-#elif defined(TARGET_DARWIN_IOS)
+#if defined(TARGET_DARWIN_IOS)
   if (CFile::Exists(SETTINGS_XML_FOLDER "darwin_ios.xml") && !Initialize(SETTINGS_XML_FOLDER "darwin_ios.xml"))
     CLog::Log(LOGFATAL, "Unable to load ios-specific settings definitions");
 #elif defined(TARGET_DARWIN_TVOS)
@@ -383,13 +381,35 @@ void CSettings::InitializeOptionFillers()
   GetSettingsManager()->RegisterSettingOptionsFiller("languagenames", CLangInfo::SettingOptionsLanguageNamesFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("refreshchangedelays", CDisplaySettings::SettingOptionsRefreshChangeDelaysFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("refreshrates", CDisplaySettings::SettingOptionsRefreshRatesFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("regions", CLangInfo::SettingOptionsRegionsFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("shortdateformats", CLangInfo::SettingOptionsShortDateFormatsFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("longdateformats", CLangInfo::SettingOptionsLongDateFormatsFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("timeformats", CLangInfo::SettingOptionsTimeFormatsFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("24hourclockformats", CLangInfo::SettingOptions24HourClockFormatsFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("speedunits", CLangInfo::SettingOptionsSpeedUnitsFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("temperatureunits", CLangInfo::SettingOptionsTemperatureUnitsFiller);
+
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "regions", [](const std::shared_ptr<const CSetting>& setting, StringSettingOptions& list,
+                    std::string& current)
+      { CLangInfo::SettingOptionsRegionsFiller(setting, list, current, g_langInfo); });
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "shortdateformats", [](const std::shared_ptr<const CSetting>& setting,
+                             StringSettingOptions& list, std::string& current)
+      { CLangInfo::SettingOptionsShortDateFormatsFiller(setting, list, current, g_langInfo); });
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "longdateformats", [](const std::shared_ptr<const CSetting>& setting,
+                            StringSettingOptions& list, std::string& current)
+      { CLangInfo::SettingOptionsLongDateFormatsFiller(setting, list, current, g_langInfo); });
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "timeformats", [](const std::shared_ptr<const CSetting>& setting, StringSettingOptions& list,
+                        std::string& current)
+      { CLangInfo::SettingOptionsTimeFormatsFiller(setting, list, current, g_langInfo); });
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "24hourclockformats", [](const std::shared_ptr<const CSetting>& setting,
+                               StringSettingOptions& list, std::string& current)
+      { CLangInfo::SettingOptions24HourClockFormatsFiller(setting, list, current, g_langInfo); });
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "speedunits", [](const std::shared_ptr<const CSetting>& setting, StringSettingOptions& list,
+                       std::string& current)
+      { CLangInfo::SettingOptionsSpeedUnitsFiller(setting, list, current, g_langInfo); });
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "temperatureunits", [](const std::shared_ptr<const CSetting>& setting,
+                             StringSettingOptions& list, std::string& current)
+      { CLangInfo::SettingOptionsTemperatureUnitsFiller(setting, list, current, g_langInfo); });
   GetSettingsManager()->RegisterSettingOptionsFiller("rendermethods", CBaseRenderer::SettingOptionsRenderMethodsFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("modes", CDisplaySettings::SettingOptionsModesFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("resolutions", CDisplaySettings::SettingOptionsResolutionsFiller);
@@ -592,12 +612,6 @@ void CSettings::InitializeISettingCallbacks()
   GetSettingsManager()->RegisterCallback(&CRssManager::GetInstance(),
                                          {CSettings::SETTING_LOOKANDFEEL_RSSEDIT});
 
-#if defined(TARGET_DARWIN_OSX) and defined(HAS_XBMCHELPER)
-  GetSettingsManager()->RegisterCallback(
-      &XBMCHelper::GetInstance(),
-      {CSettings::SETTING_INPUT_APPLEREMOTEMODE, CSettings::SETTING_INPUT_APPLEREMOTEALWAYSON});
-#endif
-
 #if defined(TARGET_DARWIN_TVOS)
   GetSettingsManager()->RegisterCallback(&CTVOSInputSettings::GetInstance(),
                                          {CSettings::SETTING_INPUT_SIRIREMOTEIDLETIMERENABLED,
@@ -629,9 +643,6 @@ void CSettings::UninitializeISettingCallbacks()
   GetSettingsManager()->UnregisterCallback(&g_langInfo);
   GetSettingsManager()->UnregisterCallback(&g_passwordManager);
   GetSettingsManager()->UnregisterCallback(&CRssManager::GetInstance());
-#if defined(TARGET_DARWIN_OSX) and defined(HAS_XBMCHELPER)
-  GetSettingsManager()->UnregisterCallback(&XBMCHelper::GetInstance());
-#endif
   GetSettingsManager()->UnregisterCallback(&CWakeOnAccess::GetInstance());
 #ifdef HAVE_LIBBLURAY
   GetSettingsManager()->UnregisterCallback(&CDiscSettings::GetInstance());

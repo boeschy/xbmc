@@ -163,7 +163,7 @@ protected:
 
   // Raw data used by renderer
   int m_currentField = FIELD_FULL;
-  int m_reloadShaders = 0;
+  bool m_reloadShaders = false;
 
   struct CYuvPlane
   {
@@ -226,7 +226,7 @@ protected:
   bool m_nonLinStretch = false;
   bool m_nonLinStretchGui = false;
   float m_pixelRatio = 0.0f;
-  CRect m_viewRect;
+  CRect m_lastViewRect;
 
   // color management
   std::unique_ptr<CColorManager> m_ColorManager;

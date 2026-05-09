@@ -24,7 +24,6 @@
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPowerHandling.h"
 #include "dialogs/GUIDialogKaiToast.h"
-#include "dialogs/GUIDialogYesNo.h"
 #include "events/EventLog.h"
 #include "events/EventLogManager.h"
 #include "favourites/FavouritesService.h" //! @todo Remove me
@@ -34,7 +33,6 @@
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/StereoscopicsManager.h" //! @todo Remove me
 #include "input/InputManager.h"
 #include "interfaces/json-rpc/JSONRPC.h" //! @todo Remove me
@@ -42,6 +40,8 @@
 #include "network/Network.h" //! @todo Remove me
 #include "network/NetworkServices.h" //! @todo Remove me
 #include "pvr/PVRManager.h" //! @todo Remove me
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/SettingsManager.h"
@@ -194,26 +194,27 @@ bool CProfileManager::Load()
 
   if (m_profiles.empty())
   { // add the master user
-    CProfile profile("special://masterprofile/", "Master user", 0);
+    CProfile profile("special://masterprofile/", "Master user", MASTER_PROFILE_ID);
     AddProfile(profile);
   }
 
   // check the validity of the previous profile index
   if (m_lastUsedProfile >= m_profiles.size())
-    m_lastUsedProfile = 0;
+    m_lastUsedProfile = MASTER_PROFILE_ID;
 
   SetCurrentProfileId(m_lastUsedProfile);
 
   // check the validity of the auto login profile index
-  if (m_autoLoginProfile < -1 || m_autoLoginProfile >= (int)m_profiles.size())
-    m_autoLoginProfile = -1;
-  else if (m_autoLoginProfile >= 0)
+  if (m_autoLoginProfile < INVALID_PROFILE_ID ||
+      m_autoLoginProfile >= static_cast<int>(m_profiles.size()))
+    m_autoLoginProfile = INVALID_PROFILE_ID;
+  else if (m_autoLoginProfile > INVALID_PROFILE_ID)
     SetCurrentProfileId(m_autoLoginProfile);
 
   // the login screen runs as the master profile, so if we're using this, we need to ensure
   // we switch to the master profile
   if (m_usingLoginScreen)
-    SetCurrentProfileId(0);
+    SetCurrentProfileId(MASTER_PROFILE_ID);
 
   return ret;
 }
@@ -248,9 +249,9 @@ void CProfileManager::Clear()
   m_usingLoginScreen = false;
   m_profileLoadedForLogin = false;
   m_previousProfileLoadedForLogin = false;
-  m_lastUsedProfile = 0;
-  m_nextProfileId = 0;
-  SetCurrentProfileId(0);
+  m_lastUsedProfile = MASTER_PROFILE_ID;
+  m_nextProfileId = MASTER_PROFILE_ID;
+  SetCurrentProfileId(MASTER_PROFILE_ID);
   m_profiles.clear();
 }
 
@@ -268,15 +269,24 @@ void CProfileManager::PrepareLoadProfile(unsigned int profileIndex)
   // stop PVR related services
   pvrManager.Stop();
 
-  if (profileIndex != 0 || !IsMasterProfile())
+  if (profileIndex != MASTER_PROFILE_ID || !IsMasterProfile())
     networkManager.NetworkMessage(CNetworkBase::SERVICES_DOWN, 1);
 }
 
 bool CProfileManager::LoadProfile(unsigned int index)
 {
+  std::unique_lock lock(m_critical);
+
+  // check if the index is valid or not
+  if (index >= m_profiles.size())
+  {
+    CLog::LogF(LOGERROR, "Profile not loaded. Invalid profile id {}", index);
+    return false;
+  }
+
   PrepareLoadProfile(index);
 
-  if (index == 0 && IsMasterProfile())
+  if (index == MASTER_PROFILE_ID && IsMasterProfile())
   {
     CGUIWindow* pWindow = CServiceBroker::GetGUI()->GetWindowManager().GetWindow(WINDOW_HOME);
     if (pWindow)
@@ -288,19 +298,11 @@ bool CProfileManager::LoadProfile(unsigned int index)
     return true;
   }
 
-  std::unique_lock lock(m_critical);
-  // check if the index is valid or not
-  if (index >= m_profiles.size())
-    return false;
-
-  // check if the profile is already active
-  if (m_currentProfile == index)
-    return true;
-
   // save any settings of the currently used skin but only if the (master)
   // profile hasn't just been loaded as a temporary profile for login
-  if (g_SkinInfo != nullptr && !m_previousProfileLoadedForLogin)
-    g_SkinInfo->SaveSettings();
+  auto skin = CServiceBroker::GetGUI()->GetSkinInfo();
+  if (skin && !m_previousProfileLoadedForLogin)
+    skin->SaveSettings();
 
   // @todo: why is m_settings not used here?
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
@@ -336,7 +338,7 @@ bool CProfileManager::LoadProfile(unsigned int index)
     infoMgr.GetInfoProviders().GetLibraryInfoProvider().ResetLibraryBools();
   }
 
-  if (m_currentProfile != 0)
+  if (m_currentProfile != MASTER_PROFILE_ID)
   {
     CXBMCTinyXML doc;
     if (doc.LoadFile(URIUtils::AddFileToFolder(GetUserDataFolder(), "guisettings.xml")))
@@ -374,7 +376,7 @@ void CProfileManager::FinalizeLoadProfile()
 {
   CContextMenuManager &contextMenuManager = CServiceBroker::GetContextMenuManager();
   ADDON::CServiceAddonManager &serviceAddons = CServiceBroker::GetServiceAddons();
-  PVR::CPVRManager &pvrManager = CServiceBroker::GetPVRManager();
+  const PVR::CPVRManager& pvrManager = CServiceBroker::GetPVRManager();
   CNetworkBase &networkManager = CServiceBroker::GetNetwork();
   ADDON::CAddonMgr &addonManager = CServiceBroker::GetAddonMgr();
   CWeatherManager &weatherManager = CServiceBroker::GetWeatherManager();
@@ -411,15 +413,13 @@ void CProfileManager::FinalizeLoadProfile()
   // Restart context menu manager
   contextMenuManager.Init();
 
-  // Restart PVR services if we are not just loading the master profile for the login screen
-  if (m_previousProfileLoadedForLogin || m_currentProfile != 0 || m_lastUsedProfile == 0)
-    pvrManager.Init();
-
   favouritesManager.ReInit(GetProfileUserDataFolder());
 
   // Start these operations only when a profile is loaded, not on the login screen
-  if (!m_profileLoadedForLogin || (m_profileLoadedForLogin && m_lastUsedProfile == 0))
+  if (!m_profileLoadedForLogin ||
+      (m_profileLoadedForLogin && m_lastUsedProfile == MASTER_PROFILE_ID))
   {
+    pvrManager.Init();
     serviceAddons.Start();
     g_application.UpdateLibraries();
   }
@@ -427,7 +427,8 @@ void CProfileManager::FinalizeLoadProfile()
   stereoscopicsManager.Initialize();
 
   // Load initial window
-  int firstWindow = g_SkinInfo->GetFirstWindow();
+  auto skin = CServiceBroker::GetGUI()->GetSkinInfo();
+  int firstWindow = skin ? skin->GetFirstWindow() : WINDOW_HOME;
 
   CServiceBroker::GetGUI()->GetWindowManager().ChangeActiveWindow(firstWindow);
 
@@ -463,33 +464,25 @@ void CProfileManager::LogOff()
   CServiceBroker::GetGUI()->GetWindowManager().ActivateWindow(WINDOW_LOGIN_SCREEN, {}, false);
 
   if (!CServiceBroker::GetNetwork().GetServices().StartEventServer()) // event server could be needed in some situations
-    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Warning, g_localizeStrings.Get(33102), g_localizeStrings.Get(33100));
+    CGUIDialogKaiToast::QueueNotification(
+        CGUIDialogKaiToast::Warning,
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(33102),
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(33100));
 }
 
 bool CProfileManager::DeleteProfile(unsigned int index)
 {
   std::unique_lock lock(m_critical);
   const CProfile *profile = GetProfile(index);
-  if (profile == NULL)
+  if (!profile)
+  {
+    CLog::LogF(LOGERROR, "Profile not deleted. Invalid profile id {}", index);
     return false;
-
-  CGUIDialogYesNo* dlgYesNo = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogYesNo>(WINDOW_DIALOG_YES_NO);
-  if (dlgYesNo == NULL)
-    return false;
-
-  const std::string& str = g_localizeStrings.Get(13201);
-  dlgYesNo->SetHeading(CVariant{13200});
-  dlgYesNo->SetLine(0, CVariant{StringUtils::Format(str, profile->getName())});
-  dlgYesNo->SetLine(1, CVariant{""});
-  dlgYesNo->SetLine(2, CVariant{""});
-  dlgYesNo->Open();
-
-  if (!dlgYesNo->IsConfirmed())
-    return false;
+  }
 
   // fall back to master profile if necessary
-  if ((int)index == m_autoLoginProfile)
-    m_autoLoginProfile = 0;
+  if (static_cast<int>(index) == m_autoLoginProfile)
+    m_autoLoginProfile = MASTER_PROFILE_ID;
 
   // delete profile
   std::string strDirectory = profile->getDirectory();
@@ -498,7 +491,7 @@ bool CProfileManager::DeleteProfile(unsigned int index)
   // fall back to master profile if necessary
   if (index == m_currentProfile)
   {
-    LoadProfile(0);
+    LoadProfile(MASTER_PROFILE_ID);
     m_settings->Save();
   }
 
@@ -538,7 +531,7 @@ const CProfile& CProfileManager::GetMasterProfile() const
 {
   std::unique_lock lock(m_critical);
   if (!m_profiles.empty())
-    return m_profiles[0];
+    return m_profiles[MASTER_PROFILE_ID];
 
   CLog::Log(LOGERROR, "{}: master profile doesn't exist", __FUNCTION__);
   return EmptyProfile;
@@ -581,7 +574,7 @@ int CProfileManager::GetProfileIndex(const std::string &name) const
       return i;
   }
 
-  return -1;
+  return INVALID_PROFILE_ID;
 }
 
 void CProfileManager::AddProfile(const CProfile &profile)
@@ -613,12 +606,12 @@ void CProfileManager::LoadMasterProfileForLogin()
   std::unique_lock lock(m_critical);
   // save the previous user
   m_lastUsedProfile = m_currentProfile;
-  if (m_currentProfile != 0)
+  if (m_currentProfile != MASTER_PROFILE_ID)
   {
     // determines that the (master) profile has only been loaded for login
     m_profileLoadedForLogin = true;
 
-    LoadProfile(0);
+    LoadProfile(MASTER_PROFILE_ID);
 
     // remember that the (master) profile has only been loaded for login
     m_previousProfileLoadedForLogin = true;
@@ -643,7 +636,7 @@ std::string CProfileManager::GetUserDataFolder() const
 
 std::string CProfileManager::GetProfileUserDataFolder() const
 {
-  if (m_currentProfile == 0)
+  if (m_currentProfile == MASTER_PROFILE_ID)
     return GetUserDataFolder();
 
   return URIUtils::AddFileToFolder(GetUserDataFolder(), GetCurrentProfile().getDirectory());
@@ -698,7 +691,7 @@ std::string CProfileManager::GetSavestatesFolder() const
 
 std::string CProfileManager::GetSettingsFile() const
 {
-  if (m_currentProfile == 0)
+  if (m_currentProfile == MASTER_PROFILE_ID)
     return "special://masterprofile/guisettings.xml";
 
   return "special://profile/guisettings.xml";

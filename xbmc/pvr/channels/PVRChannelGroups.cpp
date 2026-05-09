@@ -75,8 +75,12 @@ void CPVRChannelGroups::Unload()
   for (const auto& group : m_groups)
     group->Unload();
 
-  CServiceBroker::GetPVRManager().Events().Unsubscribe(this);
-  m_isSubscribed = false;
+  // During shutdown (esp. early abort), ServiceBroker may no longer be safe to use
+  if (m_isSubscribed && CServiceBroker::IsAddonInterfaceUp())
+  {
+    CServiceBroker::GetPVRManager().Events().Unsubscribe(this);
+    m_isSubscribed = false;
+  }
 
   m_groups.clear();
   m_allChannelsGroup.reset();
@@ -422,9 +426,8 @@ bool CPVRChannelGroups::UpdateChannelNumbersFromAllChannelsGroup()
 {
   std::unique_lock lock(m_critSection);
   return std::accumulate(
-      m_groups.cbegin(), m_groups.cend(), false, [](bool changed, const auto& group) {
-        return group->UpdateChannelNumbersFromAllChannelsGroup() ? true : changed;
-      });
+      m_groups.cbegin(), m_groups.cend(), false, [](bool changed, const auto& group)
+      { return group->UpdateChannelNumbersFromAllChannelsGroup() ? true : changed; });
 }
 
 size_t CPVRChannelGroups::Size() const
@@ -491,7 +494,7 @@ bool CPVRChannelGroups::LoadFromDatabase(const std::vector<std::shared_ptr<CPVRC
             // Update group client priorities
             std::vector<std::shared_ptr<CPVRChannelGroup>> groups;
             {
-              std::unique_lock lock(m_critSection);
+              std::unique_lock l(m_critSection);
               groups = m_groups;
             }
 
@@ -515,9 +518,9 @@ bool CPVRChannelGroups::PersistAll()
   CLog::LogFC(LOGDEBUG, LOGPVR, "Persisting all channel group changes");
 
   std::unique_lock lock(m_critSection);
-  return std::accumulate(
-      m_groups.cbegin(), m_groups.cend(), true,
-      [](bool success, const auto& group) { return !group->Persist() ? false : success; });
+  return std::accumulate(m_groups.cbegin(), m_groups.cend(), true,
+                         [](bool success, const auto& group)
+                         { return !group->Persist() ? false : success; });
 }
 
 std::shared_ptr<CPVRChannelGroup> CPVRChannelGroups::GetGroupAll() const
@@ -543,8 +546,7 @@ GroupMemberPair CPVRChannelGroups::GetLastAndPreviousToLastPlayedChannelGroupMem
   std::unique_lock lock(m_critSection);
 
   std::vector<std::shared_ptr<CPVRChannelGroup>> groups;
-  std::ranges::copy_if(m_groups, std::back_inserter(groups),
-                       [this](const auto& group)
+  std::ranges::copy_if(m_groups, std::back_inserter(groups), [this](const auto& group)
                        { return !group->IsHidden() && !group->ShouldBeIgnored(m_groups); });
 
   lock.unlock();
@@ -576,7 +578,8 @@ std::shared_ptr<CPVRChannelGroup> CPVRChannelGroups::GetLastOpenedGroup() const
   std::unique_lock lock(m_critSection);
   return std::accumulate(m_groups.cbegin(), m_groups.cend(), std::shared_ptr<CPVRChannelGroup>{},
                          [](const std::shared_ptr<CPVRChannelGroup>& last,
-                            const std::shared_ptr<CPVRChannelGroup>& group) {
+                            const std::shared_ptr<CPVRChannelGroup>& group)
+                         {
                            return group->LastOpened() > 0 &&
                                           (!last || group->LastOpened() > last->LastOpened())
                                       ? group
@@ -590,11 +593,9 @@ std::vector<std::shared_ptr<CPVRChannelGroup>> CPVRChannelGroups::GetMembers(
   std::vector<std::shared_ptr<CPVRChannelGroup>> groups;
 
   std::unique_lock lock(m_critSection);
-  std::ranges::copy_if(m_groups, std::back_inserter(groups),
-                       [bExcludeHidden, this](const auto& group) {
-                         return (!bExcludeHidden || !group->IsHidden()) &&
-                                !group->ShouldBeIgnored(m_groups);
-                       });
+  std::ranges::copy_if(
+      m_groups, std::back_inserter(groups), [bExcludeHidden, this](const auto& group)
+      { return (!bExcludeHidden || !group->IsHidden()) && !group->ShouldBeIgnored(m_groups); });
   return groups;
 }
 

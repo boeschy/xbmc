@@ -13,19 +13,24 @@
 #include "addons/Addon.h"
 #include "addons/AddonManager.h"
 #include "addons/addoninfo/AddonInfo.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/guiinfo/GUIInfo.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/StringUtils.h"
 
 using namespace KODI::GUILIB::GUIINFO;
 
-bool CAddonsGUIInfo::InitCurrentItem(CFileItem *item)
+bool CAddonsGUIInfo::InitCurrentItem(CFileItem* item)
 {
   return false;
 }
 
-bool CAddonsGUIInfo::GetLabel(std::string& value, const CFileItem *item, int contextWindow, const CGUIInfo &info, std::string *fallback) const
+bool CAddonsGUIInfo::GetLabel(std::string& value,
+                              const CFileItem* item,
+                              int contextWindow,
+                              const CGUIInfo& info,
+                              std::string* fallback) const
 {
   const std::shared_ptr<const ADDON::IAddon> addonInfo = item->GetAddonInfo();
   if (addonInfo)
@@ -73,14 +78,17 @@ bool CAddonsGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
           using enum ADDON::AddonLifecycleState;
 
           case BROKEN:
-            value = g_localizeStrings.Get(24171); // "Broken"
+            value =
+                CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(24171); // "Broken"
             break;
           case DEPRECATED:
-            value = g_localizeStrings.Get(24170); // "Deprecated"
+            value = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                24170); // "Deprecated"
             break;
           case NORMAL:
           default:
-            value = g_localizeStrings.Get(24169); // "Normal"
+            value =
+                CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(24169); // "Normal"
             break;
         }
         return true;
@@ -112,7 +120,7 @@ bool CAddonsGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
       {
         if (item->GetAddonInfo()->Origin() == ADDON::ORIGIN_SYSTEM)
         {
-          value = g_localizeStrings.Get(24992);
+          value = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(24992);
           return true;
         }
         if (!item->GetAddonInfo()->OriginName().empty())
@@ -125,7 +133,7 @@ bool CAddonsGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
           value = item->GetAddonInfo()->Origin();
           return true;
         }
-        value = g_localizeStrings.Get(25014);
+        value = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(25014);
         return true;
       }
       case LISTITEM_ADDON_SIZE:
@@ -203,7 +211,10 @@ bool CAddonsGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
   return false;
 }
 
-bool CAddonsGUIInfo::GetInt(int& value, const CGUIListItem *gitem, int contextWindow, const CGUIInfo &info) const
+bool CAddonsGUIInfo::GetInt(int& value,
+                            const CGUIListItem* gitem,
+                            int contextWindow,
+                            const CGUIInfo& info) const
 {
   switch (info.GetInfo())
   {
@@ -226,7 +237,10 @@ bool CAddonsGUIInfo::GetInt(int& value, const CGUIListItem *gitem, int contextWi
   return false;
 }
 
-bool CAddonsGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contextWindow, const CGUIInfo &info) const
+bool CAddonsGUIInfo::GetBool(bool& value,
+                             const CGUIListItem* gitem,
+                             int contextWindow,
+                             const CGUIInfo& info) const
 {
   switch (info.GetInfo())
   {

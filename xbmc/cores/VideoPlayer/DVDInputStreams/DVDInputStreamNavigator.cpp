@@ -15,7 +15,8 @@
 #if defined(TARGET_WINDOWS_STORE)
 #include "filesystem/SpecialProtocol.h"
 #endif
-#include "guilib/LocalizeStrings.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #if defined(TARGET_WINDOWS_STORE)
 #include "platform/Environment.h"
 #endif
@@ -23,6 +24,7 @@
 #include "settings/SettingsComponent.h"
 #include "utils/Geometry.h"
 #include "utils/LangCodeExpander.h"
+#include "utils/StreamUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
@@ -31,7 +33,11 @@
 #include "platform/darwin/osx/CocoaInterface.h"
 #endif
 
+#include <chrono>
 #include <memory>
+#include <string>
+
+using namespace std::chrono_literals;
 
 namespace
 {
@@ -294,6 +300,9 @@ bool CDVDInputStreamNavigator::Open()
   m_iPart = m_iPartCount = 0;
   m_iTime = m_iTotalTime = 0;
 
+  // For playlist/chapter watch time
+  m_startWatchTime = std::chrono::steady_clock::now();
+
   return true;
 }
 
@@ -538,11 +547,12 @@ int CDVDInputStreamNavigator::ProcessBlock(uint8_t* dest_buffer, int* read)
 
           if (times)
           {
-            // the times array stores the end timestamps of the chapters, e.g., times[0] stores the position/beginning of chapter 2
+            // the times array stores the duration of the chapters
+            // e.g. times[0] stores the end timestamp of the 1st chapter / beginning of chapter 2
             m_mapTitleChapters[m_iTitle][1] = 0;
             for (int i = 0; i < entries - 1; ++i)
             {
-              m_mapTitleChapters[m_iTitle][i + 2] = times[i] / 90000;
+              m_mapTitleChapters[m_iTitle][i + 2] = times[i] / 90;
             }
             free(times);
           }
@@ -959,7 +969,7 @@ void CDVDInputStreamNavigator::SetSubtitleStreamName(SubtitleStreamInfo &info, c
       case DVD_SUBPICTURE_LANG_EXT_NORMALDIRECTORSCOMMENTS:
       case DVD_SUBPICTURE_LANG_EXT_BIGDIRECTORSCOMMENTS:
       case DVD_SUBPICTURE_LANG_EXT_CHILDRENDIRECTORSCOMMENTS:
-        info.name = g_localizeStrings.Get(37001);
+        info.name = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(37001);
         break;
       default:
         break;
@@ -1008,14 +1018,14 @@ void CDVDInputStreamNavigator::SetAudioStreamName(AudioStreamInfo &info, const a
   switch( audio_attributes.code_extension )
   {
     case DVD_AUDIO_LANG_EXT_VISUALLYIMPAIRED:
-      info.name = g_localizeStrings.Get(37000);
+      info.name = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(37000);
       info.flags = StreamFlags::FLAG_VISUAL_IMPAIRED;
       break;
     case DVD_AUDIO_LANG_EXT_DIRECTORSCOMMENTS1:
-      info.name = g_localizeStrings.Get(37001);
+      info.name = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(37001);
       break;
     case DVD_AUDIO_LANG_EXT_DIRECTORSCOMMENTS2:
-      info.name = g_localizeStrings.Get(37002);
+      info.name = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(37002);
       break;
     case DVD_AUDIO_LANG_EXT_NOTSPECIFIED:
     case DVD_AUDIO_LANG_EXT_NORMALCAPTIONS:
@@ -1030,7 +1040,8 @@ void CDVDInputStreamNavigator::SetAudioStreamName(AudioStreamInfo &info, const a
     info.codecName = "ac3";
     break;
   case DVD_AUDIO_FORMAT_UNKNOWN_1:
-    info.codecDesc = g_localizeStrings.Get(13205); // "Unknown"
+    info.codecDesc =
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205); // "Unknown"
     CLog::LogF(LOGINFO, "unknown dvd audio codec DVD_AUDIO_FORMAT_UNKNOWN_1");
     break;
   case DVD_AUDIO_FORMAT_MPEG:
@@ -1046,7 +1057,8 @@ void CDVDInputStreamNavigator::SetAudioStreamName(AudioStreamInfo &info, const a
     info.codecName = "pcm";
     break;
   case DVD_AUDIO_FORMAT_UNKNOWN_5:
-    info.codecDesc = g_localizeStrings.Get(13205); // "Unknown"
+    info.codecDesc =
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205); // "Unknown"
     CLog::LogF(LOGINFO, "unknown dvd audio codec DVD_AUDIO_FORMAT_UNKNOWN_5");
     break;
   case DVD_AUDIO_FORMAT_DTS:
@@ -1057,31 +1069,17 @@ void CDVDInputStreamNavigator::SetAudioStreamName(AudioStreamInfo &info, const a
     info.codecDesc = "SDDS";
     break;
   default:
-    info.codecDesc = g_localizeStrings.Get(13205); // "Unknown"
+    info.codecDesc =
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205); // "Unknown"
     CLog::LogF(LOGINFO, "unknown dvd audio codec");
     break;
   }
 
-  info.codecDesc.append(" ");
+  const int channels{audio_attributes.channels + 1};
+  info.channels = channels;
 
-  switch(audio_attributes.channels + 1)
-  {
-  case 1:
-    info.codecDesc += g_localizeStrings.Get(37003); // "mono"
-    break;
-  case 2:
-    info.codecDesc += g_localizeStrings.Get(37004); // "stereo"
-    break;
-  case 6:
-    info.codecDesc += "5.1";
-    break;
-  case 7:
-    info.codecDesc += "6.1";
-    break;
-  default:
-    info.codecDesc += StringUtils::Format("{:d} {}", audio_attributes.channels + 1,
-                                          g_localizeStrings.Get(10127)); // "channels"
-  }
+  info.codecDesc.append(" ");
+  info.codecDesc.append(StreamUtils::GetLayout(channels));
 }
 
 AudioStreamInfo CDVDInputStreamNavigator::GetAudioStreamInfo(const int iId)
@@ -1102,7 +1100,6 @@ AudioStreamInfo CDVDInputStreamNavigator::GetAudioStreamInfo(const int iId)
     lang[0] = (audio_attributes.lang_code >> 8) & 255;
 
     info.language = g_LangCodeExpander.ConvertToISO6392B(lang);
-    info.channels = audio_attributes.channels + 1;
   }
 
   return info;
@@ -1437,7 +1434,7 @@ std::string CDVDInputStreamNavigator::GetDVDVolIdString()
   return "";
 }
 
-int64_t CDVDInputStreamNavigator::GetChapterPos(int ch)
+std::chrono::milliseconds CDVDInputStreamNavigator::GetChapterPos(int ch)
 {
   if (ch == -1 || ch > GetChapterCount())
     ch = GetChapter();
@@ -1447,9 +1444,9 @@ int64_t CDVDInputStreamNavigator::GetChapterPos(int ch)
   {
     std::map<int, int64_t>::iterator chapter = title->second.find(ch);
     if (chapter != title->second.end())
-      return chapter->second;
+      return std::chrono::milliseconds{chapter->second};
   }
-  return 0;
+  return std::chrono::milliseconds{0};
 }
 
 void CDVDInputStreamNavigator::GetVideoResolution(uint32_t* width, uint32_t* height)
@@ -1584,4 +1581,37 @@ int dvd_inputstreamnavigator_cb_readv(void * p_stream, void * p_iovec, int i_blo
     }
   }
   return i_total;
+}
+
+void CDVDInputStreamNavigator::SaveCurrentState(const CStreamDetails& details)
+{
+  std::unique_lock lock(m_statesLock);
+
+  // Details for this playlist
+  SavePlaylistDetails(m_playedPlaylists, m_startWatchTime,
+                      {.playlist = m_iTitle,
+                       .inMenu = m_bInMenu,
+                       .duration = std::chrono::milliseconds(GetTotalTime()),
+                       .details = details});
+
+  // Reset watch timer for next playlist
+  m_startWatchTime = std::chrono::steady_clock::now();
+}
+
+CDVDInputStream::UpdateState CDVDInputStreamNavigator::UpdateItemFromSavedStates(CFileItem& item,
+                                                                                 double time,
+                                                                                 bool& closed)
+{
+  std::unique_lock lock(m_statesLock);
+
+  // First add current state to the list of playlist states
+  if (item.HasVideoInfoTag())
+    SaveCurrentState(item.GetVideoInfoTag()->m_streamDetails);
+
+  return UpdateItemFromPlaylistDetails(DVDSTREAM_TYPE_DVD, m_playedPlaylists, item, time, closed);
+}
+
+void CDVDInputStreamNavigator::UpdateStack(CFileItem& item)
+{
+  return UpdateStackItem(item, 0ms);
 }

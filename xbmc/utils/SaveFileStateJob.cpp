@@ -15,7 +15,6 @@
 #include "URIUtils.h"
 #include "URL.h"
 #include "Util.h"
-#include "application/ApplicationStackHelper.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIMessage.h"
 #include "guilib/GUIWindowManager.h"
@@ -25,31 +24,33 @@
 #include "music/MusicFileItemClassify.h"
 #include "music/tags/MusicInfoTag.h"
 #include "network/upnp/UPnP.h"
-#include "pvr/PVRManager.h"
-#include "pvr/guilib/PVRGUIActionsRecordings.h"
+#include "utils/ComponentContainer.h"
 #include "utils/Variant.h"
 #include "video/Bookmark.h"
 #include "video/VideoDatabase.h"
 #include "video/VideoFileItemClassify.h"
 
+#include <chrono>
+
 using namespace KODI;
 using namespace KODI::VIDEO;
+using namespace std::chrono_literals;
 
 void CSaveFileState::DoWork(CFileItem& item,
                             CBookmark& bookmark,
                             bool updatePlayCount)
 {
   std::string progressTrackingFile = item.GetPath();
-
-  if (URIUtils::IsBlurayPath(item.GetDynPath()) &&
-      (item.GetVideoContentType() == VideoDbContentType::MOVIES ||
-       item.GetVideoContentType() == VideoDbContentType::EPISODES ||
-       item.GetVideoContentType() == VideoDbContentType::UNKNOWN /* Removable bluray */))
+  if (CUtil::UseDynPathForAddOrUpdate(item))
+  {
     progressTrackingFile = item.GetDynPath();
+  }
   else if (item.HasVideoInfoTag() && IsVideoDb(item))
+  {
     progressTrackingFile =
         item.GetVideoInfoTag()
             ->m_strFileNameAndPath; // we need the file url of the video db item to create the bookmark
+  }
   else if (item.HasProperty("original_listitem_url"))
   {
     // only use original_listitem_url for Python, UPnP and Bluray sources
@@ -66,6 +67,21 @@ void CSaveFileState::DoWork(CFileItem& item,
     if (URIUtils::IsUPnP(progressTrackingFile)
         && UPNP::CUPnP::SaveFileState(item, bookmark, updatePlayCount))
     {
+      if (auto* gui = CServiceBroker::GetGUI())
+      {
+        CFileItem updatedItem(item);
+        if (updatedItem.HasVideoInfoTag())
+          updatedItem.GetVideoInfoTag()->SetResumePoint(bookmark);
+        if (updatedItem.HasProperty("original_listitem_url"))
+          updatedItem.SetPath(updatedItem.GetProperty("original_listitem_url").asString());
+        else
+          updatedItem.SetPath(
+              progressTrackingFile); // fallback to progressTrackingFile which should be the upnp path
+
+        CGUIMessage message(GUI_MSG_NOTIFY_ALL, 0, 0, GUI_MSG_UPDATE_ITEM, 0,
+                            std::make_shared<CFileItem>(updatedItem));
+        gui->GetWindowManager().SendThreadMessage(message);
+      }
       return;
     }
 #endif
@@ -120,11 +136,8 @@ void CSaveFileState::DoWork(CFileItem& item,
 
               if (item.HasVideoInfoTag())
               {
-                if (item.IsPVRRecording())
-                  CServiceBroker::GetPVRManager().Get<PVR::GUI::Recordings>().IncrementPlayCount(
-                      item);
-                else
-                  item.GetVideoInfoTag()->IncrementPlayCount();
+                if (item.GetVideoInfoTag()->IncrementPlayCount())
+                  item.SetProperty("playcount_incremented", CVariant{true});
 
                 if (newLastPlayed.IsValid())
                   item.GetVideoInfoTag()->m_lastPlayed = newLastPlayed;
@@ -210,16 +223,33 @@ void CSaveFileState::DoWork(CFileItem& item,
         // See if idFile of library item needs updating
         const CVideoInfoTag* tag{item.HasVideoInfoTag() ? item.GetVideoInfoTag() : nullptr};
 
-        if (tag && tag->m_iFileId >= 0 &&
-            !(tag->m_iDbId < 0 && item.GetVideoContentType() != VideoDbContentType::UNKNOWN) &&
-            URIUtils::IsBlurayPath(item.GetDynPath()) &&
-            tag->m_strFileNameAndPath != item.GetDynPath())
+        const bool updateNeeded{
+            [&item, &tag]
+            {
+              if (!tag || tag->m_iFileId < 0)
+                return false; // No tag or file to update
+              if (tag->m_iDbId < 0 && item.GetVideoContentType() != VideoDbContentType::UNKNOWN)
+                return false; // No video db item to update
+              if (URIUtils::IsBlurayPath(item.GetDynPath()) &&
+                  !URIUtils::IsStack(tag->m_strFileNameAndPath) &&
+                  tag->m_strFileNameAndPath != item.GetDynPath())
+                return true; // Bluray path to update
+              if (item.GetProperty("new_stack_path").asBoolean(false))
+                return true; // Stack path to update
+              return false;
+            }()};
+
+        if (updateNeeded)
         {
           videodatabase.BeginTransaction();
           // tag->m_iFileId contains the idFile originally played and may be different to the idFile
           // in the movie table entry if it's a non-default video version
           const int newFileId{videodatabase.SetFileForMedia(
-              item.GetDynPath(), item.GetVideoContentType(), tag->m_iDbId, tag->m_iFileId)};
+              progressTrackingFile, item.GetVideoContentType(), tag->m_iDbId,
+              CVideoDatabase::FileRecord{.m_idFile = tag->m_iFileId,
+                                         .m_playCount = tag->GetPlayCount(),
+                                         .m_lastPlayed = tag->m_lastPlayed,
+                                         .m_dateAdded = tag->m_dateAdded})};
           if (newFileId > 0)
           {
             videodatabase.CommitTransaction();
@@ -236,14 +266,6 @@ void CSaveFileState::DoWork(CFileItem& item,
           if (item.HasProperty("original_listitem_url"))
             msgItem->SetPath(item.GetProperty("original_listitem_url").asString());
 
-          // Could be part of an ISO stack. In this case the bookmark is saved onto the part.
-          // In order to properly update the list, we need to refresh the stack's resume point
-          const auto& components = CServiceBroker::GetAppComponents();
-          const auto stackHelper = components.GetComponent<CApplicationStackHelper>();
-          if (stackHelper->HasRegisteredStack(item) &&
-              stackHelper->GetRegisteredStackTotalTimeMs(item) == 0)
-            videodatabase.GetResumePoint(*(msgItem->GetVideoInfoTag()));
-
           CGUIMessage message(GUI_MSG_NOTIFY_ALL, CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow(), 0, GUI_MSG_UPDATE_ITEM, 0, msgItem);
           CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(message);
         }
@@ -258,40 +280,48 @@ void CSaveFileState::DoWork(CFileItem& item,
       CLog::Log(LOGDEBUG, "{} - Saving file state for audio item {}", __FUNCTION__, redactPath);
 
       CMusicDatabase musicdatabase;
-      if (updatePlayCount)
+      if (!musicdatabase.Open())
       {
-        if (!musicdatabase.Open())
-        {
-          CLog::Log(LOGWARNING, "{} - Unable to open music database. Can not save file state!",
-                    __FUNCTION__);
-        }
-        else
+        CLog::LogF(LOGWARNING, "Unable to open music database. Can not save file state!");
+      }
+      else
+      {
+        bool updated{false};
+        if (updatePlayCount)
         {
           // consider this item as played
-          CLog::Log(LOGDEBUG, "{} - Marking audio item {} as listened", __FUNCTION__, redactPath);
-
+          CLog::LogF(LOGDEBUG, "Marking audio item {} as listened", redactPath);
           musicdatabase.IncrementPlayCount(item);
-          musicdatabase.Close();
-
-          // UPnP announce resume point changes to clients
-          // however not if playcount is modified as that already announces
-          if (MUSIC::IsMusicDb(item))
-          {
-            CVariant data;
-            data["id"] = item.GetMusicInfoTag()->GetDatabaseId();
-            data["type"] = item.GetMusicInfoTag()->GetType();
-            CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::AudioLibrary,
-                                                               "OnUpdate", data);
-          }
+          updated = true;
         }
-      }
 
-      if (MUSIC::IsAudioBook(item))
-      {
-        musicdatabase.Open();
-        musicdatabase.SetResumeBookmarkForAudioBook(
-            item, item.GetStartOffset() + CUtil::ConvertSecsToMilliSecs(bookmark.timeInSeconds));
+        if (MUSIC::IsAudioBook(item) && item.GetEndOffset() > 0) // Audio file with chapters
+        {
+          int bookmarkMs;
+          if (bookmark.timeInSeconds > 0.0)
+            bookmarkMs = static_cast<int>(item.GetStartOffset() +
+                                          CUtil::ConvertSecsToMilliSecs(bookmark.timeInSeconds));
+          else
+            bookmarkMs = 0; // bookmarkMs of <= 0 clears the bookmark
+
+          CLog::LogF(LOGDEBUG, "Setting resume point at {} for audio item {}", bookmarkMs,
+                     redactPath);
+          musicdatabase.SetResumeBookmarkForAudioBook(item, bookmarkMs);
+          updated = true;
+        }
+
         musicdatabase.Close();
+
+        // UPnP announce resume point changes to clients
+        // however not if playcount is modified as that already announces
+        if (updated && MUSIC::IsMusicDb(item))
+        {
+          CVariant data;
+          data["id"] = item.GetMusicInfoTag()->GetDatabaseId();
+          data["type"] = item.GetMusicInfoTag()->GetType();
+          CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::AudioLibrary, "OnUpdate",
+                                                             data);
+        }
       }
     }
   }

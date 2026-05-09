@@ -11,6 +11,7 @@
 #include "ReplayGain.h"
 #include "XBDateTime.h"
 #include "music/Album.h"
+#include "music/Song.h"
 #include "utils/IArchivable.h"
 #include "utils/ISerializable.h"
 #include "utils/ISortable.h"
@@ -19,7 +20,6 @@
 #include <string_view>
 #include <vector>
 
-class CSong;
 class CArtist;
 class CVariant;
 
@@ -89,7 +89,8 @@ public:
   const std::string& GetSongVideoURL() const;
   const EmbeddedArtInfo &GetCoverArtInfo() const;
   const ReplayGain& GetReplayGain() const;
-  CAlbum::ReleaseType GetAlbumReleaseType() const;
+  ReleaseType GetAlbumReleaseType() const;
+  const std::vector<ChapterDetails>& GetChapterMarks() const;
 
   void SetURL(std::string_view strURL);
   void SetTitle(const std::string& strTitle);
@@ -148,7 +149,7 @@ public:
   void SetBoxset(bool boxset);
   void SetCoverArtInfo(size_t size, const std::string &mimeType);
   void SetReplayGain(const ReplayGain& aGain);
-  void SetAlbumReleaseType(CAlbum::ReleaseType releaseType);
+  void SetAlbumReleaseType(ReleaseType releaseType);
   void SetType(MediaType_view mediaType);
   void SetDiscSubtitle(std::string_view strDiscSubtitle);
   void SetTotalDiscs(int iDiscTotal);
@@ -160,6 +161,7 @@ public:
   void SetStationName(std::string_view strStationName); // name of online radio station
   void SetStationArt(std::string_view strStationArt);
   void SetSongVideoURL(std::string_view songVideoURL); // link to video of song
+  void SetChapterMarks(const std::vector<ChapterDetails>& chapters);
 
   /*! \brief Append a unique artist to the artist list
    Checks if we have this artist already added, and if not adds it to the songs artist list.
@@ -187,8 +189,8 @@ public:
   std::string GetArtistStringForRole(const std::string& strRole) const;
   std::string GetContributorsText() const;
   std::string GetContributorsAndRolesText() const;
-  const VECMUSICROLES &GetContributors() const;
-  void SetContributors(const VECMUSICROLES& contributors);
+  const std::vector<CMusicRole>& GetContributors() const;
+  void SetContributors(const std::vector<CMusicRole>& contributors);
   bool HasContributors() const { return !m_musicRoles.empty(); }
 
   void Archive(CArchive& ar) override;
@@ -223,7 +225,8 @@ private:
   std::vector<std::string> m_musicBrainzAlbumArtistHints;
   std::string m_strMusicBrainzReleaseGroupID;
   std::string m_strMusicBrainzReleaseType;
-  VECMUSICROLES m_musicRoles; //Artists contributing to the recording and role (from tags other than ARTIST or ALBUMARTIST)
+  std::vector<CMusicRole>
+      m_musicRoles; // Artists contributing to the recording and role (from tags other than ARTIST or ALBUMARTIST)
   std::string m_strComment;
   std::string m_strMood;
   std::string m_strRecordLabel;
@@ -251,7 +254,7 @@ private:
   int m_iDiscTotal;
   bool m_bBoxset;
   int m_iBPM;
-  CAlbum::ReleaseType m_albumReleaseType;
+  ReleaseType m_albumReleaseType;
   std::string m_strReleaseStatus;
   int m_samplerate;
   int m_channels;
@@ -259,6 +262,7 @@ private:
   std::string m_stationName;
   std::string m_stationArt; // Used to fetch thumb URL for Shoutcasts
   std::string m_songVideoURL; // link to a video for a song
+  std::vector<ChapterDetails> m_chapters; // Ch No., name, start time, end time
 
   EmbeddedArtInfo m_coverArt; ///< art information
 

@@ -52,7 +52,8 @@ using namespace XFILE;
 #endif
 
 CPeripheralAddon::CPeripheralAddon(const ADDON::AddonInfoPtr& addonInfo, CPeripherals& manager)
-  : IAddonInstanceHandler(ADDON_INSTANCE_PERIPHERAL, addonInfo), m_manager(manager)
+  : IAddonInstanceHandler(ADDON_INSTANCE_PERIPHERAL, addonInfo),
+    m_manager(manager)
 {
   m_bProvidesJoysticks =
       addonInfo->Type(ADDON::AddonType::PERIPHERALDLL)->GetValue("@provides_joysticks").asBoolean();
@@ -251,8 +252,7 @@ bool CPeripheralAddon::HasFeature(const PeripheralFeature feature) const
 
 void CPeripheralAddon::GetFeatures(std::vector<PeripheralFeature>& features) const
 {
-  if (m_bProvidesJoysticks &&
-      std::find(features.begin(), features.end(), FEATURE_JOYSTICK) == features.end())
+  if (m_bProvidesJoysticks && std::ranges::find(features, FEATURE_JOYSTICK) == features.end())
     features.push_back(FEATURE_JOYSTICK);
 }
 

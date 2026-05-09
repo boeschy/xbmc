@@ -3,7 +3,9 @@ set(SOURCES TestAutoSwitch.cpp
             TestCueDocument.cpp
             TestDateTime.cpp
             TestDateTimeSpan.cpp
+            TestEpisodeUtils.cpp
             TestFileItem.cpp
+            TestLangInfo.cpp
             TestMediaSource.cpp
             TestURL.cpp
             TestUtil.cpp

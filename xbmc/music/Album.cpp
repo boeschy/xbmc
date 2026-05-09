@@ -23,15 +23,13 @@
 
 using namespace MUSIC_INFO;
 
-typedef struct ReleaseTypeInfo {
-  CAlbum::ReleaseType type;
+struct ReleaseTypeInfo
+{
+  ReleaseType type;
   std::string name;
-} ReleaseTypeInfo;
-
-ReleaseTypeInfo releaseTypes[] = {
-  { CAlbum::Album,  "album" },
-  { CAlbum::Single, "single" }
 };
+
+ReleaseTypeInfo releaseTypes[] = {{ReleaseType::Album, "album"}, {ReleaseType::Single, "single"}};
 
 CAlbum::CAlbum(const CFileItem& item)
 {
@@ -348,44 +346,41 @@ std::string CAlbum::GetGenreString() const
   return StringUtils::Join(genre, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_musicItemSeparator);
 }
 
-const std::vector<std::string> CAlbum::GetAlbumArtist() const
+std::vector<std::string> CAlbum::GetAlbumArtist() const
 {
   //Get artist names as vector from artist credits
   std::vector<std::string> albumartists;
-  for (const auto& artistCredit : artistCredits)
-  {
-    albumartists.push_back(artistCredit.GetArtist());
-  }
+  std::ranges::transform(artistCredits, std::back_inserter(albumartists),
+                         [](const auto& artistCredit) { return artistCredit.GetArtist(); });
   return albumartists;
 }
 
-const std::vector<std::string> CAlbum::GetMusicBrainzAlbumArtistID() const
+std::vector<std::string> CAlbum::GetMusicBrainzAlbumArtistID() const
 {
   //Get artist MusicBrainz IDs as vector from artist credits
   std::vector<std::string> musicBrainzID;
-  for (const auto& artistCredit : artistCredits)
-  {
-    musicBrainzID.push_back(artistCredit.GetMusicBrainzArtistID());
-  }
+  std::ranges::transform(artistCredits, std::back_inserter(musicBrainzID),
+                         [](const auto& artistCredit)
+                         { return artistCredit.GetMusicBrainzArtistID(); });
   return musicBrainzID;
 }
 
-const std::string CAlbum::GetAlbumArtistString() const
+std::string CAlbum::GetAlbumArtistString() const
 {
   //Artist description may be different from the artists in artistcredits (see ALBUMARTISTS tag processing)
   //but is takes precedence as a string because artistcredits is not always filled during processing
   if (!strArtistDesc.empty())
     return strArtistDesc;
   std::vector<std::string> artistvector;
-  for (const auto& i : artistCredits)
-    artistvector.emplace_back(i.GetArtist());
+  std::ranges::transform(artistCredits, std::back_inserter(artistvector),
+                         [](const auto& i) { return i.GetArtist(); });
   std::string artistString;
   if (!artistvector.empty())
     artistString = StringUtils::Join(artistvector, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_musicItemSeparator);
   return artistString;
 }
 
-const std::string CAlbum::GetAlbumArtistSort() const
+std::string CAlbum::GetAlbumArtistSort() const
 {
   //The stored artist sort name string takes precedence but a
   //value could be created from individual sort names held in artistcredits
@@ -401,15 +396,14 @@ const std::string CAlbum::GetAlbumArtistSort() const
   return artistString;
 }
 
-const std::vector<int> CAlbum::GetArtistIDArray() const
+std::vector<int> CAlbum::GetArtistIDArray() const
 {
   // Get album artist IDs for json rpc
   std::vector<int> artistids;
-  for (const auto& artistCredit : artistCredits)
-    artistids.push_back(artistCredit.GetArtistId());
+  std::ranges::transform(artistCredits, std::back_inserter(artistids),
+                         [](const auto& artistCredit) { return artistCredit.GetArtistId(); });
   return artistids;
 }
-
 
 std::string CAlbum::GetReleaseType() const
 {
@@ -441,7 +435,7 @@ void CAlbum::SetLastPlayed(const std::string& strLastPlayed)
   lastPlayed.SetFromDBDateTime(strLastPlayed);
 }
 
-std::string CAlbum::ReleaseTypeToString(CAlbum::ReleaseType releaseType)
+std::string CAlbum::ReleaseTypeToString(ReleaseType releaseType)
 {
   for (const ReleaseTypeInfo& releaseTypeInfo : releaseTypes)
   {
@@ -452,7 +446,7 @@ std::string CAlbum::ReleaseTypeToString(CAlbum::ReleaseType releaseType)
   return "album";
 }
 
-CAlbum::ReleaseType CAlbum::ReleaseTypeFromString(const std::string& strReleaseType)
+ReleaseType CAlbum::ReleaseTypeFromString(const std::string& strReleaseType)
 {
   for (const ReleaseTypeInfo& releaseTypeInfo : releaseTypes)
   {
@@ -460,7 +454,7 @@ CAlbum::ReleaseType CAlbum::ReleaseTypeFromString(const std::string& strReleaseT
       return releaseTypeInfo.type;
   }
 
-  return Album;
+  return ReleaseType::Album;
 }
 
 bool CAlbum::operator<(const CAlbum &a) const
@@ -603,7 +597,7 @@ bool CAlbum::Load(const TiXmlElement *album, bool append, bool prioritise)
   if (XMLUtils::GetString(album, "releasetype", strReleaseType))
     SetReleaseType(strReleaseType);
   else
-    releaseType = Album;
+    releaseType = ReleaseType::Album;
 
   return true;
 }

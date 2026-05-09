@@ -41,6 +41,7 @@ public:
   // Implementation of IShaderPreset
   bool ReadPresetFile(const std::string& presetPath) override;
   bool RenderUpdate(const RETRO::ViewportCoordinates& dest,
+                    const float2 fullDestSize,
                     IShaderTexture& source,
                     IShaderTexture& target) override;
   void SetSpeed(double speed) override { m_speed = speed; }
@@ -60,10 +61,14 @@ protected:
 
   // Helper functions
   bool Update();
-  void UpdateViewPort(CRect viewPort);
+  void UpdateViewPort(CRect viewPort, const float2 fullDestSize);
   void UpdateMVPs();
   void PrepareParameters(const RETRO::ViewportCoordinates& dest, IShaderTexture& source);
+  void CalculateScaledSize(const KODI::SHADER::ShaderPass& pass,
+                           const float2& prevSize,
+                           float2& scaledSize);
   void DisposeShaders();
+  void DisposeShaderTextures();
   bool HasPathFailed(const std::string& path) const;
   ShaderParameterMap GetShaderParameters(const std::vector<ShaderParameter>& parameters,
                                          const std::string& sourceStr) const;
@@ -77,7 +82,7 @@ protected:
 
   // Set of paths of presets that are known to not load correctly
   // Should not contain "" (empty path) because this signifies that a preset is not loaded
-  std::set<std::string> m_failedPaths;
+  std::set<std::string, std::less<>> m_failedPaths;
 
   // All video shader passes of the currently loaded preset
   std::vector<ShaderPass> m_passes;
@@ -91,18 +96,20 @@ protected:
   // Was the shader preset changed during the last frame?
   bool m_bPresetNeedsUpdate = true;
 
-  // Size of the viewport
+  // Resolution of the output viewport
   float2 m_outputSize;
+
+  // Resolution of the destination rectangle for the fullscreen game window
+  float2 m_fullDestSize;
 
   // Size of the actual source video data (ie. 160x144 for the Game Boy)
   float2 m_videoSize;
 
   // Number of frames that have passed
-  float m_frameCount = 0.0f;
+  float m_frameCount{0.0f};
 
   // Playback speed
-  double m_speed = 1.0;
+  double m_speed{1.0};
 };
-
 } // namespace SHADER
 } // namespace KODI

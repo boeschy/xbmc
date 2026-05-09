@@ -9,13 +9,14 @@
 #include "Epg.h"
 
 #include "ServiceBroker.h"
-#include "guilib/LocalizeStrings.h"
 #include "pvr/PVRCachedImages.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClient.h"
 #include "pvr/epg/EpgChannelData.h"
 #include "pvr/epg/EpgDatabase.h"
 #include "pvr/epg/EpgInfoTag.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -131,7 +132,9 @@ std::shared_ptr<CPVREpgInfoTag> CPVREpg::GetTagByStartDateTime(const CDateTime& 
   return m_tags.GetTag(start);
 }
 
-std::shared_ptr<CPVREpgInfoTag> CPVREpg::GetTagBetween(const CDateTime& beginTime, const CDateTime& endTime, bool bUpdateFromClient /* = false */)
+std::shared_ptr<CPVREpgInfoTag> CPVREpg::GetTagBetween(const CDateTime& beginTime,
+                                                       const CDateTime& endTime,
+                                                       bool bUpdateFromClient /* = false */)
 {
   std::shared_ptr<CPVREpgInfoTag> tag;
 
@@ -422,7 +425,8 @@ bool CPVREpg::UpdateFromScraper(time_t start, time_t end, bool bForceUpdate)
       {
         CLog::LogFC(LOGDEBUG, LOGEPG, "Updating EPG for channel '{}' from client '{}'",
                     m_channelData->ChannelName(), m_channelData->ClientId());
-        return (client->GetEPGForChannel(m_channelData->UniqueClientChannelId(), this, start, end) == PVR_ERROR_NO_ERROR);
+        return (client->GetEPGForChannel(m_channelData->UniqueClientChannelId(), this, start,
+                                         end) == PVR_ERROR_NO_ERROR);
       }
     }
     else
@@ -484,7 +488,7 @@ const std::string& CPVREpg::ConvertGenreIdToString(int iID, int iSubID)
       break;
   }
 
-  return g_localizeStrings.Get(iLabelId);
+  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(iLabelId);
 }
 
 std::shared_ptr<CPVREpgChannelData> CPVREpg::GetChannelData() const

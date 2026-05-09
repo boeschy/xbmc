@@ -15,11 +15,13 @@
 #include "dialogs/GUIDialogYesNo.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "messaging/helpers/DialogHelper.h"
 #include "messaging/helpers/DialogOKHelper.h"
+#include "music/MusicDbUrl.h"
 #include "music/MusicLibraryQueue.h"
 #include "music/infoscanner/MusicInfoScanner.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/LibExportSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -206,8 +208,9 @@ static int ExportLibrary(const std::vector<std::string>& params)
   if (params.size() > 2)
     path=params[2];
   if (!singleFile || !path.empty() ||
-      CGUIDialogFileBrowser::ShowAndGetDirectory(shares, g_localizeStrings.Get(661),
-                                                 path, true))
+      CGUIDialogFileBrowser::ShowAndGetDirectory(
+          shares, CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(661), path,
+          true))
   {
     if (StringUtils::EqualsNoCase(params[0], "video"))
     {
@@ -345,6 +348,48 @@ static int SearchVideoLibrary(const std::vector<std::string>& params)
   return 0;
 }
 
+/*! \brief Rescrapes additional information for a given artist
+ *  \params params The parameters.
+ *  \details params[0] = "artist id"
+ */
+static int RefreshArtist(const std::vector<std::string>& params)
+{
+  // Checking if the artist id is passed
+  if (params.empty())
+    return -1;
+
+  // Set the artist id on the musicdb url
+  CMusicDbUrl musicUrl;
+  if (!musicUrl.FromString("musicdb://artists/"))
+    return -1;
+  musicUrl.AddOption("artistid", params.front());
+
+  // Start rescraping additional information for the given artist
+  CMusicLibraryQueue::GetInstance().StartArtistScan(musicUrl.ToString(), true);
+  return 0;
+}
+
+/*! \brief Rescrapes additional information for a given album
+ *  \params params The parameters.
+ *  \details params[0] = "album id"
+ */
+static int RefreshAlbum(const std::vector<std::string>& params)
+{
+  // Checking if the album id is passed
+  if (params.empty())
+    return -1;
+
+  // Set the album id on the musicdb url
+  CMusicDbUrl musicUrl;
+  if (!musicUrl.FromString("musicdb://albums/"))
+    return -1;
+  musicUrl.AddOption("albumid", params.front());
+
+  // Start rescraping additional information for the given album
+  CMusicLibraryQueue::GetInstance().StartAlbumScan(musicUrl.ToString(), true);
+  return 0;
+}
+
 // Note: For new Texts with comma add a "\" before!!! Is used for table text.
 //
 /// \page page_List_of_built_in_functions
@@ -402,16 +447,31 @@ static int SearchVideoLibrary(const std::vector<std::string>& params)
 ///     ,
 ///     Brings up a search dialog which will search the library
 ///   }
+///   \table_row2_l{
+///     <b>`musiclibrary.refreshartist([artistId\])`</b>
+///     ,
+///     Rescrapes additional information for a given artist
+///     @param[in] artistId             Artist Id.
+///   }
+///   \table_row2_l{
+///     <b>`musiclibrary.refreshalbum([albumId\])`</b>
+///     ,
+///     Rescrapes additional information for a given album
+///     @param[in] albumId             Album Id.
+///   }
 ///  \table_end
 ///
 
 CBuiltins::CommandMap CLibraryBuiltins::GetOperations() const
 {
-  return {
-          {"cleanlibrary",        {"Clean the video/music library", 1, CleanLibrary}},
-          {"exportlibrary",       {"Export the video/music library", 1, ExportLibrary}},
-          {"exportlibrary2",      {"Export the video/music library", 1, ExportLibrary2}},
-          {"updatelibrary",       {"Update the selected library (music or video)", 1, UpdateLibrary}},
-          {"videolibrary.search", {"Brings up a search dialog which will search the library", 0, SearchVideoLibrary}}
-         };
+  return {{"cleanlibrary", {"Clean the video/music library", 1, CleanLibrary}},
+          {"exportlibrary", {"Export the video/music library", 1, ExportLibrary}},
+          {"exportlibrary2", {"Export the video/music library", 1, ExportLibrary2}},
+          {"updatelibrary", {"Update the selected library (music or video)", 1, UpdateLibrary}},
+          {"videolibrary.search",
+           {"Brings up a search dialog which will search the library", 0, SearchVideoLibrary}},
+          {"musiclibrary.refreshartist",
+           {"Rescrapes additional information for a given artist", 1, RefreshArtist}},
+          {"musiclibrary.refreshalbum",
+           {"Rescrapes additional information for a given album", 1, RefreshAlbum}}};
 }

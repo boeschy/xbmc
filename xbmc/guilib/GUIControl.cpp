@@ -22,6 +22,7 @@
 #include "input/mouse/MouseEvent.h"
 #include "input/mouse/MouseStat.h"
 #include "utils/log.h"
+#include "windowing/WinSystem.h"
 
 using namespace KODI;
 using namespace GUILIB;
@@ -125,14 +126,18 @@ void CGUIControl::DoProcess(unsigned int currentTime, CDirtyRegionList &dirtyreg
   bool changed = (m_controlDirtyState & DIRTY_STATE_CONTROL) != 0 || (m_bInvalidated && IsVisible());
   m_controlDirtyState = 0;
 
-  if (Animate(currentTime))
-    MarkDirtyRegion();
+  // If the control has an active animation, mark it as dirty even if culled because the
+  // animation might change the alpha at a later time so processing needs to continue
+  const bool animated = Animate(currentTime);
 
-  // if the control changed culling state from true to false, mark it
   const bool culled = m_transform.alpha <= 0.01f;
-  if (m_isCulled != culled)
+
+  // if the control changed culling state from true to false, mark it.
+  const bool cullingChanged = m_isCulled != culled;
+
+  if (cullingChanged || animated)
   {
-    m_isCulled = false;
+    m_isCulled = false; // set to false so MarkDirtyRegion() isn't a no-op
     MarkDirtyRegion();
   }
   m_isCulled = culled;
@@ -188,9 +193,8 @@ void CGUIControl::DoRender()
   {
     bool hasStereo =
         m_stereo != 0.0f &&
-        CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() !=
-            RENDER_STEREO_MODE_MONO &&
-        CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() != RENDER_STEREO_MODE_OFF;
+        CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() != RenderStereoMode::MONO &&
+        CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() != RenderStereoMode::OFF;
 
     CServiceBroker::GetWinSystem()->GetGfxContext().SetTransform(m_cachedTransform);
     if (m_hasCamera)

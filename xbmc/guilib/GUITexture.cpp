@@ -10,11 +10,13 @@
 
 #include "GUILargeTextureManager.h"
 #include "GUITextureCallbackManager.h"
+#include "ServiceBroker.h"
 #include "Texture.h"
 #include "TextureManager.h"
 #include "utils/MathUtils.h"
 #include "utils/StringUtils.h"
 #include "windowing/GraphicContext.h"
+#include "windowing/WinSystem.h"
 
 #include <stdexcept>
 
@@ -167,7 +169,15 @@ bool CGUITexture::Process(unsigned int currentTime)
     changed |= CalculateSize();
 
   if (m_isAllocated)
-    changed |= !ReadyToRender();
+  {
+    // Only report change on ready state transition, not every frame while loading
+    const bool ready = ReadyToRender();
+    if (ready != m_lastReadyState)
+    {
+      m_lastReadyState = ready;
+      changed = true;
+    }
+  }
 
   return changed;
 }
@@ -547,6 +557,7 @@ void CGUITexture::FreeResources(bool immediately /* = false */)
   Free();
 
   m_isAllocated = NO;
+  m_lastReadyState.reset(); // reset for next allocation cycle
 }
 
 void CGUITexture::DynamicResourceAlloc(bool allocateDynamically)

@@ -22,6 +22,7 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/Setting.h"
+#include "utils/DRMHelpers.h"
 #include "utils/DisplayInfo.h"
 #include "utils/Map.h"
 #include "utils/StringUtils.h"
@@ -96,6 +97,15 @@ CWinSystemGbm::CWinSystemGbm()
 
 CWinSystemGbm::~CWinSystemGbm() = default;
 
+const std::string CWinSystemGbm::GetName()
+{
+  auto gui_plane = m_DRM->GetGuiPlane();
+  if (gui_plane == nullptr)
+    return "gbm";
+  return "gbm (" + DRMHELPERS::FourCCToString(gui_plane->GetFormat()) + " " +
+         DRMHELPERS::ModifierToString(gui_plane->GetModifier()) + ")";
+}
+
 bool CWinSystemGbm::InitWindowSystem()
 {
   const char* x11 = getenv("DISPLAY");
@@ -163,6 +173,8 @@ bool CWinSystemGbm::InitWindowSystem()
   setting = settings->GetSetting("videoscreen.limitguisize");
   if (setting)
     setting->SetVisible(true);
+
+  SetHDR(nullptr);
 
   CLog::Log(LOGDEBUG, "CWinSystemGbm::{} - initialized DRM", __FUNCTION__);
   return CWinSystemBase::InitWindowSystem();
@@ -240,9 +252,22 @@ bool CWinSystemGbm::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool bl
   if (!std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
   {
     bo = m_GBM->GetDevice().GetSurface().LockFrontBuffer().Get();
+    if (!bo)
+    {
+      CLog::Log(LOGERROR, "CWinSystemGbm::{} - failed to lock front buffer", __FUNCTION__);
+      return false;
+    }
   }
 
   auto result = m_DRM->SetVideoMode(res, bo);
+
+  // For atomic DRM, SetVideoMode only queues the modeset (m_need_modeset).
+  // Commit it now so the kernel CRTC matches the new surface before any
+  // subsequent eglSwapBuffers; otherwise mesa logs a spurious
+  // EGL_BAD_SURFACE on the next frame while userspace surface and kernel
+  // CRTC are out of sync. Legacy DRM already committed in SetVideoMode.
+  if (result && std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
+    FlipPage(true, false, false);
 
   auto delay =
       std::chrono::milliseconds(CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
@@ -334,6 +359,21 @@ std::vector<std::string> CWinSystemGbm::GetConnectedOutputs()
   return m_DRM->GetConnectedConnectorNames();
 }
 
+bool CWinSystemGbm::SetVideoOutput(const VideoPicture* videoPicture)
+{
+  // Scaffolding: in this commit just flips m_gui_plane / m_video_plane role
+  // identity. Format and modifier are read from the current surface and pass
+  // through tautologically -- the current plane already supports them. A
+  // follow-on (#28030) will recreate the GBM surface at a different
+  // bit depth and pick a matching plane for real.
+  CDRMPlane* current = m_DRM->GetGuiPlane() ? m_DRM->GetGuiPlane() : m_DRM->GetVideoPlane();
+  if (!current)
+    return false;
+
+  return videoPicture ? m_DRM->FindVideoPlane(current->GetFormat(), current->GetModifier())
+                      : m_DRM->FindGuiPlane(current->GetFormat(), current->GetModifier());
+}
+
 bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
 {
   auto settingsComponent = CServiceBroker::GetSettingsComponent();
@@ -359,7 +399,7 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
   {
     if (connector->SupportsProperty("Colorspace"))
     {
-      std::optional<uint64_t> colorspace = connector->GetPropertyValue("Colorspace", "Default");
+      std::optional<uint64_t> colorspace = connector->GetPropertyEnumValue("Colorspace", "Default");
       if (colorspace)
       {
         CLog::LogF(LOGDEBUG, "setting connector colorspace to Default");
@@ -387,7 +427,7 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
       m_info->SupportsColorimetry(colorimetry))
   {
     std::optional<uint64_t> colorspace =
-        connector->GetPropertyValue("Colorspace", ColorimetryMap.at(colorimetry));
+        connector->GetPropertyEnumValue("Colorspace", ColorimetryMap.at(colorimetry));
     if (colorspace)
     {
       CLog::LogF(LOGDEBUG, "setting connector colorspace to {}", ColorimetryMap.at(colorimetry));

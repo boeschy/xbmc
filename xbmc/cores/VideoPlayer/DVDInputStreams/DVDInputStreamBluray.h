@@ -12,8 +12,10 @@
 #include "DVDInputStream.h"
 #include "threads/CriticalSection.h"
 
+#include <chrono>
 #include <list>
 #include <memory>
+#include <string>
 
 extern "C"
 {
@@ -115,7 +117,7 @@ public:
   int GetChapter() override;
   int GetChapterCount() override;
   void GetChapterName(std::string& name, int ch=-1) override {};
-  int64_t GetChapterPos(int ch) override;
+  std::chrono::milliseconds GetChapterPos(int ch) override;
   bool SeekChapter(int ch) override;
 
   CDVDInputStream::IDisplayTime* GetIDisplayTime() override { return this; }
@@ -132,10 +134,15 @@ public:
   void OverlayCallbackARGB(const struct bd_argb_overlay_s * const);
 #endif
 
+  BLURAY_TITLE_INFO* GetTitleFromState(const std::string& xmlstate);
   BLURAY_TITLE_INFO* GetTitleLongest();
   BLURAY_TITLE_INFO* GetTitleFile(const std::string& name);
 
   void ProcessEvent();
+
+  void SaveCurrentState(const CStreamDetails& details) override;
+  UpdateState UpdateItemFromSavedStates(CFileItem& item, double time, bool& closed) override;
+  void UpdateStack(CFileItem& item) override;
 
 protected:
   struct SPlane;
@@ -194,4 +201,8 @@ protected:
 
     /* used during bd_open_stream read block*/
     CCriticalSection m_readBlocksLock;
+
+    std::chrono::steady_clock::time_point m_startWatchTime{};
+    std::vector<PlaylistInformation> m_playedPlaylists;
+    CCriticalSection m_statesLock;
 };

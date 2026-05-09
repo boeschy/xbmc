@@ -133,8 +133,8 @@ msgid "Choose rating to display for media items"
 msgstr "Vali meediaüksuste kuvatav hinnang"
 
 msgctxt "#31025"
-msgid "No favourites found. You can add any item from media views to this list by using the context menu."
-msgstr "Lemmikuid ei ole. Kontekstimenüüd kasutades saad sellesse nimekirja lisada üksusi meediakuvadest."
+msgid "No favourites found. You can add items from media and other views by using the context menu."
+msgstr ""
 
 msgctxt "#31026"
 msgid "Timeshift"
@@ -566,8 +566,8 @@ msgid "Categories"
 msgstr "Kategooriad"
 
 msgctxt "#31149"
-msgid "Select genre fanart pack"
-msgstr "Vali žanri fännipiltide pakk"
+msgid "Choose genre fanart pack"
+msgstr ""
 
 msgctxt "#31150"
 msgid "Origin"
@@ -690,6 +690,10 @@ msgctxt "#31176"
 msgid "Default select action for movie sets on the home screen"
 msgstr "Vaiketegevus filmikogumike valikul avalehel"
 
+msgctxt "#31177"
+msgid "Choose weather icon pack"
+msgstr ""
+
 # empty strings from id 31177 to 31596
 #. Button to select Player Process Info window
 msgctxt "#31597"
@@ -771,6 +775,14 @@ msgstr "Süsteem"
 msgctxt "#31612"
 msgid "channels"
 msgstr "kanalid"
+
+#~ msgctxt "#31025"
+#~ msgid "No favourites found. You can add any item from media views to this list by using the context menu."
+#~ msgstr "Lemmikuid ei ole. Kontekstimenüüd kasutades saad sellesse nimekirja lisada üksusi meediakuvadest."
+
+#~ msgctxt "#31149"
+#~ msgid "Select genre fanart pack"
+#~ msgstr "Vali žanri fännipiltide pakk"
 
 #~ msgctxt "#31112"
 #~ msgid "Toggle audio stream"

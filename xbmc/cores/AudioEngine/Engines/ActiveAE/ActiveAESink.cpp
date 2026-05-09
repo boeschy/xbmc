@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2018 Team Kodi
+ *  Copyright (C) 2010-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -596,6 +596,11 @@ void CActiveAESink::StateMachine(int signal, Protocol *port, Message *msg)
   } // for
 }
 
+void CActiveAESink::OnStartup()
+{
+  SetTask(ThreadTask::AUDIO);
+}
+
 void CActiveAESink::Process()
 {
   Message *msg = nullptr;
@@ -670,6 +675,11 @@ void CActiveAESink::Process()
       }
     }
   }
+}
+
+void CActiveAESink::OnExit()
+{
+  RevertTask();
 }
 
 void CActiveAESink::EnumerateSinkList(bool force, std::string driver)
@@ -1207,7 +1217,13 @@ void CActiveAESink::SetSilenceTimer()
     m_extSilenceTimeout = XbmcThreads::EndTime<decltype(m_extSilenceTimeout)>::Max();
   else if (m_extAppFocused) // handles no playback/GUI and playback in pause and seek
   {
-    m_extSilenceTimeout = m_silenceTimeOut;
+    // only true with AudioTrack RAW + passthrough + DTSHD formats
+    const bool noSilenceOnPause =
+        !m_needIecPack && m_requestedFormat.m_dataFormat == AE_FMT_RAW &&
+        (m_sinkFormat.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_DTSHD_MA ||
+         m_sinkFormat.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_DTSHD);
+
+    m_extSilenceTimeout = (noSilenceOnPause) ? 0ms : m_silenceTimeOut;
   }
   else
   {

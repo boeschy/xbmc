@@ -19,6 +19,7 @@
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #include "cores/DataCacheCore.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
+#include "jobs/JobManager.h"
 #include "messaging/ApplicationMessenger.h"
 #include "music/MusicFileItemClassify.h"
 #include "music/tags/MusicInfoTag.h"
@@ -26,7 +27,6 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "threads/SystemClock.h"
-#include "utils/JobManager.h"
 #include "utils/log.h"
 #include "video/Bookmark.h"
 
@@ -785,10 +785,10 @@ inline bool PAPlayer::ProcessStream(StreamInfo *si, double &freeBufferTime)
   }
 
   int status = si->m_decoder.GetStatus();
-  if (status == STATUS_ENDED   ||
-      status == STATUS_NO_FILE ||
+  if (status == STATUS_ENDED || status == STATUS_NO_FILE ||
       si->m_decoder.ReadSamples(PACKET_SIZE) == RET_ERROR ||
-      ((si->m_endOffset) && (si->m_framesSent / si->m_audioFormat.m_sampleRate >= (si->m_endOffset - si->m_startOffset) / 1000)))
+      ((si->m_endOffset) && (si->m_framesSent >= (si->m_endOffset - si->m_startOffset) *
+                                                     si->m_audioFormat.m_sampleRate / 1000)))
   {
     if (si == m_currentStream && si->m_nextFileItem)
     {

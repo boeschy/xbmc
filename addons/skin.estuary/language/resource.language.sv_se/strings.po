@@ -5,9 +5,9 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2025-05-13 18:14+0000\n"
+"PO-Revision-Date: 2026-01-08 21:07+0000\n"
 "Last-Translator: Daniel Nylander <daniel@danielnylander.se>\n"
 "Language-Team: Swedish <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estuary/sv_se/>\n"
 "Language: sv_se\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.11.3\n"
+"X-Generator: Weblate 5.15.1\n"
 
 msgctxt "Addon Summary"
 msgid "Estuary skin by phil65. (Kodi's default skin)"
@@ -101,7 +101,7 @@ msgstr "Nyligen spelade kanaler"
 
 msgctxt "#31017"
 msgid "Rated"
-msgstr "Betygsatt"
+msgstr "Klassning"
 
 #. home screen channel widget: recently played radio channels. (please note that in some non-english languages #31018 and #31016 might not be equal)
 msgctxt "#31018"
@@ -126,15 +126,15 @@ msgstr "Sortera efter"
 
 msgctxt "#31023"
 msgid "Viewtype"
-msgstr "Vytyp"
+msgstr "Visningstyp"
 
 msgctxt "#31024"
 msgid "Choose rating to display for media items"
 msgstr "Välj betyg att visa för mediaobjekt"
 
 msgctxt "#31025"
-msgid "No favourites found. You can add any item from media views to this list by using the context menu."
-msgstr "Inga favoriter hittades. Du kan lägga till objekt från mediavyer till den här listan genom att använda innehållsmenyn."
+msgid "No favourites found. You can add items from media and other views by using the context menu."
+msgstr "Inga favoriter hittades. Du kan lägga till objekt från media och andra vyer med hjälp av snabbmenyn."
 
 msgctxt "#31026"
 msgid "Timeshift"
@@ -316,7 +316,7 @@ msgstr "Slutar"
 #. Label to highlight that live stream is being played
 msgctxt "#31081"
 msgid "Live"
-msgstr ""
+msgstr "Direktsänd"
 
 msgctxt "#31082"
 msgid "Lyrics add-on"
@@ -459,7 +459,7 @@ msgstr "Ställ in väderleverantör"
 
 msgctxt "#31122"
 msgid "Unwatched TV Shows"
-msgstr "Osedda tv-program"
+msgstr "Osedda tv-serier"
 
 msgctxt "#31123"
 msgid "Same director"
@@ -531,7 +531,7 @@ msgstr "Videoavkodare"
 #. Label to show the video pixel format
 msgctxt "#31140"
 msgid "Pixel format"
-msgstr "Pixelformat"
+msgstr "Bildpunktsformat"
 
 msgctxt "#31141"
 msgid "Changes for version"
@@ -566,8 +566,8 @@ msgid "Categories"
 msgstr "Kategorier"
 
 msgctxt "#31149"
-msgid "Select genre fanart pack"
-msgstr "Välj genre-fanart paket"
+msgid "Choose genre fanart pack"
+msgstr "Välj fanart-paket för genre"
 
 msgctxt "#31150"
 msgid "Origin"
@@ -583,7 +583,7 @@ msgstr "Slumpvis utvalda musikvideor"
 
 msgctxt "#31153"
 msgid "You do not have any add-ons of this type installed. Enter the add-on browser to download add-ons created by our community."
-msgstr "Du har inga tillägg av denna typ installerat. Gå till tilläggshanteraren för att hämta tillägg som skapats av vår community."
+msgstr "Du har inga tillägg av denna typ installerat. Gå till tilläggshanteraren för att hämta tillägg som skapats av vår gemenskap."
 
 msgctxt "#31154"
 msgid "Press OK to switch between locations"
@@ -690,11 +690,15 @@ msgctxt "#31176"
 msgid "Default select action for movie sets on the home screen"
 msgstr "Standardvalsåtgärd för filmer på hemskärmen"
 
+msgctxt "#31177"
+msgid "Choose weather icon pack"
+msgstr "Välj paket för väderikoner"
+
 # empty strings from id 31177 to 31596
 #. Button to select Player Process Info window
 msgctxt "#31597"
 msgid "Player info"
-msgstr "Spelarinfo"
+msgstr "Uppspelarinformation"
 
 #. Label to show player cache
 msgctxt "#31598"
@@ -710,7 +714,7 @@ msgstr "Ljudavkodare"
 #. Label to show the video codec name
 msgctxt "#31600"
 msgid "Video codec"
-msgstr "Videocodec"
+msgstr "Videokodek"
 
 #. Label to show the video resolution
 msgctxt "#31601"
@@ -730,7 +734,7 @@ msgstr "Videobitfrekvens"
 #. Label to show the audio codec name
 msgctxt "#31604"
 msgid "Audio codec"
-msgstr "Ljudcodec"
+msgstr "Ljudkodek"
 
 #. Label to show the number of audio channels
 msgctxt "#31605"
@@ -740,7 +744,7 @@ msgstr "Ljudkanaler"
 #. Label to show the audio bitrate
 msgctxt "#31606"
 msgid "Audio bitrate"
-msgstr "Bitfrekvens för ljud"
+msgstr "Ljudbitfrekvens"
 
 #. Label to show the screen resolution
 msgctxt "#31607"
@@ -771,6 +775,14 @@ msgstr "System"
 msgctxt "#31612"
 msgid "channels"
 msgstr "kanaler"
+
+#~ msgctxt "#31025"
+#~ msgid "No favourites found. You can add any item from media views to this list by using the context menu."
+#~ msgstr "Inga favoriter hittades. Du kan lägga till objekt från mediavyer till den här listan genom att använda innehållsmenyn."
+
+#~ msgctxt "#31149"
+#~ msgid "Select genre fanart pack"
+#~ msgstr "Välj genre-fanart paket"
 
 #~ msgctxt "#31112"
 #~ msgid "Toggle audio stream"

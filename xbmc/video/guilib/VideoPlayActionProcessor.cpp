@@ -17,8 +17,9 @@
 #include "filesystem/Directory.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "playlists/PlayListTypes.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/PlayerUtils.h"
@@ -105,9 +106,11 @@ Action CVideoPlayActionProcessor::ChoosePlayOrResume() const
   }
   else if (URIUtils::IsStack(GetItem()->GetDynPath()))
   {
-    const auto [offset, partNumber] = VIDEO::UTILS::GetStackResumeOffsetAndPartNumber(*GetItem());
-    if (offset > 0)
+    if (const auto resume{UTILS::GetStackResumeOffsetAndPartNumber(*GetItem())}; resume)
+    {
+      const auto& [offset, partNumber] = *resume;
       return ChoosePlayOrResume(VIDEO::UTILS::GetResumeString(offset, partNumber));
+    }
   }
   else
   {
@@ -157,7 +160,8 @@ unsigned int CVideoPlayActionProcessor::ChooseStackPart() const
 
   for (int i = 0; i < parts.Size(); ++i)
   {
-    parts[i]->SetLabel(StringUtils::Format(g_localizeStrings.Get(23051), i + 1)); // Part #
+    parts[i]->SetLabel(StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(23051), i + 1)); // Part #
   }
 
   CGUIDialogSelect* dialog{CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(

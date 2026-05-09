@@ -4,9 +4,10 @@ set(SOURCES AddonVideoCodec.cpp
 
 set(HEADERS AddonVideoCodec.h
             DVDVideoCodec.h
-            DVDVideoCodecFFmpeg.h)
+            DVDVideoCodecFFmpeg.h
+            DVDVideoPP.h)
 
-if(NOT ENABLE_EXTERNAL_LIBAV)
+if(TARGET ffmpeg::libpostproc)
   list(APPEND SOURCES DVDVideoPPFFmpeg.cpp)
   list(APPEND HEADERS DVDVideoPPFFmpeg.h)
 endif()
@@ -39,11 +40,6 @@ endif()
 if("gbm" IN_LIST CORE_PLATFORM_NAME_LC OR "wayland" IN_LIST CORE_PLATFORM_NAME_LC)
   list(APPEND SOURCES DVDVideoCodecDRMPRIME.cpp)
   list(APPEND HEADERS DVDVideoCodecDRMPRIME.h)
-endif()
-
-if("webos" IN_LIST CORE_PLATFORM_NAME_LC)
-  list(APPEND SOURCES DVDVideoCodecStarfish.cpp)
-  list(APPEND HEADERS DVDVideoCodecStarfish.h)
 endif()
 
 core_add_library(dvdvideocodecs)

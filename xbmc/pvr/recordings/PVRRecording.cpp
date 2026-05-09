@@ -10,7 +10,6 @@
 
 #include "ServiceBroker.h"
 #include "cores/EdlEdit.h"
-#include "guilib/LocalizeStrings.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClient.h"
 #include "pvr/channels/PVRChannel.h"
@@ -21,6 +20,8 @@
 #include "pvr/recordings/PVRRecordingsPath.h"
 #include "pvr/timers/PVRTimerInfoTag.h"
 #include "pvr/timers/PVRTimers.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/MathUtils.h"
@@ -210,10 +211,10 @@ void CPVRRecording::Serialize(CVariant& value) const
 void CPVRRecording::ToSortable(SortItem& sortable, Field field) const
 {
   std::unique_lock lock(m_critSection);
-  if (field == FieldSize)
-    sortable[FieldSize] = m_sizeInBytes;
-  else if (field == FieldProvider)
-    sortable[FieldProvider] = StringUtils::Format("{} {}", m_iClientId, m_iClientProviderUid);
+  if (field == Field::SIZE)
+    sortable[Field::SIZE] = m_sizeInBytes;
+  else if (field == Field::PROVIDER)
+    sortable[Field::PROVIDER] = StringUtils::Format("{} {}", m_iClientId, m_iClientProviderUid);
   else
     CVideoInfoTag::ToSortable(sortable, field);
 }
@@ -479,7 +480,8 @@ void CPVRRecording::Update(const CPVRRecording& tag, const CPVRClient& client)
   }
 
   //Old Method of identifying TV show title and subtitle using m_strDirectory and strPlotOutline (deprecated)
-  std::string strShow = StringUtils::Format("{} - ", g_localizeStrings.Get(20364));
+  std::string strShow = StringUtils::Format(
+      "{} - ", CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(20364));
   if (StringUtils::StartsWithNoCase(m_strPlotOutline, strShow))
   {
     CLog::Log(LOGWARNING, "PVR addon provides episode name in strPlotOutline which is deprecated");

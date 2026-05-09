@@ -14,6 +14,8 @@
 #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
 #include "rendering/gles/RenderSystemGLES.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/EGLFence.h"
 #include "utils/EGLImage.h"
 #include "utils/GLUtils.h"
@@ -29,11 +31,24 @@ using namespace KODI::UTILS::EGL;
 CRendererDRMPRIMEGLES::~CRendererDRMPRIMEGLES()
 {
   Flush(false);
+
+  if (m_configured)
+  {
+    if (auto winSystem = CServiceBroker::GetWinSystem())
+      winSystem->SetVideoOutput(nullptr);
+  }
 }
 
 CBaseRenderer* CRendererDRMPRIMEGLES::Create(CVideoBuffer* buffer)
 {
   if (!buffer)
+    return nullptr;
+
+  auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  if (!settings->GetBool(CSettings::SETTING_VIDEOPLAYER_USEPRIMEDECODER))
+    return nullptr;
+
+  if (settings->GetInt(CSettings::SETTING_VIDEOPLAYER_USEPRIMERENDERER) != 1)
     return nullptr;
 
   auto buf = dynamic_cast<CVideoBufferDRMPRIME*>(buffer);
@@ -99,6 +114,9 @@ bool CRendererDRMPRIMEGLES::Configure(const VideoPicture& picture,
 
   if (!winSystem)
     return false;
+
+  if (!winSystem->SetVideoOutput(&picture))
+    CLog::Log(LOGWARNING, "RendererDRMPRIMEGLES::Configure: SetVideoOutput failed");
 
   auto winSystemEGL = dynamic_cast<KODI::WINDOWING::LINUX::CWinSystemEGL*>(winSystem);
 

@@ -15,9 +15,10 @@
 #include "guilib/GUIWindow.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/IGUIContainer.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "playlists/PlayList.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "windows/GUIMediaWindow.h"
@@ -26,7 +27,7 @@ namespace KODI::GUILIB::GUIINFO
 {
 
 // conditions for window retrieval
-static const int WINDOW_CONDITION_HAS_LIST_ITEMS  = 1;
+static const int WINDOW_CONDITION_HAS_LIST_ITEMS = 1;
 static const int WINDOW_CONDITION_IS_MEDIA_WINDOW = 2;
 
 std::string GetPlaylistLabel(int item, PLAYLIST::Id playlistId /* = TYPE_NONE */)
@@ -52,19 +53,19 @@ std::string GetPlaylistLabel(int item, PLAYLIST::Id playlistId /* = TYPE_NONE */
     case PLAYLIST_RANDOM:
     {
       if (player.IsShuffled(playlistId))
-        return g_localizeStrings.Get(16041); // 16041: On
+        return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(16041); // 16041: On
       else
-        return g_localizeStrings.Get(591); // 591: Off
+        return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(591); // 591: Off
     }
     case PLAYLIST_REPEAT:
     {
       PLAYLIST::RepeatState state = player.GetRepeat(playlistId);
       if (state == PLAYLIST::RepeatState::ONE)
-        return g_localizeStrings.Get(592); // 592: One
+        return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(592); // 592: One
       else if (state == PLAYLIST::RepeatState::ALL)
-        return g_localizeStrings.Get(593); // 593: All
+        return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(593); // 593: All
       else
-        return g_localizeStrings.Get(594); // 594: Off
+        return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(594); // 594: Off
     }
     default:
       break;
@@ -91,7 +92,7 @@ CGUIWindow* GetWindowWithCondition(int contextWindow, int condition)
 {
   const CGUIWindowManager& windowMgr = CServiceBroker::GetGUI()->GetWindowManager();
 
-  CGUIWindow *window = windowMgr.GetWindow(contextWindow);
+  CGUIWindow* window = windowMgr.GetWindow(contextWindow);
   if (CheckWindowCondition(window, condition))
     return window;
 
@@ -135,11 +136,11 @@ CGUIMediaWindow* GetMediaWindow(int contextWindow)
 
 CGUIControl* GetActiveContainer(int containerId, int contextWindow)
 {
-  CGUIWindow *window = GetWindow(contextWindow);
+  CGUIWindow* window = GetWindow(contextWindow);
   if (!window)
     return nullptr;
 
-  CGUIControl *control = nullptr;
+  CGUIControl* control = nullptr;
   if (!containerId) // No container specified, so we lookup the current view container
   {
     if (window->IsMediaWindow())
@@ -164,18 +165,15 @@ std::shared_ptr<CGUIListItem> GetCurrentListItem(int contextWindow,
 {
   std::shared_ptr<CGUIListItem> item;
 
-  if (containerId == 0  &&
-      itemOffset == 0 &&
-      !(itemFlags & INFOFLAG_LISTITEM_CONTAINER) &&
-      !(itemFlags & INFOFLAG_LISTITEM_ABSOLUTE) &&
-      !(itemFlags & INFOFLAG_LISTITEM_POSITION))
+  if (containerId == 0 && itemOffset == 0 && !(itemFlags & INFOFLAG_LISTITEM_CONTAINER) &&
+      !(itemFlags & INFOFLAG_LISTITEM_ABSOLUTE) && !(itemFlags & INFOFLAG_LISTITEM_POSITION))
     item = GetCurrentListItemFromWindow(contextWindow);
 
   if (!item)
   {
     CGUIControl* activeContainer = GetActiveContainer(containerId, contextWindow);
     if (activeContainer)
-      item = static_cast<IGUIContainer *>(activeContainer)->GetListItem(itemOffset, itemFlags);
+      item = static_cast<IGUIContainer*>(activeContainer)->GetListItem(itemOffset, itemFlags);
   }
 
   return item;

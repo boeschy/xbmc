@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -121,27 +121,31 @@ public:
                        KODI::UTILS::COLOR::Color color,
                        CD3DTexture* texture,
                        const CRect* texCoords,
-                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+                       SHADER_METHOD options,
+                       float depth);
 
   static void DrawQuad(const CPoint points[4],
                        KODI::UTILS::COLOR::Color color,
                        unsigned numViews,
                        ID3D11ShaderResourceView** view,
                        const CRect* texCoords,
-                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+                       SHADER_METHOD options,
+                       float depth);
 
   static void DrawQuad(const CRect& coords,
                        KODI::UTILS::COLOR::Color color,
                        CD3DTexture* texture,
                        const CRect* texCoords,
-                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+                       SHADER_METHOD options,
+                       float depth);
 
   static void DrawQuad(const CRect& coords,
                        KODI::UTILS::COLOR::Color color,
                        unsigned numViews,
                        ID3D11ShaderResourceView** view,
                        const CRect* texCoords,
-                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+                       SHADER_METHOD options,
+                       float depth);
 
   void OnDestroyDevice(bool fatal) override;
   void OnCreateDevice() override;
@@ -157,15 +161,15 @@ protected:
   // saved data
   BYTE* m_data;
   // creation parameters
-  UINT m_width;
-  UINT m_height;
-  UINT m_mipLevels;
-  UINT m_pitch;
-  UINT m_bindFlags;
-  UINT m_cpuFlags;
-  UINT m_viewIdx;
-  D3D11_USAGE m_usage;
-  DXGI_FORMAT m_format;
+  UINT m_width{0};
+  UINT m_height{0};
+  UINT m_mipLevels{0};
+  UINT m_pitch{0};
+  UINT m_bindFlags{0};
+  UINT m_cpuFlags{0};
+  UINT m_viewIdx{0};
+  D3D11_USAGE m_usage{D3D11_USAGE_DEFAULT};
+  DXGI_FORMAT m_format{DXGI_FORMAT_B8G8R8A8_UNORM};
 
   // created texture
   Microsoft::WRL::ComPtr<ID3D11Texture2D> m_texture;
@@ -238,11 +242,11 @@ private:
 
   // saved data
   BYTE* m_data;
-  UINT m_length;
-  UINT m_stride;
+  UINT m_length{0};
+  UINT m_stride{0};
   UINT m_cpuFlags;
-  DXGI_FORMAT m_format;
-  D3D11_USAGE m_usage;
+  DXGI_FORMAT m_format{DXGI_FORMAT_UNKNOWN};
+  D3D11_USAGE m_usage{D3D11_USAGE_DEFAULT};
   D3D11_BIND_FLAG m_type;
   Microsoft::WRL::ComPtr<ID3D11Buffer> m_buffer;
 };

@@ -1,5 +1,5 @@
 /**********************************************************************
- *  Copyright (C) 2004, Leo Seib, Hannover
+ *  Copyright (C) 2004-2026, Leo Seib, Hannover
  *
  *  Project:SQLiteDataset C++ Dynamic Library
  *  Module: SQLiteDataset class realisation file
@@ -12,16 +12,17 @@
 
 #include "sqlitedataset.h"
 
+#include "utils/Map.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/XTimeUtils.h"
 #include "utils/log.h"
 
 #include <chrono>
-#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <sqlite3.h>
@@ -32,7 +33,7 @@ namespace
 {
 #define X(VAL) std::make_pair(VAL, #VAL)
 //!@todo Remove ifdefs when sqlite version requirement has been bumped to at least 3.26.0
-const std::map<int, const char*> g_SqliteErrorStrings = {
+constexpr auto sqliteErrorStrings = make_map<int, std::string_view>({
     X(SQLITE_OK),
     X(SQLITE_ERROR),
     X(SQLITE_INTERNAL),
@@ -159,7 +160,7 @@ const std::map<int, const char*> g_SqliteErrorStrings = {
 #if defined(SQLITE_OK_LOAD_PERMANENTLY)
     X(SQLITE_OK_LOAD_PERMANENTLY),
 #endif
-};
+});
 #undef X
 
 //************* Callback function ***************************
@@ -289,8 +290,8 @@ int SqliteDatabase::setErr(int err_code, const char* qry)
 {
   std::stringstream ss;
   ss << "[" << db << "] ";
-  auto errorIt = g_SqliteErrorStrings.find(err_code);
-  if (errorIt != g_SqliteErrorStrings.end())
+  auto errorIt = sqliteErrorStrings.find(err_code);
+  if (errorIt != sqliteErrorStrings.end())
   {
     ss << "SQLite error " << errorIt->second;
   }
@@ -300,14 +301,10 @@ int SqliteDatabase::setErr(int err_code, const char* qry)
   }
   if (conn)
     ss << " (" << sqlite3_errmsg(conn) << ")";
-  ss << "\nQuery: " << qry;
+  if (qry != nullptr)
+    ss << "\nQuery: " << qry;
   error = ss.str();
   return err_code;
-}
-
-const char* SqliteDatabase::getErrorMsg()
-{
-  return error.c_str();
 }
 
 static int AlphaNumericCollation(
@@ -320,6 +317,16 @@ int SqliteDatabase::connect(bool create)
 {
   if (host.empty() || db.empty())
     return DB_CONNECTION_NONE;
+
+  {
+    static bool showed_ver_info = false;
+    if (!showed_ver_info)
+    {
+      const char* version_string = sqlite3_libversion();
+      CLog::Log(LOGINFO, "SqliteDatabase: library version {}", version_string);
+      showed_ver_info = true;
+    }
+  }
 
   //CLog::Log(LOGDEBUG, "Connecting to sqlite:{}:{}", host, db);
 
@@ -386,8 +393,9 @@ bool SqliteDatabase::exists()
 
   // performing a select all on the sqlite_master will return rows if there are tables
   // defined indicating it's not empty and therefore must "exist".
-  last_err = sqlite3_exec(getHandle(), "SELECT * FROM sqlite_master", &callback, &res, nullptr);
-  if (last_err == SQLITE_OK)
+  const int err =
+      sqlite3_exec(getHandle(), "SELECT * FROM sqlite_master", &callback, &res, nullptr);
+  if (err == SQLITE_OK)
   {
     bRet = !res.records.empty();
   }
@@ -480,48 +488,48 @@ int SqliteDatabase::drop_analytics()
   result_set res;
 
   CLog::LogFC(LOGDEBUG, LOGDATABASE, "Cleaning indexes from database {} at {}", db, host);
-  last_err =
+  int err =
       sqlite3_exec(conn, "SELECT name FROM sqlite_master WHERE type == 'index' AND sql IS NOT NULL",
                    &callback, &res, nullptr);
-  if (last_err != SQLITE_OK)
+  if (err != SQLITE_OK)
     return DB_UNEXPECTED_RESULT;
 
   std::string sqlcmd;
   for (const auto record : res.records)
   {
-    sqlcmd = StringUtils::Format("DROP INDEX '{}'", record->at(0).get_asString().c_str());
-    last_err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
-    if (last_err != SQLITE_OK)
+    sqlcmd = StringUtils::Format("DROP INDEX `{}`", record->at(0).get_asString().c_str());
+    err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK)
       return DB_UNEXPECTED_RESULT;
   }
   res.clear();
 
   CLog::LogFC(LOGDEBUG, LOGDATABASE, "Cleaning views from database {} at {}", db, host);
-  last_err = sqlite3_exec(conn, "SELECT name FROM sqlite_master WHERE type == 'view'", &callback,
-                          &res, nullptr);
-  if (last_err != SQLITE_OK)
+  err = sqlite3_exec(conn, "SELECT name FROM sqlite_master WHERE type == 'view'", &callback, &res,
+                     nullptr);
+  if (err != SQLITE_OK)
     return DB_UNEXPECTED_RESULT;
 
   for (const auto& record : res.records)
   {
-    sqlcmd = StringUtils::Format("DROP VIEW '{}'", record->at(0).get_asString().c_str());
-    last_err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
-    if (last_err != SQLITE_OK)
+    sqlcmd = StringUtils::Format("DROP VIEW `{}`", record->at(0).get_asString().c_str());
+    err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK)
       return DB_UNEXPECTED_RESULT;
   }
   res.clear();
 
   CLog::LogFC(LOGDEBUG, LOGDATABASE, "Cleaning triggers from database {} at {}", db, host);
-  last_err = sqlite3_exec(conn, "SELECT name FROM sqlite_master WHERE type == 'trigger'", &callback,
-                          &res, nullptr);
-  if (last_err != SQLITE_OK)
+  err = sqlite3_exec(conn, "SELECT name FROM sqlite_master WHERE type == 'trigger'", &callback,
+                     &res, nullptr);
+  if (err != SQLITE_OK)
     return DB_UNEXPECTED_RESULT;
 
   for (const auto& record : res.records)
   {
-    sqlcmd = StringUtils::Format("DROP TRIGGER '{}'", record->at(0).get_asString().c_str());
-    last_err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
-    if (last_err != SQLITE_OK)
+    sqlcmd = StringUtils::Format("DROP TRIGGER `{}`", record->at(0).get_asString().c_str());
+    err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK)
       return DB_UNEXPECTED_RESULT;
   }
   // res would be cleared on destruct
@@ -552,8 +560,8 @@ long SqliteDatabase::nextid(const char* sname)
   result_set res;
   std::string sqlcmd{
       StringUtils::Format("SELECT nextid FROM {} WHERE seq_name = '{}'", sequence_table, sname)};
-  last_err = sqlite3_exec(getHandle(), sqlcmd.c_str(), &callback, &res, nullptr);
-  if (last_err != SQLITE_OK)
+  int err = sqlite3_exec(getHandle(), sqlcmd.c_str(), &callback, &res, nullptr);
+  if (err != SQLITE_OK)
   {
     return DB_UNEXPECTED_RESULT;
   }
@@ -562,8 +570,8 @@ long SqliteDatabase::nextid(const char* sname)
     id = 1;
     sqlcmd = StringUtils::Format("INSERT INTO {} (nextid,seq_name) VALUES ({},'{}')",
                                  sequence_table, id, sname);
-    last_err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
-    if (last_err != SQLITE_OK)
+    err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK)
       return DB_UNEXPECTED_RESULT;
     return id;
   }
@@ -572,8 +580,8 @@ long SqliteDatabase::nextid(const char* sname)
     id = res.records[0]->at(0).get_asInt() + 1;
     sqlcmd = StringUtils::Format("UPDATE {} SET nextid={} WHERE seq_name = '{}'", sequence_table,
                                  id, sname);
-    last_err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
-    if (last_err != SQLITE_OK)
+    err = sqlite3_exec(conn, sqlcmd.c_str(), nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK)
       return DB_UNEXPECTED_RESULT;
     return id;
   }
@@ -621,10 +629,10 @@ void SqliteDatabase::rollback_transaction()
 
 // methods for formatting
 // ---------------------------------------------
-std::string SqliteDatabase::vprepare(const char* format, va_list args)
+std::string SqliteDatabase::vprepare(std::string_view format, va_list args)
 {
-  std::string strFormat = format;
-  std::string strResult = "";
+  std::string strFormat{format};
+  std::string strResult;
   char* p;
   size_t pos;
 
@@ -633,8 +641,10 @@ std::string SqliteDatabase::vprepare(const char* format, va_list args)
   pos = 0;
   while ((pos = strFormat.find("%s", pos)) != std::string::npos)
   {
-    strFormat.replace(pos, 2, "%q");
-    pos++;
+    // %%s is meant as a literal % followed by s, skip
+    if (pos == 0 || strFormat[pos - 1] != '%')
+      strFormat.replace(pos, 2, "%q");
+    pos += 2;
   }
 
   //  the %I64 enhancement is not supported by sqlite3_vmprintf
@@ -930,8 +940,8 @@ bool SqliteDataset::query(const std::string& query)
   if (!handle())
     throw DbErrors("No Database Connection");
 
-  if (query.find("SELECT") == std::string::npos && query.find("select") == std::string::npos)
-    throw DbErrors("MUST be select SQL!");
+  // Must be a SELECT SQL query
+  assert(query.find("SELECT") != std::string::npos || query.find("select") != std::string::npos);
 
   close();
 

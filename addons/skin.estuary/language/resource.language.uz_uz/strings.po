@@ -133,7 +133,7 @@ msgid "Choose rating to display for media items"
 msgstr ""
 
 msgctxt "#31025"
-msgid "No favourites found. You can add any item from media views to this list by using the context menu."
+msgid "No favourites found. You can add items from media and other views by using the context menu."
 msgstr ""
 
 msgctxt "#31026"
@@ -578,7 +578,7 @@ msgid "Categories"
 msgstr "Turkumlar"
 
 msgctxt "#31149"
-msgid "Select genre fanart pack"
+msgid "Choose genre fanart pack"
 msgstr ""
 
 msgctxt "#31150"
@@ -700,6 +700,10 @@ msgstr ""
 #. Setting to control what happens when clicking a movie set on the home screen
 msgctxt "#31176"
 msgid "Default select action for movie sets on the home screen"
+msgstr ""
+
+msgctxt "#31177"
+msgid "Choose weather icon pack"
 msgstr ""
 
 # empty strings from id 31177 to 31596

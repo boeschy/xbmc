@@ -16,6 +16,7 @@
 #include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "TextureCache.h"
+#include "URL.h"
 #include "addons/AddonManager.h"
 #include "addons/AddonVersion.h"
 #include "addons/Skin.h"
@@ -33,10 +34,11 @@
 #include "guilib/GUIFontManager.h"
 #include "guilib/GUITextureCallbackManager.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/StereoscopicsManager.h"
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/helpers/DialogHelper.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/SkinSettings.h"
@@ -46,6 +48,7 @@
 #include "utils/XBMCTinyXML.h"
 #include "utils/log.h"
 #include "video/dialogs/GUIDialogFullScreenInfo.h"
+#include "windowing/WinSystem.h"
 
 using namespace KODI::MESSAGING;
 
@@ -126,27 +129,26 @@ bool CApplicationSkinHandling::LoadSkin(const std::string& skinID)
 
   CLog::Log(LOGINFO, "  load skin from: {} (version: {})", skin->Path(),
             skin->Version().asString());
-  g_SkinInfo = skin;
+  CServiceBroker::GetGUI()->SetSkinInfo(skin);
 
   CLog::Log(LOGINFO, "  load fonts for skin...");
   CServiceBroker::GetWinSystem()->GetGfxContext().SetMediaDir(skin->Path());
-  g_directoryCache.ClearSubPaths(skin->Path());
+  g_directoryCache.ClearSubPaths(CURL(skin->Path()));
 
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
   CServiceBroker::GetGUI()->GetColorManager().Load(
       settings->GetString(CSettings::SETTING_LOOKANDFEEL_SKINCOLORS));
 
-  g_SkinInfo->LoadIncludes();
+  skin->LoadIncludes();
 
   g_fontManager.LoadFonts(settings->GetString(CSettings::SETTING_LOOKANDFEEL_FONT));
 
-  // load in the skin strings
-  std::string langPath = URIUtils::AddFileToFolder(skin->Path(), "language");
-  URIUtils::AddSlashAtEnd(langPath);
-
-  g_localizeStrings.LoadSkinStrings(langPath,
-                                    settings->GetString(CSettings::SETTING_LOCALE_LANGUAGE));
-  g_SkinInfo->LoadTimers();
+  // load the skin strings in
+  //! @todo Move skin language files to resources/language/ to match other addon structure
+  const std::string langPath = URIUtils::AddFileToFolder(skin->Path(), "language/");
+  CServiceBroker::GetResourcesComponent().GetLocalizeStrings().LoadAddonStrings(
+      langPath, settings->GetString(CSettings::SETTING_LOCALE_LANGUAGE), skin->ID());
+  skin->LoadTimers();
 
   const auto start = std::chrono::steady_clock::now();
 
@@ -176,7 +178,7 @@ bool CApplicationSkinHandling::LoadSkin(const std::string& skinID)
   CServiceBroker::GetGUI()->GetAudioManager().Load();
   CServiceBroker::GetTextureCache()->Initialize();
 
-  if (g_SkinInfo->HasSkinFile("DialogFullScreenInfo.xml"))
+  if (skin->HasSkinFile("DialogFullScreenInfo.xml"))
     CServiceBroker::GetGUI()->GetWindowManager().Add(new CGUIDialogFullScreenInfo);
 
   CLog::Log(LOGINFO, "  skin loaded...");
@@ -223,49 +225,55 @@ bool CApplicationSkinHandling::LoadSkin(const std::string& skinID)
 
 void CApplicationSkinHandling::UnloadSkin()
 {
-  if (g_SkinInfo != nullptr && m_saveSkinOnUnloading)
-    g_SkinInfo->SaveSettings();
+  CGUIComponent* gui = CServiceBroker::GetGUI();
+  if (gui == nullptr)
+    return;
+
+  std::shared_ptr<ADDON::CSkinInfo> skin = gui->GetSkinInfo();
+  if (skin && m_saveSkinOnUnloading)
+    skin->SaveSettings();
   else if (!m_saveSkinOnUnloading)
     m_saveSkinOnUnloading = true;
 
-  if (g_SkinInfo)
-    g_SkinInfo->Unload();
-
-  CGUIComponent* gui = CServiceBroker::GetGUI();
-  if (gui)
+  if (skin)
   {
-    gui->GetAudioManager().Enable(false);
-
-    gui->GetWindowManager().DeInitialize();
-
-    const std::shared_ptr<CTextureCache> textureCache{CServiceBroker::GetTextureCache()};
-    if (textureCache)
-      textureCache->Deinitialize();
-
-    // remove the skin-dependent window
-    gui->GetWindowManager().Delete(WINDOW_DIALOG_FULLSCREEN_INFO);
-
-    gui->GetTextureManager().Cleanup();
-    gui->GetLargeTextureManager().CleanupUnusedImages(true);
-
-    g_fontManager.Clear();
-
-    gui->GetColorManager().Clear();
-
-    gui->GetInfoManager().Clear();
+    skin->Unload();
+    CServiceBroker::GetResourcesComponent().GetLocalizeStrings().ClearAddonStrings(skin->ID());
   }
 
-  //  The g_SkinInfo shared_ptr ought to be reset here
-  // but there are too many places it's used without checking for nullptr
-  // and as a result a race condition on exit can cause a crash.
+  gui->GetAudioManager().Enable(false);
+
+  gui->GetWindowManager().DeInitialize();
+
+  const std::shared_ptr<CTextureCache> textureCache{CServiceBroker::GetTextureCache()};
+  if (textureCache)
+    textureCache->Deinitialize();
+
+  // remove the skin-dependent window
+  gui->GetWindowManager().Delete(WINDOW_DIALOG_FULLSCREEN_INFO);
+
+  gui->GetTextureManager().Cleanup();
+  gui->GetLargeTextureManager().CleanupUnusedImages(true);
+
+  g_fontManager.Clear();
+
+  gui->GetColorManager().Clear();
+
+  gui->GetInfoManager().Clear();
+
+  gui->UnloadSkin();
   CLog::Log(LOGINFO, "Unloaded skin");
 }
 
 bool CApplicationSkinHandling::LoadCustomWindows()
 {
   // Start from wherever home.xml is
+  auto skin = CServiceBroker::GetGUI()->GetSkinInfo();
+  if (!skin)
+    return false;
+
   std::vector<std::string> vecSkinPath;
-  g_SkinInfo->GetSkinPaths(vecSkinPath);
+  skin->GetSkinPaths(vecSkinPath);
 
   for (const auto& skinPath : vecSkinPath)
   {
@@ -383,14 +391,18 @@ bool CApplicationSkinHandling::LoadCustomWindows()
 
 void CApplicationSkinHandling::ReloadSkin(bool confirm)
 {
-  if (!g_SkinInfo || m_bInitializing)
+  auto gui = CServiceBroker::GetGUI();
+  if (gui == nullptr)
+    return;
+
+  auto skin = gui->GetSkinInfo();
+  if (!skin || m_bInitializing)
     return; // Don't allow reload before skin is loaded by system
 
-  std::string oldSkin = g_SkinInfo->ID();
+  std::string oldSkin = skin->ID();
 
-  CGUIMessage msg(GUI_MSG_LOAD_SKIN, -1,
-                  CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow());
-  CServiceBroker::GetGUI()->GetWindowManager().SendMessage(msg);
+  CGUIMessage msg(GUI_MSG_LOAD_SKIN, -1, gui->GetWindowManager().GetActiveWindow());
+  gui->GetWindowManager().SendMessage(msg);
 
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
   std::string newSkin = settings->GetString(CSettings::SETTING_LOOKANDFEEL_SKIN);
@@ -407,7 +419,7 @@ void CApplicationSkinHandling::ReloadSkin(bool confirm)
         settings->SetString(CSettings::SETTING_LOOKANDFEEL_SKIN, oldSkin);
       }
       else
-        CServiceBroker::GetGUI()->GetWindowManager().ActivateWindow(WINDOW_STARTUP_ANIM);
+        gui->GetWindowManager().ActivateWindow(WINDOW_STARTUP_ANIM);
     }
   }
   else
@@ -425,8 +437,10 @@ void CApplicationSkinHandling::ReloadSkin(bool confirm)
     {
       m_confirmSkinChange = false;
       setting->Reset();
-      CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Error, g_localizeStrings.Get(24102),
-                                            g_localizeStrings.Get(24103));
+      CGUIDialogKaiToast::QueueNotification(
+          CGUIDialogKaiToast::Error,
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(24102),
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(24103));
     }
   }
   m_confirmSkinChange = true;
@@ -503,7 +517,8 @@ bool CApplicationSkinHandling::OnSettingChanged(const CSetting& setting)
 
     m_ignoreSkinSettingChanges = false;
 
-    if (g_SkinInfo)
+    auto skin = CServiceBroker::GetGUI()->GetSkinInfo();
+    if (skin)
     {
       // now we can finally reload skins
       std::string builtin("ReloadSkin");
@@ -525,6 +540,7 @@ bool CApplicationSkinHandling::OnSettingChanged(const CSetting& setting)
 
 void CApplicationSkinHandling::ProcessSkin() const
 {
-  if (g_SkinInfo != nullptr)
-    g_SkinInfo->ProcessTimers();
+  auto skin = CServiceBroker::GetGUI()->GetSkinInfo();
+  if (skin)
+    skin->ProcessTimers();
 }

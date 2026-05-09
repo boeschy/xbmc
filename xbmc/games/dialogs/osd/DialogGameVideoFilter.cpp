@@ -23,12 +23,13 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIMessage.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/WindowIDs.h"
+#include "jobs/JobManager.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/GameSettings.h"
 #include "settings/MediaSettings.h"
 #include "threads/SystemClock.h"
-#include "utils/JobManager.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
@@ -75,7 +76,7 @@ CDialogGameVideoFilter::CDialogGameVideoFilter()
 
 std::string CDialogGameVideoFilter::GetHeading()
 {
-  return g_localizeStrings.Get(35225); // "Video filter"
+  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(35225); // "Video filter"
 }
 
 void CDialogGameVideoFilter::PreInit()
@@ -88,7 +89,8 @@ void CDialogGameVideoFilter::PreInit()
 
   if (m_items.Size() == 0)
   {
-    CFileItemPtr item = std::make_shared<CFileItem>(g_localizeStrings.Get(231)); // "None"
+    CFileItemPtr item = std::make_shared<CFileItem>(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(231)); // "None"
     m_items.Add(std::move(item));
   }
 }
@@ -104,9 +106,11 @@ void CDialogGameVideoFilter::InitScalingMethods()
         RETRO::CRenderVideoSettings videoSettings;
         videoSettings.SetScalingMethod(scalingMethodProps.scalingMethod);
 
-        CFileItemPtr item =
-            std::make_shared<CFileItem>(g_localizeStrings.Get(scalingMethodProps.nameIndex));
-        item->SetLabel2(g_localizeStrings.Get(scalingMethodProps.categoryIndex));
+        CFileItemPtr item = std::make_shared<CFileItem>(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                scalingMethodProps.nameIndex));
+        item->SetLabel2(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+            scalingMethodProps.categoryIndex));
         item->SetProperty("game.videofilter", CVariant{videoSettings.GetVideoFilter()});
         item->SetArt("icon", ICON_VIDEO);
         m_items.Add(std::move(item));
@@ -114,6 +118,18 @@ void CDialogGameVideoFilter::InitScalingMethods()
     }
   }
 }
+
+namespace
+{
+TiXmlNode* GetFirstChildOfNode(TiXmlNode& node, const char* childName)
+{
+  TiXmlNode* ret{node.FirstChild(childName)};
+  if (ret)
+    return ret->FirstChild();
+
+  return ret;
+}
+} // unnamed namespace
 
 void CDialogGameVideoFilter::InitVideoFilters()
 {
@@ -125,10 +141,12 @@ void CDialogGameVideoFilter::InitVideoFilters()
 
   //! @todo Have the add-on give us the xml as a string (or parse it)
   std::string xmlFilename;
-#ifdef TARGET_WINDOWS
-  xmlFilename = "ShaderPresetsHLSLP.xml";
-#else
+#if defined(HAS_GLES)
+  xmlFilename = "ShaderPresetsGLSLP_GLES.xml";
+#elif defined(HAS_GL)
   xmlFilename = "ShaderPresetsGLSLP.xml";
+#else
+  xmlFilename = "ShaderPresetsHLSLP.xml";
 #endif
 
   const std::string homeAddonPath = CSpecialProtocol::TranslatePath(
@@ -168,21 +186,18 @@ void CDialogGameVideoFilter::InitVideoFilters()
     if (child->FirstChild() == nullptr)
       continue;
 
-    TiXmlNode* pathNode;
-    if ((pathNode = child->FirstChild("path")))
-      if ((pathNode = pathNode->FirstChild()))
-        videoFilter.path =
-            URIUtils::AddFileToFolder(URIUtils::GetBasePath(xmlPath), pathNode->Value());
+    const TiXmlNode* pathNode{GetFirstChildOfNode(*child, "path")};
+    if (pathNode)
+      videoFilter.path =
+          URIUtils::AddFileToFolder(URIUtils::GetBasePath(xmlPath), pathNode->Value());
 
-    TiXmlNode* nameNode;
-    if ((nameNode = child->FirstChild("name")))
-      if ((nameNode = nameNode->FirstChild()))
-        videoFilter.name = nameNode->Value();
+    const TiXmlNode* nameNode{GetFirstChildOfNode(*child, "name")};
+    if (nameNode)
+      videoFilter.name = nameNode->Value();
 
-    TiXmlNode* folderNode;
-    if ((folderNode = child->FirstChild("folder")))
-      if ((folderNode = folderNode->FirstChild()))
-        videoFilter.folder = folderNode->Value();
+    const TiXmlNode* folderNode{GetFirstChildOfNode(*child, "folder")};
+    if (folderNode)
+      videoFilter.folder = folderNode->Value();
 
     videoFilters.emplace_back(videoFilter);
   }
@@ -231,7 +246,8 @@ void CDialogGameVideoFilter::InitGetMoreButton()
 
   if (showGetMore)
   {
-    auto item = std::make_shared<CFileItem>(g_localizeStrings.Get(21452)); // "Get more..."
+    auto item = std::make_shared<CFileItem>(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21452)); // "Get more..."
     item->SetArt("icon", ICON_GET_MORE);
     m_items.Add(std::move(item));
   }
@@ -322,7 +338,8 @@ void CDialogGameVideoFilter::RefreshList()
 
 std::string CDialogGameVideoFilter::GetLocalizedString(uint32_t code)
 {
-  return g_localizeStrings.GetAddonString(PRESETS_ADDON_NAME, code);
+  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().GetAddonString(
+      PRESETS_ADDON_NAME, code);
 }
 
 void CDialogGameVideoFilter::OnGetMore()

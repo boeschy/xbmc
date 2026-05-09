@@ -121,11 +121,27 @@ public:
     GetInstance().FormatAndLogInternal(level, component, format, fmt::make_format_args(args...));
   }
 
+  template<typename... Args>
+  static void Log(const std::string& loggerName,
+                  int level,
+                  fmt::format_string<Args...> format,
+                  Args&&... args)
+  {
+    GetInstance().FormatAndLogInternal(loggerName, MapLogLevel(level), format,
+                                       fmt::make_format_args(args...));
+  }
+
+#ifdef TARGET_WINDOWS
+#define LogF(level, format, ...) Log((level), ("{}: " format), __FUNCTION__, ##__VA_ARGS__)
+#define LogFC(level, component, format, ...) \
+  Log((level), (component), ("{}: " format), __FUNCTION__, ##__VA_ARGS__)
+#else
 #define LogF(level, format, ...) \
   Log((level), ("{}: " format), std::source_location::current().function_name(), ##__VA_ARGS__)
 #define LogFC(level, component, format, ...) \
   Log((level), (component), ("{}: " format), std::source_location::current().function_name(), \
       ##__VA_ARGS__)
+#endif
 
 private:
   static CLog& GetInstance();
@@ -134,6 +150,11 @@ private:
 
   void FormatAndLogInternal(spdlog::level::level_enum level,
                             uint32_t component,
+                            fmt::string_view format,
+                            fmt::format_args args);
+
+  void FormatAndLogInternal(const std::string& loggerName,
+                            spdlog::level::level_enum level,
                             fmt::string_view format,
                             fmt::format_args args);
 

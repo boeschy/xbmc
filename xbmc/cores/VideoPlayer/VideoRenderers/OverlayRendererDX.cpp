@@ -42,14 +42,14 @@ static bool LoadTexture(int width, int height, int stride
 {
   if (!texture->Create(width, height, 1, D3D11_USAGE_IMMUTABLE, format, pixels, stride))
   {
-    CLog::Log(LOGERROR, "{} - failed to allocate texture.", __FUNCTION__);
+    CLog::LogF(LOGERROR, "failed to allocate texture.");
     return false;
   }
 
   D3D11_TEXTURE2D_DESC desc = {};
   if (!texture->GetDesc(&desc))
   {
-    CLog::Log(LOGERROR, "{} - failed to get texture description.", __FUNCTION__);
+    CLog::LogF(LOGERROR, "failed to get texture description.");
     texture->Release();
     return false;
   }
@@ -141,7 +141,7 @@ COverlayQuadsDX::COverlayQuadsDX(ASS_Image* images, float width, float height)
   if (!m_vertex.Create(D3D11_BIND_VERTEX_BUFFER, 6 * m_count, sizeof(Vertex), DXGI_FORMAT_UNKNOWN,
                        D3D11_USAGE_IMMUTABLE, vt))
   {
-    CLog::Log(LOGERROR, "{} - failed to create vertex buffer", __FUNCTION__);
+    CLog::LogF(LOGERROR, "failed to create vertex buffer");
     m_texture.Release();
   }
 
@@ -167,8 +167,10 @@ void COverlayQuadsDX::Render(SRenderState &state)
   XMMATRIX world, view, proj;
   pGUIShader->GetWVP(world, view, proj);
 
-  if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_SPLIT_HORIZONTAL
-   || CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_SPLIT_VERTICAL)
+  if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+          RenderStereoMode::SPLIT_HORIZONTAL ||
+      CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+          RenderStereoMode::SPLIT_VERTICAL)
   {
     CRect rect;
     DX::Windowing()->GetViewPort(rect);
@@ -191,6 +193,7 @@ void COverlayQuadsDX::Render(SRenderState &state)
   pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
   DX::Windowing()->SetAlphaBlendEnable(true);
+  pGUIShader->SetDepth(-1.f);
   pGUIShader->Begin(SHADER_METHOD_RENDER_FONT);
 
   pGUIShader->SetShaderViews(1, m_texture.GetAddressOfSRV());
@@ -316,7 +319,7 @@ void COverlayImageDX::Load(const uint32_t* rgba, int width, int height, int stri
 
   if (!m_vertex.Create(D3D11_BIND_VERTEX_BUFFER, 4, sizeof(Vertex), DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, vt))
   {
-    CLog::Log(LOGERROR, "{} - failed to create vertex buffer", __FUNCTION__);
+    CLog::LogF(LOGERROR, "failed to create vertex buffer");
     m_texture.Release();
   }
 }
@@ -333,8 +336,10 @@ void COverlayImageDX::Render(SRenderState &state)
   XMMATRIX world, view, proj;
   pGUIShader->GetWVP(world, view, proj);
 
-  if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_SPLIT_HORIZONTAL
-   || CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_SPLIT_VERTICAL)
+  if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+          RenderStereoMode::SPLIT_HORIZONTAL ||
+      CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+          RenderStereoMode::SPLIT_VERTICAL)
   {
     CRect rect;
     DX::Windowing()->GetViewPort(rect);
@@ -356,6 +361,7 @@ void COverlayImageDX::Render(SRenderState &state)
   pContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
   pContext->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
+  pGUIShader->SetDepth(-1.f);
   pGUIShader->Begin(SHADER_METHOD_RENDER_TEXTURE_NOBLEND);
   DX::Windowing()->SetAlphaBlendEnable(true);
 

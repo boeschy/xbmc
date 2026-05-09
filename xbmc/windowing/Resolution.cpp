@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -17,6 +17,7 @@
 #include "utils/MathUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
+#include "windowing/WinSystem.h"
 
 #include <cstdlib>
 #include <limits>
@@ -88,7 +89,6 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
               "[WHITELIST] Using the default whitelist because the user whitelist is empty");
     std::vector<RESOLUTION> candidates;
     RESOLUTION_INFO info;
-    std::string resString;
     CServiceBroker::GetWinSystem()->GetGfxContext().GetAllowedResolutions(candidates);
     for (const auto& c : candidates)
     {
@@ -101,10 +101,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
         // and this causes ugly double switching.
         // This won't allow 25p / 30p playback on native refreshrate by default
         if ((info.fRefreshRate > 30) || (MathUtils::FloatEquals(info.fRefreshRate, 24.0f, 0.1f)))
-        {
-          resString = CDisplaySettings::GetInstance().GetStringFromRes(c);
-          indexList.emplace_back(resString);
-        }
+          indexList.push_back(CDisplaySettings::GetInstance().GetStringFromRes(c));
       }
     }
   }
@@ -120,9 +117,10 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
 
     // allow resolutions that are exact and have the correct refresh rate
-    // allow macroblock alignment / padding errors (e.g. 1080 mod16 == 8)
+    // allow hardware decoder surface padding due to codec block alignment and GPU requirements
+    // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
     if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-         (width == info.iScreenWidth && height <= info.iScreenHeight + 8)) &&
+         (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
         (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
         MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
     {
@@ -154,9 +152,10 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
       const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
 
       // allow resolutions that are exact and have double the refresh rate
-      // allow macroblock alignment / padding errors (e.g. 1080 mod16 == 8)
+      // allow hardware decoder surface padding due to codec block alignment and GPU requirements
+      // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
       if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-           (width == info.iScreenWidth && height <= info.iScreenHeight + 8)) &&
+           (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
           (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
           MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
       {
@@ -193,9 +192,10 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
       const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
 
       // allow resolutions that are exact and have 2.5 times the refresh rate
-      // allow macroblock alignment / padding errors (e.g. 1080 mod16 == 8)
+      // allow hardware decoder surface padding due to codec block alignment and GPU requirements
+      // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
       if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-           (width == info.iScreenWidth && height <= info.iScreenHeight + 8)) &&
+           (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
           (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
           MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
       {

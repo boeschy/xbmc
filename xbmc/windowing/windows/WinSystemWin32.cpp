@@ -69,7 +69,7 @@ CWinSystemWin32::CWinSystemWin32()
   {
     cacert = CSpecialProtocol::TranslatePath("special://xbmc/system/certs/cacert.pem");
     if (XFILE::CFile::Exists(cacert))
-      CEnvironment::setenv("SSL_CERT_FILE", cacert.c_str(), 1);
+      CEnvironment::setenv("SSL_CERT_FILE", cacert, 1);
   }
 
   m_winEvents.reset(new CWinEventsWin32());
@@ -528,7 +528,9 @@ bool CWinSystemWin32::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool 
 
   bool forceChange = false;    // resolution/display is changed but window state isn't changed
   bool changeScreen = false;   // display is changed
-  bool stereoChange = IsStereoEnabled() != (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_HARDWAREBASED);
+  bool stereoChange =
+      IsStereoEnabled() != (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+                            RenderStereoMode::HARDWAREBASED);
 
   if (m_nWidth != res.iWidth || m_nHeight != res.iHeight || m_fRefreshRate != res.fRefreshRate ||
       !oldMonitor || oldMonitor->hMonitor != newMonitor->hMonitor || stereoChange ||

@@ -114,9 +114,9 @@
 						<textoffsety>20</textoffsety>
 						<aligny>bottom</aligny>
 						<label></label>
-						<onclick condition="!String.IsEmpty(ListItem.Plot)">SetProperty(TextViewer_Header,$LOCALIZE[207],home)</onclick>
-						<onclick condition="!String.IsEmpty(ListItem.Plot)">SetProperty(TextViewer_Text,$ESCINFO[ListItem.Plot],home)</onclick>
-						<onclick condition="!String.IsEmpty(ListItem.Plot)">ActivateWindow(1102)</onclick>
+						<onclick>SetProperty(TextViewer_Header,$LOCALIZE[207],home)</onclick>
+						<onclick>SetProperty(TextViewer_Text,$ESCVAR[VideoInfoPlotVar],home)</onclick>
+						<onclick>ActivateWindow(1102)</onclick>
 						<onup>50</onup>
 						<onleft>4000</onleft>
 						<onright>4000</onright>
@@ -139,9 +139,9 @@
 						<textoffsety>20</textoffsety>
 						<aligny>bottom</aligny>
 						<label></label>
-						<onclick condition="!String.IsEmpty(ListItem.Plot)">SetProperty(TextViewer_Header,$LOCALIZE[207],home)</onclick>
-						<onclick condition="!String.IsEmpty(ListItem.Plot)">SetProperty(TextViewer_Text,$ESCINFO[ListItem.Plot],home)</onclick>
-						<onclick condition="!String.IsEmpty(ListItem.Plot)">ActivateWindow(1102)</onclick>
+						<onclick>SetProperty(TextViewer_Header,$LOCALIZE[207],home)</onclick>
+						<onclick>SetProperty(TextViewer_Text,$ESCVAR[VideoInfoPlotVar],home)</onclick>
+						<onclick>ActivateWindow(1102)</onclick>
 						<onup>50</onup>
 						<onleft>4000</onleft>
 						<onright>4000</onright>
@@ -153,8 +153,8 @@
 						<left>40</left>
 						<top>25</top>
 						<width>670</width>
-						<height>363</height>
-						<label fallback="19055">$INFO[ListItem.Plot]</label>
+						<height>368</height>
+						<label fallback="19055">$VAR[VideoInfoPlotVar]</label>
 						<autoscroll delay="10000" time="5000" repeat="10000">Skin.HasSetting(AutoScroll)</autoscroll>
 						<visible>Integer.IsGreater(Container(4000).NumItems,0)</visible>
 					</control>
@@ -162,8 +162,8 @@
 						<left>40</left>
 						<top>25</top>
 						<width>1165</width>
-						<height>363</height>
-						<label fallback="19055">$INFO[ListItem.Plot]</label>
+						<height>368</height>
+						<label fallback="19055">$VAR[VideoInfoPlotVar]</label>
 						<autoscroll delay="10000" time="5000" repeat="10000">Skin.HasSetting(AutoScroll)</autoscroll>
 						<visible>!Integer.IsGreater(Container(4000).NumItems,0)</visible>
 					</control>
@@ -782,7 +782,7 @@
 			<control type="group">
 				<visible>Control.HasFocus(50) + !String.IsEqual(ListItem.DBType,set)</visible>
 				<animation effect="fade" time="200">VisibleChange</animation>
-				<top>10</top>
+				<top>-10</top>
 				<left>0</left>
 				<control type="image">
 					<left>21</left>
@@ -802,7 +802,7 @@
 			<control type="group">
 				<visible>Control.HasFocus(138)</visible>
 				<animation effect="fade" time="200">VisibleChange</animation>
-				<top>10</top>
+				<top>-10</top>
 				<left>0</left>
 				<control type="image">
 					<top>4</top>

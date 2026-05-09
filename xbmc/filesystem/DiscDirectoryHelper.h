@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include "Directory.h"
+#include "video/Episode.h"
+#include "video/VideoInfoTag.h"
+
 #include <chrono>
 #include <cstdint>
 #include <map>
@@ -23,15 +27,14 @@ class CVideoInfoTag;
 
 namespace XFILE
 {
-
 using namespace std::chrono_literals;
 
-enum class GetTitles : uint8_t
+enum class GetTitle : int
 {
-  GET_TITLES_ONE = 0,
-  GET_TITLES_MAIN,
-  GET_TITLES_EPISODES,
-  GET_TITLES_ALL
+  GET_TITLES_SINGLE = -1,
+  GET_TITLES_MAIN = -2,
+  GET_TITLES_EPISODES = -3,
+  GET_TITLES_ALL = -4
 };
 
 enum class SortTitles : uint8_t
@@ -47,12 +50,25 @@ enum class AddMenuOption : bool
   ADD_MENU
 };
 
+enum class MenuDecision : uint8_t
+{
+  NO_ACTION,
+  SILENT,
+  SHOW_SIMPLE_MENU,
+  SHOW_DISC_MENU,
+  GET_MAIN_TITLE
+};
+
 enum class ENCODING_TYPE : uint8_t
 {
-  VIDEO_MPEG1 = 0x01,
+  // Video
   VIDEO_MPEG2 = 0x02,
-  AUDIO_MPEG1 = 0x03,
-  AUDIO_MPEG2 = 0x04,
+  VIDEO_VC1 = 0xea,
+  VIDEO_H264 = 0x1b,
+  VIDEO_H264_MVC = 0x20,
+  VIDEO_HEVC = 0x24,
+
+  // Audio
   AUDIO_LPCM = 0x80,
   AUDIO_AC3 = 0x81,
   AUDIO_DTS = 0x82,
@@ -60,14 +76,13 @@ enum class ENCODING_TYPE : uint8_t
   AUDIO_AC3PLUS = 0x84,
   AUDIO_DTSHD = 0x85,
   AUDIO_DTSHD_MASTER = 0x86,
-  VIDEO_VC1 = 0xea,
-  VIDEO_H264 = 0x1b,
-  VIDEO_HEVC = 0x24,
+  AUDIO_AC3PLUS_SECONDARY = 0xa1,
+  AUDIO_DTSHD_SECONDARY = 0xa2,
+
+  // Other
   SUB_PG = 0x90,
   SUB_IG = 0x91,
   SUB_TEXT = 0x92,
-  AUDIO_AC3PLUS_SECONDARY = 0xa1,
-  AUDIO_DTSHD_SECONDARY = 0xa2
 };
 
 enum class ASPECT_RATIO : uint8_t
@@ -76,28 +91,30 @@ enum class ASPECT_RATIO : uint8_t
   RATIO_16_9 = 3
 };
 
-struct DiscStreamInfo
-{
-  bool operator==(const DiscStreamInfo&) const = default;
-
-  ENCODING_TYPE coding{0};
-  unsigned int format{0};
-  unsigned int rate{0};
-  ASPECT_RATIO aspect{0};
-  std::string lang;
-};
-
-struct PlaylistInfo
+struct PlaylistInformation
 {
   unsigned int playlist{0};
   std::chrono::milliseconds duration{0ms};
   std::vector<unsigned int> clips;
   std::map<unsigned int, std::chrono::milliseconds> clipDuration;
   std::vector<std::chrono::milliseconds> chapters;
-  std::vector<DiscStreamInfo> videoStreams;
-  std::vector<DiscStreamInfo> audioStreams;
-  std::vector<DiscStreamInfo> pgStreams;
+  std::vector<VideoStreamInfo> videoStreams;
+  std::vector<AudioStreamInfo> audioStreams;
+  std::vector<SubtitleStreamInfo> pgStreams;
   std::string languages;
+
+  void clear()
+  {
+    playlist = 0;
+    duration = 0ms;
+    clips.clear();
+    clipDuration.clear();
+    chapters.clear();
+    videoStreams.clear();
+    audioStreams.clear();
+    pgStreams.clear();
+    languages.clear();
+  }
 };
 
 struct ClipInfo
@@ -106,7 +123,7 @@ struct ClipInfo
   std::vector<unsigned int> playlists;
 };
 
-using PlaylistMap = std::map<unsigned int, PlaylistInfo>;
+using PlaylistMap = std::map<unsigned int, PlaylistInformation>;
 using ClipMap = std::map<unsigned int, ClipInfo>;
 
 static constexpr std::chrono::milliseconds MIN_EPISODE_DURATION{10 * 60 * 1000}; // 10 minutes
@@ -146,20 +163,6 @@ class CDiscDirectoryHelper
     }
   };
 
-  // For removing duplicates from a vector of CandidatePlaylistInformation
-  struct CandidatePlaylistInformationNotDuplicate
-  {
-    explicit CandidatePlaylistInformationNotDuplicate(std::set<int64_t>& seen) : m_seen(seen) {}
-
-    bool operator()(const CandidatePlaylistInformation& c) const noexcept
-    {
-      return m_seen.insert(c.duration.count()).second;
-    }
-
-  private:
-    std::set<int64_t>& m_seen;
-  };
-
 public:
   CDiscDirectoryHelper();
   CDiscDirectoryHelper(const CDiscDirectoryHelper&) = delete;
@@ -169,6 +172,7 @@ public:
    * \brief Populates a CFileItemList with the playlist(s) corresponding to the given episode.
    * \param url bluray:// episode url
    * \param items CFileItemList to populate
+   * \param allTitles CFileItemList of all titles on the disc (populated by CBlurayDirectory). Used for streamdetails.
    * \param episodeIndex index into episodesOnDisc
    * \param episodesOnDisc vector array of CVideoInfoTags - one for each episode on the disc (populated by GetEpisodesOnDisc)
    * \param clips map of clips on disc (populated in CBlurayDirectory)
@@ -177,8 +181,9 @@ public:
    */
   bool GetEpisodePlaylists(const CURL& url,
                            CFileItemList& items,
+                           const CFileItemList& allTitles,
                            int episodeIndex,
-                           const std::vector<CVideoInfoTag>& episodesOnDisc,
+                           const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc,
                            const ClipMap& clips,
                            const PlaylistMap& playlists);
 
@@ -197,15 +202,30 @@ public:
    */
   static void AddRootOptions(const CURL& url, CFileItemList& items, AddMenuOption addMenuOption);
 
+  /*!
+   * \brief Either shows simple menu to select playlist, chooses main feature (movie/episode) playlists or returns if disc menu will be used later.
+   * \param item FileItem containing details of desired movie/episode. This is updated with the selected playlist.
+   * \param playback Determines if the simple dialog should be shown or the main title selected (if possible).
+   * \return true if a playlist was selected or if the disc menu will be used later, false if the user cancelled.
+   */
+  static bool GetOrShowPlaylistSelection(CFileItem& item, MenuDecision playback);
+
+protected:
+  static bool GetDirectoryItems(const std::string& path,
+                                CFileItemList& items,
+                                const CDirectory::CHints& hints,
+                                bool silent = false);
+
 private:
-  void InitialisePlaylistSearch(int episodeIndex, const std::vector<CVideoInfoTag>& episodesOnDisc);
-  bool IsPotentialPlayAllPlaylist(const PlaylistInfo& playlistInformation) const;
+  void InitialisePlaylistSearch(int episodeIndex,
+                                const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc);
+  bool IsPotentialPlayAllPlaylist(const PlaylistInformation& playlistInformation) const;
   static bool ClipQualifies(const ClipInfo& clipInformation,
                             unsigned int clip,
-                            const PlaylistInfo& playlistInformation,
+                            const PlaylistInformation& playlistInformation,
                             bool& allowBeginningOrEnd,
                             bool allowBeginningAndEnd);
-  bool IsValidSingleEpisodePlaylist(const PlaylistInfo& singleEpisodePlaylistInformation,
+  bool IsValidSingleEpisodePlaylist(const PlaylistInformation& singleEpisodePlaylistInformation,
                                     unsigned int clip) const;
   bool CheckClip(const PlaylistMap& playlists,
                  unsigned int playlistNumber,
@@ -216,11 +236,11 @@ private:
       const ClipMap& clips,
       const PlaylistMap& playlists,
       unsigned int playlistNumber,
-      const PlaylistInfo& playlistInformation,
+      const PlaylistInformation& playlistInformation,
       std::map<unsigned int, std::vector<unsigned int>>& playAllPlaylistClipMap) const;
   void StorePlayAllPlaylist(
       unsigned int playlistNumber,
-      const PlaylistInfo& playlistInformation,
+      const PlaylistInformation& playlistInformation,
       const std::map<unsigned int, std::vector<unsigned int>>& playAllPlaylistClipMap);
   void FindPlayAllPlaylists(const ClipMap& clips, const PlaylistMap& playlists);
   void FindGroups(const PlaylistMap& playlists);
@@ -231,15 +251,19 @@ private:
       const std::vector<std::vector<CandidatePlaylistInformation>>& groups);
   void GetPlaylistsFromGroup(unsigned int episodeIndex,
                              const std::vector<CandidatePlaylistInformation>& group);
-  void UseGroupMethod(unsigned int episodeIndex, const std::vector<CVideoInfoTag>& episodesOnDisc);
+  void UseGroupMethod(unsigned int episodeIndex,
+                      const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc);
+  void UseTotalMethod(unsigned int episodeIndex,
+                      const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc,
+                      const PlaylistMap& playlists);
   static int CalculateMultiple(std::chrono::milliseconds duration,
                                std::chrono::milliseconds averageShortest,
                                double multiplePercent);
   void UseGroupsWithMultiplesMethod(unsigned int episodeIndex,
-                                    const std::vector<CVideoInfoTag>& episodesOnDisc);
-  void ChooseSingleBestPlaylist(const std::vector<CVideoInfoTag>& episodesOnDisc);
+                                    const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc);
+  void ChooseSingleBestPlaylist(const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc);
   void AddIdenticalPlaylists(const PlaylistMap& playlists);
-  void FindCandidatePlaylists(const std::vector<CVideoInfoTag>& episodesOnDisc,
+  void FindCandidatePlaylists(const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc,
                               unsigned int episodeIndex,
                               const PlaylistMap& playlists);
   void FindSpecials(const PlaylistMap& playlists);
@@ -247,13 +271,14 @@ private:
                            const std::shared_ptr<CFileItem>& item,
                            unsigned int playlist,
                            const PlaylistMap& playlists,
-                           const CVideoInfoTag& tag,
+                           const KODI::VIDEO::EPISODE& episode,
                            IsSpecial isSpecial);
   void EndPlaylistSearch() const;
   void PopulateFileItems(const CURL& url,
                          CFileItemList& items,
+                         const CFileItemList& allTitles,
                          int episodeIndex,
-                         const std::vector<CVideoInfoTag>& episodesOnDisc,
+                         const std::vector<KODI::VIDEO::EPISODE>& episodesOnDisc,
                          const PlaylistMap& playlists) const;
 
   AllEpisodes m_allEpisodes{AllEpisodes::SINGLE};
@@ -267,5 +292,7 @@ private:
   std::vector<std::vector<CandidatePlaylistInformation>> m_allGroups;
   std::map<unsigned int, CandidatePlaylistInformation> m_candidatePlaylists;
   std::set<unsigned int> m_candidateSpecials;
+
+  static bool GetItems(CFileItemList& items, const std::string& directory, bool silent = false);
 };
 } // namespace XFILE

@@ -14,6 +14,7 @@ if(NOT TARGET LIBRARY::NGHttp2)
 
     set(patches "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/01-all-cmake-version.patch")
     generate_patchcommand("${patches}")
+    unset(patches)
 
     set(CMAKE_ARGS -DENABLE_DEBUG=OFF
                    -DENABLE_FAILMALLOC=OFF
@@ -39,7 +40,7 @@ if(NOT TARGET LIBRARY::NGHttp2)
   find_package(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME} ${CONFIG_${CMAKE_FIND_PACKAGE_NAME}_FIND_SPEC} CONFIG ${SEARCH_QUIET}
                                                          CONFIGS nghttp2-targets.cmake
                                                          HINTS ${DEPENDS_PATH}/lib/cmake
-                                                         ${${CORE_PLATFORM_NAME_LC}_SEARCH_CONFIG})
+                                                         ${${CORE_SYSTEM_NAME}_SEARCH_CONFIG})
 
   # cmake config may not be available (eg Debian libnghttp2-dev package)
   # fallback to pkgconfig for non windows platforms
@@ -52,69 +53,14 @@ if(NOT TARGET LIBRARY::NGHttp2)
   endif()
 
   # Check for existing Nghttp2. If version >= NGHTTP2-VERSION file version, dont build
-  if(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_VERSION VERSION_LESS ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_VER} AND NGHttp2_FIND_REQUIRED)
+  if("${${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_VERSION}" VERSION_LESS ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_VER} AND NGHttp2_FIND_REQUIRED)
+    message(STATUS "Building ${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}: \(version \"${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_VER}\"\)")
     cmake_language(EVAL CODE "
       buildmacro${CMAKE_FIND_PACKAGE_NAME}()
     ")
-  else()
-    if(TARGET nghttp2::nghttp2 OR TARGET nghttp2::nghttp2_static)
-
-      # We have a preference for the static lib when needed, however provide support for the shared
-      # lib as well
-      if(TARGET nghttp2::nghttp2_static)
-        set(_target nghttp2::nghttp2_static)
-      else()
-        set(_target nghttp2::nghttp2)
-      endif()
-
-      # This is for the case where a distro provides a non standard (Debug/Release) config type
-      # convert this back to either DEBUG/RELEASE or just RELEASE
-      # we only do this because we use find_package_handle_standard_args for config time output
-      # and it isnt capable of handling TARGETS, so we have to extract the info
-      get_target_property(_NGHTTP2_CONFIGURATIONS ${_target} IMPORTED_CONFIGURATIONS)
-      if(_NGHTTP2_CONFIGURATIONS)
-        foreach(_nghttp2_config IN LISTS _NGHTTP2_CONFIGURATIONS)
-          # Some non standard config (eg None on Debian)
-          # Just set to RELEASE var so select_library_configurations can continue to work its magic
-          string(TOUPPER ${_nghttp2_config} _nghttp2_config_UPPER)
-          if((NOT ${_nghttp2_config_UPPER} STREQUAL "RELEASE") AND
-             (NOT ${_nghttp2_config_UPPER} STREQUAL "DEBUG"))
-            get_target_property(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_RELEASE ${_target} IMPORTED_LOCATION_${_nghttp2_config_UPPER})
-          else()
-            get_target_property(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_${_nghttp2_config_UPPER} ${_target} IMPORTED_LOCATION_${_nghttp2_config_UPPER})
-          endif()
-        endforeach()
-      else()
-        get_target_property(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_RELEASE ${_target} IMPORTED_LOCATION)
-      endif()
-
-      get_target_property(NGHTTP2_INCLUDE_DIR ${_target} INTERFACE_INCLUDE_DIRECTORIES)
-    elseif(TARGET PkgConfig::${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME})
-      # First item is the full path of the library file found
-      # pkg_check_modules does not populate a variable of the found library explicitly
-      list(GET ${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_LINK_LIBRARIES 0 ${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_RELEASE)
-
-      get_target_property(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_INCLUDE_DIR PkgConfig::${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME} INTERFACE_INCLUDE_DIRECTORIES)
-
-      set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_VERSION ${${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_VERSION})
-    endif()
   endif()
 
-  include(SelectLibraryConfigurations)
-  select_library_configurations(${${CMAKE_FIND_PACKAGE_NAME}_MODULE})
-  unset(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARIES)
-
-  if(NOT VERBOSE_FIND)
-     set(${CMAKE_FIND_PACKAGE_NAME}_FIND_QUIETLY TRUE)
-   endif()
-
-  include(FindPackageHandleStandardArgs)
-  find_package_handle_standard_args(NGHttp2
-                                    REQUIRED_VARS ${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY ${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_INCLUDE_DIR
-                                    VERSION_VAR ${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_VERSION)
-
-  if(NGHttp2_FOUND)
-
+  if(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_FOUND)
     if((TARGET nghttp2::nghttp2 OR TARGET nghttp2::nghttp2_static) AND NOT TARGET ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_BUILD_NAME})
       # We have a preference for the static lib when needed, however provide support 
       # for the shared lib as well

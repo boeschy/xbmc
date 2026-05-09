@@ -30,7 +30,8 @@
 #include "guilib/GUISettingsSliderControl.h"
 #include "guilib/GUISpinControlEx.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/MediaSourceSettings.h"
 #include "settings/SettingAddon.h"
 #include "settings/SettingControl.h"
@@ -61,7 +62,8 @@ std::string Localize(std::uint32_t code,
 
   if (!addonId.empty())
   {
-    const std::string label = g_localizeStrings.GetAddonString(addonId, code);
+    const std::string label =
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().GetAddonString(addonId, code);
     if (!label.empty())
       return label;
   }
@@ -729,9 +731,9 @@ bool CGUIControlListSetting::OnClick()
           strLabel = strLabel.substr(0, strLabel.find(','));
           if (!strLabel.empty())
           {
-            bValidType = !std::any_of(options.begin(), options.end(), [&](const auto& p) {
-              return p->GetProperty("value").asString() == strLabel;
-            });
+            bValidType =
+                !std::ranges::any_of(options, [&](const auto& p)
+                                     { return p->GetProperty("value").asString() == strLabel; });
           }
           if (bValidType)
           { // Add new value to the list of options
@@ -970,7 +972,7 @@ bool CGUIControlButtonSetting::OnClick()
       if (m_pSetting->GetType() == SettingType::List)
         std::static_pointer_cast<CSettingList>(m_pSetting)->FromString(addonIDs);
       else
-        SetValid(setting->SetValue(addonIDs[0]));
+        SetValid(setting->SetValue(!addonIDs.empty() ? addonIDs[0] : ""));
     }
     else if (controlFormat == "path" || controlFormat == "file" || controlFormat == "image")
       SetValid(GetPath(std::static_pointer_cast<CSettingPath>(m_pSetting), m_localizer));
@@ -1089,7 +1091,8 @@ void CGUIControlButtonSetting::Update(bool fromControl, bool updateDisplayOnly)
             }
 
             if (addonNames.empty())
-              strText = g_localizeStrings.Get(231); // None
+              strText =
+                  CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(231); // None
             else
               strText = StringUtils::Join(addonNames, ", ");
           }
@@ -1106,7 +1109,8 @@ void CGUIControlButtonSetting::Update(bool fromControl, bool updateDisplayOnly)
             {
               strText = strValue;
               if (strText.empty())
-                strText = g_localizeStrings.Get(231); // None
+                strText =
+                    CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(231); // None
             }
             else
               strText = strValue;

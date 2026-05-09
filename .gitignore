@@ -187,9 +187,7 @@ cmake_install.cmake
 /project/BuildDependencies/mingwlibs
 /project/BuildDependencies/arm64
 /project/BuildDependencies/x64
-/project/BuildDependencies/win10-arm
 /project/BuildDependencies/win10-x64
-/project/BuildDependencies/win10-win32
 /project/BuildDependencies/win32
 
 # /system/players/VideoPlayer
@@ -197,20 +195,6 @@ cmake_install.cmake
 
 # /system
 /system/profiles.xml
-
-#/tools/android
-/tools/android/packaging/Makefile
-/tools/android/packaging/xbmc/activity_main.xml
-/tools/android/packaging/xbmc/AndroidManifest.xml
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/Main.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/Splash.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCBroadcastReceiver.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCInputDeviceListener.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCOnAudioFocusChangeListener.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCOnFrameAvailableListener.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCSettingsContentObserver.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCVideoView.java
-/tools/android/packaging/xbmc/strings.xml
 
 #/tools/depends
 /tools/depends/**/config.cache
@@ -241,8 +225,6 @@ cmake_install.cmake
 # /tools/EventClients/
 /tools/EventClients/*.pyc
 /tools/EventClients/Makefile
-/tools/EventClients/Clients/OSXRemote/Makefile
-/tools/EventClients/Clients/OSXRemote/build/
 /tools/EventClients/Clients/WiiRemote/WiiRemote
 
 # /tools/darwin/

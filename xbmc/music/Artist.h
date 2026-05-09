@@ -11,10 +11,9 @@
 #include "XBDateTime.h"
 #include "utils/Artwork.h"
 #include "utils/ScraperUrl.h"
-#include "utils/StringUtils.h"
 
-#include <map>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -183,22 +182,20 @@ private:
   bool m_bScrapedMBID = false; // Flag that mbid is from album merge of scarper results not derived from tags
 };
 
-typedef std::vector<CArtist> VECARTISTS;
-typedef std::vector<CArtistCredit> VECARTISTCREDITS;
+static constexpr std::string_view BLANKARTIST_FAKEMUSICBRAINZID = "Artist Tag Missing";
+static constexpr std::string_view BLANKARTIST_NAME = "[Missing Tag]";
+static constexpr int BLANKARTIST_ID = 1;
+static constexpr std::string_view VARIOUSARTISTS_MBID = "89ad4ac3-39f7-470e-963a-56509c546377";
 
-inline const std::string BLANKARTIST_FAKEMUSICBRAINZID = "Artist Tag Missing";
-inline const std::string BLANKARTIST_NAME = "[Missing Tag]";
-const int BLANKARTIST_ID = 1;
-inline const std::string VARIOUSARTISTS_MBID = "89ad4ac3-39f7-470e-963a-56509c546377";
-
-#define ROLE_ARTIST 1  //Default role
+static constexpr int ROLE_ARTIST = 1; // Default role
 
 class CMusicRole
 {
 public:
   CMusicRole() = default;
   CMusicRole(std::string strRole, std::string strArtist)
-    : idRole(-1), m_strRole(std::move(strRole)), m_strArtist(std::move(strArtist)), idArtist(-1)
+    : m_strRole(std::move(strRole)),
+      m_strArtist(std::move(strArtist))
   {
   }
   CMusicRole(int role, std::string strRole, std::string strArtist, int ArtistId)
@@ -214,21 +211,11 @@ public:
   int GetArtistId() const { return idArtist; }
   void SetArtistId(int iArtistId) { idArtist = iArtistId;  }
 
-  bool operator==(const CMusicRole& a) const
-  {
-    if (StringUtils::EqualsNoCase(m_strRole, a.m_strRole))
-      return StringUtils::EqualsNoCase(m_strArtist, a.m_strArtist);
-    else
-      return false;
-  }
+  bool operator==(const CMusicRole& a) const;
+
 private:
-  int idRole;
+  int idRole = -1;
   std::string m_strRole;
   std::string m_strArtist;
-  int idArtist;
+  int idArtist = -1;
 };
-
-typedef std::vector<CMusicRole> VECMUSICROLES;
-
-
-

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2016-2018 Team Kodi
+ *  Copyright (C) 2016-2025 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -48,23 +48,6 @@ namespace dbiplus
   using sql_record = std::vector<field_value>;
 }
 
-#ifndef my_offsetof
-#ifndef TARGET_POSIX
-#define my_offsetof(TYPE, MEMBER) offsetof(TYPE, MEMBER)
-#else
-/*
-   Custom version of standard offsetof() macro which can be used to get
-   offsets of members in class for non-POD types (according to the current
-   version of C++ standard offsetof() macro can't be used in such cases and
-   attempt to do so causes warnings to be emitted, OTOH in many cases it is
-   still OK to assume that all instances of the class has the same offsets
-   for the same members).
- */
-#define my_offsetof(TYPE, MEMBER) \
-               ((size_t)((char *)&(((TYPE *)0x10)->MEMBER) - (char*)0x10))
-#endif
-#endif
-
 namespace KODI::VIDEO
 {
   class IVideoInfoScannerObserver;
@@ -83,101 +66,6 @@ enum VideoDbDetails
   VideoDbDetailsUniqueID = 0x40,
   VideoDbDetailsAll      = 0xFF
 } ;
-
-// these defines are based on how many columns we have and which column certain data is going to be in
-// when we do GetDetailsForMovie()
-constexpr int VIDEODB_MAX_COLUMNS = 24;
-constexpr int VIDEODB_DETAILS_FILEID = 1;
-
-// clang-format off
-constexpr int VIDEODB_DETAILS_MOVIE_SET_ID              = VIDEODB_MAX_COLUMNS + 2;
-constexpr int VIDEODB_DETAILS_MOVIE_USER_RATING         = VIDEODB_MAX_COLUMNS + 3;
-constexpr int VIDEODB_DETAILS_MOVIE_PREMIERED           = VIDEODB_MAX_COLUMNS + 4;
-constexpr int VIDEODB_DETAILS_MOVIE_SET_NAME            = VIDEODB_MAX_COLUMNS + 5;
-constexpr int VIDEODB_DETAILS_MOVIE_SET_OVERVIEW        = VIDEODB_MAX_COLUMNS + 6;
-constexpr int VIDEODB_DETAILS_MOVIE_SET_ORIGINALNAME    = VIDEODB_MAX_COLUMNS + 7;
-constexpr int VIDEODB_DETAILS_MOVIE_FILE                = VIDEODB_MAX_COLUMNS + 8;
-constexpr int VIDEODB_DETAILS_MOVIE_PATH                = VIDEODB_MAX_COLUMNS + 9;
-constexpr int VIDEODB_DETAILS_MOVIE_PLAYCOUNT           = VIDEODB_MAX_COLUMNS + 10;
-constexpr int VIDEODB_DETAILS_MOVIE_LASTPLAYED          = VIDEODB_MAX_COLUMNS + 11;
-constexpr int VIDEODB_DETAILS_MOVIE_DATEADDED           = VIDEODB_MAX_COLUMNS + 12;
-constexpr int VIDEODB_DETAILS_MOVIE_RESUME_TIME         = VIDEODB_MAX_COLUMNS + 13;
-constexpr int VIDEODB_DETAILS_MOVIE_TOTAL_TIME          = VIDEODB_MAX_COLUMNS + 14;
-constexpr int VIDEODB_DETAILS_MOVIE_PLAYER_STATE        = VIDEODB_MAX_COLUMNS + 15;
-constexpr int VIDEODB_DETAILS_MOVIE_RATING              = VIDEODB_MAX_COLUMNS + 16;
-constexpr int VIDEODB_DETAILS_MOVIE_VOTES               = VIDEODB_MAX_COLUMNS + 17;
-constexpr int VIDEODB_DETAILS_MOVIE_RATING_TYPE         = VIDEODB_MAX_COLUMNS + 18;
-constexpr int VIDEODB_DETAILS_MOVIE_UNIQUEID_VALUE      = VIDEODB_MAX_COLUMNS + 19;
-constexpr int VIDEODB_DETAILS_MOVIE_UNIQUEID_TYPE       = VIDEODB_MAX_COLUMNS + 20;
-constexpr int VIDEODB_DETAILS_MOVIE_HASVERSIONS         = VIDEODB_MAX_COLUMNS + 21;
-constexpr int VIDEODB_DETAILS_MOVIE_HASEXTRAS           = VIDEODB_MAX_COLUMNS + 22;
-constexpr int VIDEODB_DETAILS_MOVIE_ISDEFAULTVERSION    = VIDEODB_MAX_COLUMNS + 23;
-constexpr int VIDEODB_DETAILS_MOVIE_VERSION_FILEID      = VIDEODB_MAX_COLUMNS + 24;
-constexpr int VIDEODB_DETAILS_MOVIE_VERSION_TYPEID      = VIDEODB_MAX_COLUMNS + 25;
-constexpr int VIDEODB_DETAILS_MOVIE_VERSION_TYPENAME    = VIDEODB_MAX_COLUMNS + 26;
-constexpr int VIDEODB_DETAILS_MOVIE_VERSION_ITEMTYPE    = VIDEODB_MAX_COLUMNS + 27;
-
-constexpr int VIDEODB_DETAILS_EPISODE_TVSHOW_ID         = VIDEODB_MAX_COLUMNS + 2;
-constexpr int VIDEODB_DETAILS_EPISODE_USER_RATING       = VIDEODB_MAX_COLUMNS + 3;
-constexpr int VIDEODB_DETAILS_EPISODE_SEASON_ID         = VIDEODB_MAX_COLUMNS + 4;
-constexpr int VIDEODB_DETAILS_EPISODE_FILE              = VIDEODB_MAX_COLUMNS + 5;
-constexpr int VIDEODB_DETAILS_EPISODE_PATH              = VIDEODB_MAX_COLUMNS + 6;
-constexpr int VIDEODB_DETAILS_EPISODE_PLAYCOUNT         = VIDEODB_MAX_COLUMNS + 7;
-constexpr int VIDEODB_DETAILS_EPISODE_LASTPLAYED        = VIDEODB_MAX_COLUMNS + 8;
-constexpr int VIDEODB_DETAILS_EPISODE_DATEADDED         = VIDEODB_MAX_COLUMNS + 9;
-constexpr int VIDEODB_DETAILS_EPISODE_TVSHOW_NAME       = VIDEODB_MAX_COLUMNS + 10;
-constexpr int VIDEODB_DETAILS_EPISODE_TVSHOW_GENRE      = VIDEODB_MAX_COLUMNS + 11;
-constexpr int VIDEODB_DETAILS_EPISODE_TVSHOW_STUDIO     = VIDEODB_MAX_COLUMNS + 12;
-constexpr int VIDEODB_DETAILS_EPISODE_TVSHOW_AIRED      = VIDEODB_MAX_COLUMNS + 13;
-constexpr int VIDEODB_DETAILS_EPISODE_TVSHOW_MPAA       = VIDEODB_MAX_COLUMNS + 14;
-constexpr int VIDEODB_DETAILS_EPISODE_RESUME_TIME       = VIDEODB_MAX_COLUMNS + 15;
-constexpr int VIDEODB_DETAILS_EPISODE_TOTAL_TIME        = VIDEODB_MAX_COLUMNS + 16;
-constexpr int VIDEODB_DETAILS_EPISODE_PLAYER_STATE      = VIDEODB_MAX_COLUMNS + 17;
-constexpr int VIDEODB_DETAILS_EPISODE_RATING            = VIDEODB_MAX_COLUMNS + 18;
-constexpr int VIDEODB_DETAILS_EPISODE_VOTES             = VIDEODB_MAX_COLUMNS + 19;
-constexpr int VIDEODB_DETAILS_EPISODE_RATING_TYPE       = VIDEODB_MAX_COLUMNS + 20;
-constexpr int VIDEODB_DETAILS_EPISODE_UNIQUEID_VALUE    = VIDEODB_MAX_COLUMNS + 21;
-constexpr int VIDEODB_DETAILS_EPISODE_UNIQUEID_TYPE     = VIDEODB_MAX_COLUMNS + 22;
-
-constexpr int VIDEODB_DETAILS_TVSHOW_USER_RATING        = VIDEODB_MAX_COLUMNS + 1;
-constexpr int VIDEODB_DETAILS_TVSHOW_DURATION           = VIDEODB_MAX_COLUMNS + 2;
-constexpr int VIDEODB_DETAILS_TVSHOW_PARENTPATHID       = VIDEODB_MAX_COLUMNS + 3;
-constexpr int VIDEODB_DETAILS_TVSHOW_PATH               = VIDEODB_MAX_COLUMNS + 4;
-constexpr int VIDEODB_DETAILS_TVSHOW_DATEADDED          = VIDEODB_MAX_COLUMNS + 5;
-constexpr int VIDEODB_DETAILS_TVSHOW_LASTPLAYED         = VIDEODB_MAX_COLUMNS + 6;
-constexpr int VIDEODB_DETAILS_TVSHOW_NUM_EPISODES       = VIDEODB_MAX_COLUMNS + 7;
-constexpr int VIDEODB_DETAILS_TVSHOW_NUM_WATCHED        = VIDEODB_MAX_COLUMNS + 8;
-constexpr int VIDEODB_DETAILS_TVSHOW_NUM_SEASONS        = VIDEODB_MAX_COLUMNS + 9;
-constexpr int VIDEODB_DETAILS_TVSHOW_RATING             = VIDEODB_MAX_COLUMNS + 10;
-constexpr int VIDEODB_DETAILS_TVSHOW_VOTES              = VIDEODB_MAX_COLUMNS + 11;
-constexpr int VIDEODB_DETAILS_TVSHOW_RATING_TYPE        = VIDEODB_MAX_COLUMNS + 12;
-constexpr int VIDEODB_DETAILS_TVSHOW_UNIQUEID_VALUE     = VIDEODB_MAX_COLUMNS + 13;
-constexpr int VIDEODB_DETAILS_TVSHOW_UNIQUEID_TYPE      = VIDEODB_MAX_COLUMNS + 14;
-constexpr int VIDEODB_DETAILS_TVSHOW_NUM_INPROGRESS     = VIDEODB_MAX_COLUMNS + 15;
-
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_USER_RATING    = VIDEODB_MAX_COLUMNS + 2;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_PREMIERED      = VIDEODB_MAX_COLUMNS + 3;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_FILE           = VIDEODB_MAX_COLUMNS + 4;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_PATH           = VIDEODB_MAX_COLUMNS + 5;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_PLAYCOUNT      = VIDEODB_MAX_COLUMNS + 6;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_LASTPLAYED     = VIDEODB_MAX_COLUMNS + 7;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_DATEADDED      = VIDEODB_MAX_COLUMNS + 8;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_RESUME_TIME    = VIDEODB_MAX_COLUMNS + 9;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_TOTAL_TIME     = VIDEODB_MAX_COLUMNS + 10;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_PLAYER_STATE   = VIDEODB_MAX_COLUMNS + 11;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_UNIQUEID_VALUE = VIDEODB_MAX_COLUMNS + 12;
-constexpr int VIDEODB_DETAILS_MUSICVIDEO_UNIQUEID_TYPE  = VIDEODB_MAX_COLUMNS + 13;
-
-constexpr int VIDEODB_TYPE_UNUSED       = 0;
-constexpr int VIDEODB_TYPE_STRING       = 1;
-constexpr int VIDEODB_TYPE_INT          = 2;
-constexpr int VIDEODB_TYPE_FLOAT        = 3;
-constexpr int VIDEODB_TYPE_BOOL         = 4;
-constexpr int VIDEODB_TYPE_COUNT        = 5;
-constexpr int VIDEODB_TYPE_STRINGARRAY  = 6;
-constexpr int VIDEODB_TYPE_DATE         = 7;
-constexpr int VIDEODB_TYPE_DATETIME     = 8;
-// clang-format on
 
 enum class VideoDbContentType
 {
@@ -205,270 +93,26 @@ private:
     using namespace std::literals::string_view_literals;
     switch (type)
     {
-      case VideoDbContentType::UNKNOWN:
+      using enum VideoDbContentType;
+
+      case UNKNOWN:
         return "unknown"sv;
-      case VideoDbContentType::MOVIES:
+      case MOVIES:
         return "movies"sv;
-      case VideoDbContentType::TVSHOWS:
+      case TVSHOWS:
         return "TV shows"sv;
-      case VideoDbContentType::MUSICVIDEOS:
+      case MUSICVIDEOS:
         return "music videos"sv;
-      case VideoDbContentType::EPISODES:
+      case EPISODES:
         return "episodes"sv;
-      case VideoDbContentType::MOVIE_SETS:
+      case MOVIE_SETS:
         return "movie sets"sv;
-      case VideoDbContentType::MUSICALBUMS:
+      case MUSICALBUMS:
         return "music albums"sv;
     };
     throw std::invalid_argument("no videodb content string found");
   }
 };
-
-enum VIDEODB_IDS // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
-{
-  VIDEODB_ID_MIN = -1,
-  VIDEODB_ID_TITLE = 0,
-  VIDEODB_ID_PLOT = 1,
-  VIDEODB_ID_PLOTOUTLINE = 2,
-  VIDEODB_ID_TAGLINE = 3,
-  VIDEODB_ID_VOTES = 4, // unused
-  VIDEODB_ID_RATING_ID = 5,
-  VIDEODB_ID_CREDITS = 6,
-  VIDEODB_ID_YEAR = 7, // unused
-  VIDEODB_ID_THUMBURL = 8,
-  VIDEODB_ID_IDENT_ID = 9,
-  VIDEODB_ID_SORTTITLE = 10,
-  VIDEODB_ID_RUNTIME = 11,
-  VIDEODB_ID_MPAA = 12,
-  VIDEODB_ID_TOP250 = 13,
-  VIDEODB_ID_GENRE = 14,
-  VIDEODB_ID_DIRECTOR = 15,
-  VIDEODB_ID_ORIGINALTITLE = 16,
-  VIDEODB_ID_THUMBURL_SPOOF = 17,
-  VIDEODB_ID_STUDIOS = 18,
-  VIDEODB_ID_TRAILER = 19,
-  VIDEODB_ID_FANART = 20,
-  VIDEODB_ID_COUNTRY = 21,
-  VIDEODB_ID_BASEPATH = 22,
-  VIDEODB_ID_PARENTPATHID = 23,
-  VIDEODB_ID_MAX
-};
-
-struct SDbTableOffsets
-{
-  int type{VIDEODB_TYPE_UNUSED};
-  size_t offset{0};
-};
-
-// clang-format off
-const std::array<SDbTableOffsets, 24> DbMovieOffsets = {{
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strTitle) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPlot) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPlotOutline) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strTagLine) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iIdRating) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_writingCredits) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPictureURL.m_data) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iIdUniqueID) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strSortTitle) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_duration) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strMPAARating) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iTop250) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_genre) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_director) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strOriginalTitle) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_studio) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strTrailer) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_fanart.m_xml) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_country) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_basePath) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) }
-}};
-// clang-format on
-
-enum VIDEODB_SET_IDS // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
-{
-  VIDEODB_ID_SET_MIN = -1,
-  VIDEODB_ID_SET_TITLE = 0,
-  VIDEODB_ID_SET_OVERVIEW = 1,
-  VIDEODB_ID_SET_ORIGINALTITLE = 2,
-  VIDEODB_ID_SET_MAX
-};
-
-// clang-format off
-const std::array<SDbTableOffsets, 3> DbSetOffsets = {{
-    {VIDEODB_TYPE_STRING, my_offsetof(CSetInfoTag, m_title)},
-    {VIDEODB_TYPE_STRING, my_offsetof(CSetInfoTag, m_overview)},
-    {VIDEODB_TYPE_STRING, my_offsetof(CSetInfoTag, m_originalTitle)}
-}};
-// clang-format on
-
-enum VIDEODB_TV_IDS // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
-{
-  VIDEODB_ID_TV_MIN = -1,
-  VIDEODB_ID_TV_TITLE = 0,
-  VIDEODB_ID_TV_PLOT = 1,
-  VIDEODB_ID_TV_STATUS = 2,
-  VIDEODB_ID_TV_VOTES = 3, // unused
-  VIDEODB_ID_TV_RATING_ID = 4,
-  VIDEODB_ID_TV_PREMIERED = 5,
-  VIDEODB_ID_TV_THUMBURL = 6,
-  VIDEODB_ID_TV_THUMBURL_SPOOF = 7,
-  VIDEODB_ID_TV_GENRE = 8,
-  VIDEODB_ID_TV_ORIGINALTITLE = 9,
-  VIDEODB_ID_TV_EPISODEGUIDE = 10,
-  VIDEODB_ID_TV_FANART = 11,
-  VIDEODB_ID_TV_IDENT_ID = 12,
-  VIDEODB_ID_TV_MPAA = 13,
-  VIDEODB_ID_TV_STUDIOS = 14,
-  VIDEODB_ID_TV_SORTTITLE = 15,
-  VIDEODB_ID_TV_TRAILER = 16,
-  VIDEODB_ID_TV_MAX
-};
-
-// clang-format off
-const std::array<SDbTableOffsets, 17> DbTvShowOffsets = {{
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strTitle) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPlot) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strStatus) },
-  { VIDEODB_TYPE_UNUSED, 0 }, //unused
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iIdRating) },
-  { VIDEODB_TYPE_DATE, my_offsetof(CVideoInfoTag,m_premiered) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPictureURL.m_data) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_genre) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strOriginalTitle)},
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strEpisodeGuide)},
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_fanart.m_xml)},
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iIdUniqueID)},
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strMPAARating)},
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_studio)},
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strSortTitle)},
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strTrailer)}
-}};
-// clang-format on
-
-//! @todo is this comment valid for seasons? There is no offset structure or am I wrong?
-enum VIDEODB_SEASON_IDS // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
-{
-  VIDEODB_ID_SEASON_MIN = -1,
-  VIDEODB_ID_SEASON_ID = 0,
-  VIDEODB_ID_SEASON_TVSHOW_ID = 1,
-  VIDEODB_ID_SEASON_NUMBER = 2,
-  VIDEODB_ID_SEASON_NAME = 3,
-  VIDEODB_ID_SEASON_USER_RATING = 4,
-  VIDEODB_ID_SEASON_TVSHOW_PATH = 5,
-  VIDEODB_ID_SEASON_TVSHOW_TITLE = 6,
-  VIDEODB_ID_SEASON_TVSHOW_PLOT = 7,
-  VIDEODB_ID_SEASON_TVSHOW_PREMIERED = 8,
-  VIDEODB_ID_SEASON_TVSHOW_GENRE = 9,
-  VIDEODB_ID_SEASON_TVSHOW_STUDIO = 10,
-  VIDEODB_ID_SEASON_TVSHOW_MPAA = 11,
-  VIDEODB_ID_SEASON_EPISODES_TOTAL = 12,
-  VIDEODB_ID_SEASON_EPISODES_WATCHED = 13,
-  VIDEODB_ID_SEASON_PREMIERED = 14,
-  VIDEODB_ID_SEASON_EPISODES_INPROGRESS = 15,
-  VIDEODB_ID_SEASON_MAX
-};
-
-enum VIDEODB_EPISODE_IDS // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
-{
-  VIDEODB_ID_EPISODE_MIN = -1,
-  VIDEODB_ID_EPISODE_TITLE = 0,
-  VIDEODB_ID_EPISODE_PLOT = 1,
-  VIDEODB_ID_EPISODE_VOTES = 2, // unused
-  VIDEODB_ID_EPISODE_RATING_ID = 3,
-  VIDEODB_ID_EPISODE_CREDITS = 4,
-  VIDEODB_ID_EPISODE_AIRED = 5,
-  VIDEODB_ID_EPISODE_THUMBURL = 6,
-  VIDEODB_ID_EPISODE_THUMBURL_SPOOF = 7,
-  VIDEODB_ID_EPISODE_PLAYCOUNT = 8, // unused - feel free to repurpose
-  VIDEODB_ID_EPISODE_RUNTIME = 9,
-  VIDEODB_ID_EPISODE_DIRECTOR = 10,
-  VIDEODB_ID_EPISODE_PRODUCTIONCODE = 11,
-  VIDEODB_ID_EPISODE_SEASON = 12,
-  VIDEODB_ID_EPISODE_EPISODE = 13,
-  VIDEODB_ID_EPISODE_ORIGINALTITLE = 14,
-  VIDEODB_ID_EPISODE_SORTSEASON = 15,
-  VIDEODB_ID_EPISODE_SORTEPISODE = 16,
-  VIDEODB_ID_EPISODE_BOOKMARK = 17,
-  VIDEODB_ID_EPISODE_BASEPATH = 18,
-  VIDEODB_ID_EPISODE_PARENTPATHID = 19,
-  VIDEODB_ID_EPISODE_IDENT_ID = 20,
-  VIDEODB_ID_EPISODE_MAX
-};
-
-// clang-format off
-const std::array<SDbTableOffsets, 21> DbEpisodeOffsets = {{
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strTitle) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPlot) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iIdRating) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_writingCredits) },
-  { VIDEODB_TYPE_DATE, my_offsetof(CVideoInfoTag,m_firstAired) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPictureURL.m_data) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_duration) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_director) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strProductionCode) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iSeason) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iEpisode) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strOriginalTitle)},
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iSpecialSortSeason) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iSpecialSortEpisode) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iBookmarkId) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_basePath) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iIdUniqueID) }
-}};
-// clang-format on
-
-enum VIDEODB_MUSICVIDEO_IDS // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
-{
-  VIDEODB_ID_MUSICVIDEO_MIN = -1,
-  VIDEODB_ID_MUSICVIDEO_TITLE = 0,
-  VIDEODB_ID_MUSICVIDEO_THUMBURL = 1,
-  VIDEODB_ID_MUSICVIDEO_THUMBURL_SPOOF = 2,
-  VIDEODB_ID_MUSICVIDEO_PLAYCOUNT = 3, // unused - feel free to repurpose
-  VIDEODB_ID_MUSICVIDEO_RUNTIME = 4,
-  VIDEODB_ID_MUSICVIDEO_DIRECTOR = 5,
-  VIDEODB_ID_MUSICVIDEO_STUDIOS = 6,
-  VIDEODB_ID_MUSICVIDEO_YEAR = 7, // unused
-  VIDEODB_ID_MUSICVIDEO_PLOT = 8,
-  VIDEODB_ID_MUSICVIDEO_ALBUM = 9,
-  VIDEODB_ID_MUSICVIDEO_ARTIST = 10,
-  VIDEODB_ID_MUSICVIDEO_GENRE = 11,
-  VIDEODB_ID_MUSICVIDEO_TRACK = 12,
-  VIDEODB_ID_MUSICVIDEO_BASEPATH = 13,
-  VIDEODB_ID_MUSICVIDEO_PARENTPATHID = 14,
-  VIDEODB_ID_MUSICVIDEO_IDENT_ID = 15,
-  VIDEODB_ID_MUSICVIDEO_MAX
-};
-
-// clang-format off
-const std::array<SDbTableOffsets, 16> DbMusicVideoOffsets = {{
-  { VIDEODB_TYPE_STRING, my_offsetof(class CVideoInfoTag,m_strTitle) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPictureURL.m_data) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_duration) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_director) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_studio) },
-  { VIDEODB_TYPE_UNUSED, 0 }, // unused
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strPlot) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strAlbum) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_artist) },
-  { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_genre) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iTrack) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_basePath) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iIdUniqueID)}
-}};
-// clang-format on
 
 enum class ArtFallbackOptions
 {
@@ -479,7 +123,8 @@ enum class ArtFallbackOptions
 enum class DeleteMovieCascadeAction
 {
   DEFAULT_VERSION,
-  ALL_ASSETS
+  ALL_ASSETS,
+  ALL_ASSETS_NOT_STREAMDETAILS
 };
 
 enum class DeleteMovieHashAction
@@ -491,8 +136,30 @@ enum class DeleteMovieHashAction
 #define COMPARE_PERCENTAGE     0.90f // 90%
 #define COMPARE_PERCENTAGE_MIN 0.50f // 50%
 
+struct EpisodeInformation
+{
+  int index{0};
+  unsigned int duration{0};
+};
+
+using EpisodeFileMap = std::multimap<std::string, EpisodeInformation, std::less<>>;
+using EpisodeFileMapEntry = std::pair<std::string, EpisodeInformation>;
+
+static constexpr const char* MULTIPLE_EPISODES{"multiple_episodes"};
+
 class CVideoDatabase : public CDatabase
 {
+  struct FileInformation
+  {
+    // user-defined ctor required for XCode 15.2 and emplace_back
+    FileInformation(std::string&& newPath, int newFileId, int newVvId, std::string&& newHash);
+
+    std::string path;
+    int fileId{0};
+    int vvId{0};
+    std::string hash;
+  };
+
 public:
 
   class CActor    // used for actor retrieval for non-master users
@@ -641,12 +308,10 @@ public:
   void GetEpisodesByBlurayPath(const std::string& path, std::vector<CVideoInfoTag>& episodes);
   void GetEpisodesByFile(const std::string& strFilenameAndPath, std::vector<CVideoInfoTag>& episodes);
   void GetEpisodesByFileId(int idFile, std::vector<CVideoInfoTag>& episodes);
-
-  int SetDetailsForItem(CVideoInfoTag& details, const KODI::ART::Artwork& artwork);
-  int SetDetailsForItem(int id,
-                        MediaType_view mediaType,
-                        CVideoInfoTag& details,
-                        const KODI::ART::Artwork& artwork);
+  bool GetEpisodeMap(int idShow,
+                     EpisodeFileMap& fileMap,
+                     dbiplus::Dataset& pDS,
+                     int idFile = -1 /* = -1 */) const;
 
   int SetDetailsForMovie(CVideoInfoTag& details,
                          const KODI::ART::Artwork& artwork,
@@ -665,7 +330,7 @@ public:
    \param idTvShow the database id of the tvshow if known (defaults to -1)
    \return the id of the tvshow.
    */
-  int SetDetailsForTvShow(const std::vector<std::pair<std::string, std::string>>& paths,
+  int SetDetailsForTvShow(const std::vector<std::string>& paths,
                           CVideoInfoTag& details,
                           const KODI::ART::Artwork& artwork,
                           const KODI::ART::SeasonsArtwork& seasonArt,
@@ -682,15 +347,29 @@ public:
                            const KODI::ART::Artwork& artwork,
                            int idShow,
                            int idEpisode = -1);
+
+  /*!
+   * @brief The FileInfo structure represents a DB record of the files table.
+   */
+  struct FileRecord
+  {
+    int m_idFile{-1};
+    int m_playCount{-1};
+    CDateTime m_lastPlayed{};
+    CDateTime m_dateAdded{};
+  };
+
   int SetFileForMedia(const std::string& fileAndPath,
                       VideoDbContentType type,
                       int mediaId,
-                      int oldIdFile);
+                      const FileRecord& oldFile);
+
   int SetDetailsForMusicVideo(CVideoInfoTag& details,
                               const KODI::ART::Artwork& artwork,
                               int idMVideo = -1);
   bool SetStreamDetailsForFile(const CStreamDetails& details,
                                const std::string& strFileNameAndPath);
+
   /*!
    * \brief Clear any existing stream details and add the new provided details to a file.
    * \param[in] details New stream details
@@ -713,6 +392,8 @@ public:
    * \return vector array of playlist numbers and idFiles
    */
   std::vector<PlaylistInfo> GetPlaylistsByPath(const std::string& path);
+
+  void SetTrailerForMovie(int idMovie, const std::string& trailer);
 
   bool SetSingleValue(VideoDbContentType type, int dbId, int dbField, const std::string& strValue);
   bool SetSingleValue(VideoDbContentType type,
@@ -812,8 +493,9 @@ public:
    */
   bool EraseAllForFile(const std::string& fileNameAndPath);
 
-  bool GetStackTimes(const std::string &filePath, std::vector<uint64_t> &times);
-  void SetStackTimes(const std::string &filePath, const std::vector<uint64_t> &times);
+  bool GetStackTimes(const std::string& filePath, std::vector<std::chrono::milliseconds>& times);
+  void SetStackTimes(const std::string& filePath,
+                     const std::vector<std::chrono::milliseconds>& times);
 
   void GetBookMarksForFile(const std::string& strFilenameAndPath, VECBOOKMARKS& bookmarks, CBookmark::EType type = CBookmark::STANDARD, bool bAppend=false, long partNumber=0);
   bool AddBookMarkToFile(const std::string& strFilenameAndPath,
@@ -1030,6 +712,17 @@ public:
                      const std::set<int>& paths = std::set<int>(),
                      bool showProgress = true);
 
+  enum class FileExistsAction
+  {
+    ACTION_NONE,
+    ACTION_UPDATE
+  };
+
+  int AddOrUpdateFile(const std::string& fileAndPath,
+                      const std::string& parentPath,
+                      const FileRecord& fileInfo,
+                      FileExistsAction existsAction);
+
   /*! \brief Add a file to the database, if necessary
    If the file is already in the database, we simply return its id.
    \param url - full path of the file to add.
@@ -1076,7 +769,9 @@ public:
   void UpdateFileDateAdded(CVideoInfoTag& details);
 
   void ExportToXML(const std::string &path, bool singleFile = true, bool images=false, bool actorThumbs=false, bool overwrite=false);
+  void ExportArt(const CFileItem& item, const KODI::ART::Artwork& artwork, bool overwrite) const;
   void ExportActorThumbs(const std::string& path,
+                         const std::string& singlePath,
                          const CVideoInfoTag& tag,
                          bool singleFiles,
                          bool overwrite = false,
@@ -1157,8 +852,20 @@ public:
   bool RemoveArtForItem(int mediaId,
                         const MediaType& mediaType,
                         const std::set<std::string, std::less<>>& artTypes);
+  /*!
+   * \brief Retrieve season information of a TV show.
+   * \param[in] showId ID of the show
+   * \param[out] seasons Map of the season information. Key = ID of the season, values = season number
+   * \return true for success, false otherwise
+   */
   bool GetTvShowSeasons(int showId, std::map<int, int> &seasons);
-  bool GetTvShowNamedSeasons(int showId, std::map<int, std::string> &seasons);
+  /*!
+   * \brief Retrieve season information of a TV show.
+   * \param[in] showId ID of the show
+   * \param[out] seasons Map of the season information. Key = season number, values = SeasonAttributes structure
+   * \return true for success, false otherwise
+   */
+  bool GetTvShowSeasons(int showId, std::map<int, CVideoInfoTag::SeasonAttributes>& seasons);
 
   /*!
    * \brief Get the custom named season.
@@ -1197,11 +904,13 @@ public:
   bool GetFilter(CDbUrl &videoUrl, Filter &filter, SortDescription &sorting) override;
 
   /*! \brief Will check if the season exists and if that is not the case add it to the database.
-  \param showID The id of the show in question.
-  \param season The season number we want to add.
+  \param[in] showID The id of the show in question.
+  \param[in] season The season number we want to add.
+  \param[in] name Name of the season
+  \param[in] plot Plot of the season
   \return The dbId of the season.
   */
-  int AddSeason(int showID, int season, const std::string& name = "");
+  int AddSeason(int showID, int season, const std::string& name = "", const std::string& plot = "");
   int AddSet(const std::string& strSet,
              const std::string& strOverview = "",
              const std::string& strOriginalSet = "",
@@ -1215,6 +924,7 @@ public:
 
   std::string GetVideoItemTitle(VideoDbContentType itemType, int dbId);
   std::string GetVideoVersionById(int id);
+  int GetVideoVersionByTitle(const std::string& title) const;
   void GetVideoVersions(VideoDbContentType itemType,
                         int dbId,
                         CFileItemList& items,
@@ -1229,15 +939,34 @@ public:
    * \param dbIdTarget id that the video will be attached to
    * \param idVideoVersion new versiontype of the default version of the video
    * \param assetType new asset type of the default version of the video
+   * \param cascadeAction action to take on the assets of the video being converted
+   *        (used to preserve streamdetails for bluray playlists)
    * \return true for success, false otherwise
    */
   bool ConvertVideoToVersion(VideoDbContentType itemType,
                              int dbIdSource,
                              int dbIdTarget,
                              int idVideoVersion,
-                             VideoAssetType assetType);
+                             VideoAssetType assetType,
+                             DeleteMovieCascadeAction cascadeAction);
+
+  /*!
+   * \brief Adds or updates a version of an existing movie to the database
+   * \param itemType type of the video being converted
+   * \param dbIdSource id of the video being converted
+   * \param idVideoVersion new versiontype of the default version of the video
+   * \param assetType new asset type of the default version of the video
+   * \return true if success, false otherwise
+   */
+  bool AddOrUpdateVideoVersion(VideoDbContentType itemType,
+                               int dbIdSource,
+                               int idFile,
+                               int idVideoVersion,
+                               VideoAssetType assetType);
+
   void SetDefaultVideoVersion(VideoDbContentType itemType, int dbId, int idFile);
   void SetVideoVersion(int idFile, int idVideoVersion);
+  int AddOrValidateVideoVersionType(const std::string& typeVideoVersion);
   int AddVideoVersionType(const std::string& typeVideoVersion,
                           VideoAssetTypeOwner owner,
                           VideoAssetType assetType);
@@ -1262,7 +991,6 @@ public:
                             VideoAssetType asset,
                             CFileItemList& items);
   bool SetVideoVersionDefaultArt(int dbId, int idFrom, const MediaType& mediaType);
-  void InitializeVideoVersionTypeTable(int schemaVersion);
   void UpdateVideoVersionTypeTable();
   bool GetVideoVersionsNav(const std::string& strBaseDir,
                            CFileItemList& items,
@@ -1273,9 +1001,19 @@ public:
 
   int GetMovieId(const std::string& strFilenameAndPath);
   std::string GetMovieTitle(int idMovie);
-  void GetSameVideoItems(const CFileItem& item, CFileItemList& items);
+
+  enum MatchingMask : uint8_t
+  {
+    None = 0x00,
+    UniqueId = 0x01,
+    Path = 0x02,
+    Title = 0x04
+  };
+
+  void GetSameVideoItems(const CFileItem& item,
+                         CFileItemList& items,
+                         int matchingMask = UniqueId | Title);
   int GetFileIdByMovie(int idMovie);
-  int GetFileIdByFile(const std::string& fullpath);
   std::string GetFileBasePathById(int idFile);
 
   /*!
@@ -1332,11 +1070,10 @@ protected:
   /*! \brief Adds a path to the tvshow link table.
    \param idShow the id of the show.
    \param path the path to add.
-   \param parentPath the parent path of the path to add.
    \param dateAdded date/time when the path was added
    \return true if successfully added, false otherwise.
    */
-  bool AddPathToTvShow(int idShow, const std::string &path, const std::string &parentPath, const CDateTime& dateAdded = CDateTime());
+  bool AddPathToTvShow(int idShow, const std::string& path, const CDateTime& dateAdded);
 
   /*! \brief Check whether a show is already in the library.
    Matches on unique identifier or matching title and premiered date.
@@ -1367,8 +1104,8 @@ protected:
 
   CVideoInfoTag GetDetailsForMovie(dbiplus::Dataset& pDS, int getDetails = VideoDbDetailsNone);
   CVideoInfoTag GetDetailsForMovie(const dbiplus::sql_record* const record, int getDetails = VideoDbDetailsNone);
-  CSetInfoTag GetDetailsForSet(dbiplus::Dataset& pDS);
-  CSetInfoTag GetDetailsForSet(const dbiplus::sql_record* const record);
+  CSetInfoTag GetDetailsForSet(dbiplus::Dataset& pDS) const;
+  CSetInfoTag GetDetailsForSet(const dbiplus::sql_record* const record) const;
   CVideoInfoTag GetDetailsForTvShow(dbiplus::Dataset& pDS,
                                     int getDetails = VideoDbDetailsNone,
                                     CFileItem* item = nullptr);
@@ -1419,21 +1156,17 @@ protected:
                              int max,
                              const T& offsets) const;
 
-  int SetFileForEpisode(const std::string& fileAndPath, int idEpisode, int oldIdFile);
-  int SetFileForMovie(const std::string& fileAndPath, int idMovie, int oldIdFile);
-  int SetFileForUnknown(const std::string& fileAndPath, int oldIdFile);
+  int SetFileForEpisode(const std::string& fileAndPath,
+                        int idEpisode,
+                        int oldIdFile,
+                        int newIdFile);
+  int SetFileForMovie(const std::string& fileAndPath, int idMovie, int oldIdFile, int newIdFile);
+  int SetFileForUnknown(const std::string& fileAndPath, int oldIdFile, int newIdFile);
 
 private:
   void CreateTables() override;
   void CreateAnalytics() override;
   void UpdateTables(int version) override;
-  void CreateLinkIndex(const char *table);
-  void CreateForeignLinkIndex(const char *table, const char *foreignkey);
-
-  /*! \brief (Re)Create the generic database views for movies, tvshows,
-     episodes and music videos
-   */
-  virtual void CreateViews();
 
   /*! \brief Helper to get a database id given a query.
    Returns an integer, -1 if not found, and greater than 0 if found.

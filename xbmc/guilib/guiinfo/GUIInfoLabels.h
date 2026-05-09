@@ -97,6 +97,10 @@ constexpr uint32_t PLAYER_IS_REMOTE                  = 85;
 constexpr uint32_t PLAYER_IS_EXTERNAL                = 86;
 constexpr uint32_t PLAYER_IS_LIVE                    = 87;
 
+constexpr uint32_t WEATHER_DATA                      = 95;
+constexpr uint32_t WEATHER_IS_UPDATING               = 96;
+constexpr uint32_t WEATHER_LAST_UPDATED              = 97;
+// unused id 98 to 99
 constexpr uint32_t WEATHER_CONDITIONS_TEXT           = 100;
 constexpr uint32_t WEATHER_TEMPERATURE               = 101;
 constexpr uint32_t WEATHER_LOCATION                  = 102;
@@ -295,6 +299,7 @@ constexpr uint32_t VIDEOPLAYER_UNIQUEID              = 294;
 constexpr uint32_t VIDEOPLAYER_AUDIOSTREAMCOUNT      = 295;
 constexpr uint32_t VIDEOPLAYER_VIDEOVERSION_NAME     = 296;
 constexpr uint32_t VIDEOPLAYER_VIDEOSTREAMCOUNT      = 297;
+constexpr uint32_t VIDEOPLAYER_HDR_DETAIL            = 298;
 
 // Videoplayer infobools
 constexpr uint32_t VIDEOPLAYER_HASSUBTITLES          = 300;
@@ -332,9 +337,23 @@ constexpr uint32_t VIDEOPLAYER_CHANNEL_NUMBER        = 327;
 constexpr uint32_t VIDEOPLAYER_HAS_EPG               = 328;
 constexpr uint32_t VIDEOPLAYER_CAN_RESUME_LIVE_TV    = 329;
 
+// RetroPlayer infolabels
 constexpr uint32_t RETROPLAYER_VIDEO_FILTER          = 330;
 constexpr uint32_t RETROPLAYER_STRETCH_MODE          = 331;
 constexpr uint32_t RETROPLAYER_VIDEO_ROTATION        = 332;
+constexpr uint32_t RETROPLAYER_TITLE                 = 1704;
+constexpr uint32_t RETROPLAYER_PLATFORM              = 1705;
+constexpr uint32_t RETROPLAYER_GENRES                = 1706;
+constexpr uint32_t RETROPLAYER_PUBLISHER             = 1707;
+constexpr uint32_t RETROPLAYER_DEVELOPER             = 1708;
+constexpr uint32_t RETROPLAYER_OVERVIEW              = 1709;
+constexpr uint32_t RETROPLAYER_GAME_CLIENT           = 1710;
+constexpr uint32_t RETROPLAYER_GAME_CLIENT_NAME      = 1711;
+constexpr uint32_t RETROPLAYER_GAME_CLIENT_PLATFORMS = 1712;
+constexpr uint32_t RETROPLAYER_SUPPORTS_EJECT        = 1700;
+constexpr uint32_t RETROPLAYER_DISC_EJECTED          = 1701;
+constexpr uint32_t RETROPLAYER_DISC_LABEL            = 1702;
+constexpr uint32_t RETROPLAYER_EMPTY_TRAY            = 1703;
 
 // More VideoPlayer infolabels
 constexpr uint32_t VIDEOPLAYER_CHANNEL_LOGO          = 333;
@@ -1029,6 +1048,7 @@ constexpr uint32_t LISTITEM_EPISODEPART              = LISTITEM_START + 223;
 constexpr uint32_t LISTITEM_MEDIAPROVIDERS           = LISTITEM_START + 224;
 constexpr uint32_t LISTITEM_TITLE_EXTRAINFO          = LISTITEM_START + 225;
 constexpr uint32_t LISTITEM_DECODED_FILENAME_AND_PATH  = LISTITEM_START + 226;
+constexpr uint32_t LISTITEM_VIDEO_HDR_DETAIL         = LISTITEM_START + 227;
 
 constexpr int      LISTITEM_END                      = LISTITEM_START + 2500;
 

@@ -36,15 +36,17 @@ public:
   virtual bool ReadPresetFile(const std::string& presetPath) = 0;
 
   /*!
-   * \brief Updates state if needed and renderes the preset to the target texture
+   * \brief Updates state if needed and renders the preset to the target texture
    *
-   * \param dest Coordinates of the 4 corners of the output viewport/window
+   * \param dest Coordinates of the 4 corners of the destination rectangle
+   * \param fullDestSize Destination rectangle size for the fullscreen game window
    * \param source The source of the video frame, in its original resolution (unscaled)
    * \param target The target texture that the final result will be rendered to
    *
    * \return Returns false if updating or rendering failed, true if both succeeded
    */
   virtual bool RenderUpdate(const RETRO::ViewportCoordinates& dest,
+                            const float2 fullDestSize,
                             IShaderTexture& source,
                             IShaderTexture& target) = 0;
 

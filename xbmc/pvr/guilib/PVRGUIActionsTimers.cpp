@@ -16,8 +16,8 @@
 #include "dialogs/GUIDialogYesNo.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/WindowIDs.h"
+#include "jobs/JobManager.h"
 #include "messaging/helpers/DialogHelper.h"
 #include "messaging/helpers/DialogOKHelper.h"
 #include "pvr/PVREventLogJob.h"
@@ -36,6 +36,8 @@
 #include "pvr/settings/PVRSettings.h"
 #include "pvr/timers/PVRTimerInfoTag.h"
 #include "pvr/timers/PVRTimers.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "threads/IRunnable.h"
 #include "utils/StringUtils.h"
@@ -60,8 +62,10 @@ class AsyncUpdateTimer : private IRunnable
 public:
   AsyncUpdateTimer(const CPVRGUIActionsTimers& guiActions,
                    const std::shared_ptr<CPVRTimerInfoTag>& oldTimer,
-                   const std::shared_ptr<CPVRTimerInfoTag>& newTimer)
-    : m_guiActions(guiActions), m_oldTimer(oldTimer), m_newTimer(newTimer)
+                   const std::shared_ptr<CPVRTimerInfoTag>& changedTimer)
+    : m_guiActions(guiActions),
+      m_oldTimer(oldTimer),
+      m_changedTimer(changedTimer)
   {
   }
 
@@ -77,10 +81,10 @@ private:
   {
     m_success = true;
 
-    if (m_newTimer->GetTimerType() == m_oldTimer->GetTimerType() &&
-        m_newTimer->ClientID() == m_oldTimer->ClientID())
+    if (m_changedTimer->GetTimerType() == m_oldTimer->GetTimerType() &&
+        m_changedTimer->ClientID() == m_oldTimer->ClientID())
     {
-      if (CServiceBroker::GetPVRManager().Timers()->UpdateTimer(m_newTimer))
+      if (CServiceBroker::GetPVRManager().Timers()->UpdateTimer(m_changedTimer))
         return;
 
       HELPERS::ShowOKDialogText(CVariant{257},
@@ -96,10 +100,12 @@ private:
       // and we would end up with one timer missing wrt to the rule defined by the new timer.
       if (m_guiActions.DeleteTimer(m_oldTimer, m_oldTimer->IsRecording(), false))
       {
-        if (m_newTimer->IsTimerRule())
-          m_newTimer->ResetChildState();
+        if (m_changedTimer->IsTimerRule())
+          m_changedTimer->ResetChildState();
 
-        m_success = m_guiActions.AddTimer(m_newTimer);
+        // Flag the changed timer as new so it can be detected as such by the add-on.
+        m_changedTimer->ResetClientIndex();
+        m_success = m_guiActions.AddTimer(m_changedTimer);
         if (!m_success)
         {
           // rollback.
@@ -111,7 +117,7 @@ private:
 
   const CPVRGUIActionsTimers& m_guiActions;
   std::shared_ptr<CPVRTimerInfoTag> m_oldTimer;
-  std::shared_ptr<CPVRTimerInfoTag> m_newTimer;
+  std::shared_ptr<CPVRTimerInfoTag> m_changedTimer;
   bool m_success{false};
 };
 } // unnamed namespace
@@ -371,29 +377,34 @@ void InstantRecordingActionSelector::AddAction(PVRRECORD_INSTANTRECORDACTION eAc
     switch (eAction)
     {
       case RECORD_INSTANTRECORDTIME:
-        m_pDlgSelect->Add(
-            StringUtils::Format(g_localizeStrings.Get(19090),
-                                m_iInstantRecordTime)); // Record next <default duration> minutes
+        m_pDlgSelect->Add(StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19090),
+            m_iInstantRecordTime)); // Record next <default duration> minutes
         break;
       case RECORD_30_MINUTES:
-        m_pDlgSelect->Add(
-            StringUtils::Format(g_localizeStrings.Get(19090), 30)); // Record next 30 minutes
+        m_pDlgSelect->Add(StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19090),
+            30)); // Record next 30 minutes
         break;
       case RECORD_60_MINUTES:
-        m_pDlgSelect->Add(
-            StringUtils::Format(g_localizeStrings.Get(19090), 60)); // Record next 60 minutes
+        m_pDlgSelect->Add(StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19090),
+            60)); // Record next 60 minutes
         break;
       case RECORD_120_MINUTES:
-        m_pDlgSelect->Add(
-            StringUtils::Format(g_localizeStrings.Get(19090), 120)); // Record next 120 minutes
+        m_pDlgSelect->Add(StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19090),
+            120)); // Record next 120 minutes
         break;
       case RECORD_CURRENT_SHOW:
-        m_pDlgSelect->Add(StringUtils::Format(g_localizeStrings.Get(19091),
-                                              title)); // Record current show (<title>)
+        m_pDlgSelect->Add(StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19091),
+            title)); // Record current show (<title>)
         break;
       case RECORD_NEXT_SHOW:
-        m_pDlgSelect->Add(StringUtils::Format(g_localizeStrings.Get(19092),
-                                              title)); // Record next show (<title>)
+        m_pDlgSelect->Add(StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19092),
+            title)); // Record next show (<title>)
         break;
       case NONE:
       case ASK:
@@ -501,7 +512,9 @@ bool CPVRGUIActionsTimers::SetRecordingOnChannel(const std::shared_ptr<CPVRChann
 
             // "now"
             const std::string currentTitle =
-                bLocked ? g_localizeStrings.Get(19266) /* Parental locked */ : epgTag->Title();
+                bLocked ? CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                              19266) /* Parental locked */
+                        : epgTag->Title();
             selector.AddAction(RECORD_CURRENT_SHOW, currentTitle);
             ePreselect = RECORD_CURRENT_SHOW;
 
@@ -509,9 +522,10 @@ bool CPVRGUIActionsTimers::SetRecordingOnChannel(const std::shared_ptr<CPVRChann
             epgTagNext = channel->GetEPGNext();
             if (epgTagNext)
             {
-              const std::string nextTitle = bLocked
-                                                ? g_localizeStrings.Get(19266) /* Parental locked */
-                                                : epgTagNext->Title();
+              const std::string nextTitle =
+                  bLocked ? CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                                19266) /* Parental locked */
+                          : epgTagNext->Title();
               selector.AddAction(RECORD_NEXT_SHOW, nextTitle);
 
               // be smart. if current show is almost over, preselect next show.
@@ -655,14 +669,14 @@ bool CPVRGUIActionsTimers::EditTimer(const CFileItem& item) const
     return false;
   }
 
-  // clone the timer.
-  const auto newTimer{std::make_shared<CPVRTimerInfoTag>()};
-  newTimer->UpdateEntry(timer);
+  // Clone the timer so we can track changes.
+  const auto changedTimer{std::make_shared<CPVRTimerInfoTag>()};
+  changedTimer->UpdateEntry(timer);
 
-  if (ShowTimerSettings(newTimer) &&
+  if (ShowTimerSettings(changedTimer) &&
       (!timer->GetTimerType()->IsReadOnly() || timer->GetTimerType()->SupportsEnableDisable()))
   {
-    AsyncUpdateTimer asyncUpdate(*this, timer, newTimer);
+    AsyncUpdateTimer asyncUpdate(*this, timer, changedTimer);
     return asyncUpdate.Execute();
   }
   return false;
@@ -860,15 +874,16 @@ std::string GetAnnouncerText(const std::shared_ptr<const CPVRTimerInfoTag>& time
   std::string text;
   if (timer->IsEpgBased())
   {
-    text = StringUtils::Format(g_localizeStrings.Get(idEpg),
-                               timer->Title(), // tv show title
-                               timer->ChannelName(),
-                               timer->StartAsLocalTime().GetAsLocalizedDateTime(false, false));
+    text = StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(idEpg),
+        timer->Title(), // tv show title
+        timer->ChannelName(), timer->StartAsLocalTime().GetAsLocalizedDateTime(false, false));
   }
   else
   {
-    text = StringUtils::Format(g_localizeStrings.Get(idNoEpg), timer->ChannelName(),
-                               timer->StartAsLocalTime().GetAsLocalizedDateTime(false, false));
+    text = StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(idNoEpg),
+        timer->ChannelName(), timer->StartAsLocalTime().GetAsLocalizedDateTime(false, false));
   }
   return text;
 }
@@ -941,7 +956,7 @@ void CPVRGUIActionsTimers::AnnounceReminder(const std::shared_ptr<CPVRTimerInfoT
     if (autoRecord)
     {
       // (Auto-close of this reminder will schedule a recording...)
-      text += "\n\n" + g_localizeStrings.Get(19309);
+      text += "\n\n" + CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19309);
     }
   }
 
@@ -953,7 +968,7 @@ void CPVRGUIActionsTimers::AnnounceReminder(const std::shared_ptr<CPVRTimerInfoT
     if (autoSwitch)
     {
       // (Auto-close of this reminder will switch to channel...)
-      text += "\n\n" + g_localizeStrings.Get(19331);
+      text += "\n\n" + CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19331);
     }
   }
 

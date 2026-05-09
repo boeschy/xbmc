@@ -43,5 +43,4 @@ private:
   // Construction parameter
   CD3DTexture& m_texture;
 };
-
 } // namespace KODI::SHADER

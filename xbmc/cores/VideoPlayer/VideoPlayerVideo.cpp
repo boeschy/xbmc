@@ -119,8 +119,7 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
         hint.codec == AV_CODEC_ID_HEVC ||
         hint.codec == AV_CODEC_ID_MPEG4 ||
         hint.codec == AV_CODEC_ID_WMV3 ||
-        hint.codec == AV_CODEC_ID_VC1 ||
-        hint.codec == AV_CODEC_ID_AV1)
+        hint.codec == AV_CODEC_ID_VC1)
     {
       CLog::LogF(LOGERROR, "Codec id {} require extradata.", hint.codec);
       return false;
@@ -706,14 +705,14 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
     if (m_picture.stereoMode.empty())
     {
       std::string stereoMode;
-      switch(m_processInfo.GetVideoSettings().m_StereoMode)
+      switch (static_cast<RenderStereoMode>(m_processInfo.GetVideoSettings().m_StereoMode))
       {
-        case RENDER_STEREO_MODE_SPLIT_VERTICAL:
+        case RenderStereoMode::SPLIT_VERTICAL:
           stereoMode = "left_right";
           if (m_processInfo.GetVideoSettings().m_StereoInvert)
             stereoMode = "right_left";
           break;
-        case RENDER_STEREO_MODE_SPLIT_HORIZONTAL:
+        case RenderStereoMode::SPLIT_HORIZONTAL:
           stereoMode = "top_bottom";
           if (m_processInfo.GetVideoSettings().m_StereoInvert)
             stereoMode = "bottom_top";

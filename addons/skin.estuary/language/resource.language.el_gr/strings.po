@@ -133,8 +133,8 @@ msgid "Choose rating to display for media items"
 msgstr ""
 
 msgctxt "#31025"
-msgid "No favourites found. You can add any item from media views to this list by using the context menu."
-msgstr "Δεν βρέθηκαν αγαπημένα. Μπορείτε να προσθέσετε οποιοδήποτε αντικείμενο από την προβολή πολυμέσων σε αυτή τη λίστα χρησιμοποιώντας το κεντρικό μενού."
+msgid "No favourites found. You can add items from media and other views by using the context menu."
+msgstr ""
 
 msgctxt "#31026"
 msgid "Timeshift"
@@ -566,7 +566,7 @@ msgid "Categories"
 msgstr "Κατηγορίες"
 
 msgctxt "#31149"
-msgid "Select genre fanart pack"
+msgid "Choose genre fanart pack"
 msgstr ""
 
 msgctxt "#31150"
@@ -690,6 +690,10 @@ msgctxt "#31176"
 msgid "Default select action for movie sets on the home screen"
 msgstr ""
 
+msgctxt "#31177"
+msgid "Choose weather icon pack"
+msgstr ""
+
 # empty strings from id 31177 to 31596
 #. Button to select Player Process Info window
 msgctxt "#31597"
@@ -771,6 +775,10 @@ msgstr "Σύστημα"
 msgctxt "#31612"
 msgid "channels"
 msgstr ""
+
+#~ msgctxt "#31025"
+#~ msgid "No favourites found. You can add any item from media views to this list by using the context menu."
+#~ msgstr "Δεν βρέθηκαν αγαπημένα. Μπορείτε να προσθέσετε οποιοδήποτε αντικείμενο από την προβολή πολυμέσων σε αυτή τη λίστα χρησιμοποιώντας το κεντρικό μενού."
 
 #~ msgctxt "#31112"
 #~ msgid "Toggle audio stream"

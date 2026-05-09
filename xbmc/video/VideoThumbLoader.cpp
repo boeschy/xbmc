@@ -75,8 +75,8 @@ std::vector<std::string> GetSettingListAsString(const std::string& settingID)
   std::vector<CVariant> values =
     CServiceBroker::GetSettingsComponent()->GetSettings()->GetList(settingID);
   std::vector<std::string> result;
-  std::transform(values.begin(), values.end(), std::back_inserter(result),
-                 [](const CVariant& s) { return s.asString(); });
+  std::ranges::transform(values, std::back_inserter(result),
+                         [](const CVariant& s) { return s.asString(); });
   return result;
 }
 
@@ -156,7 +156,7 @@ bool CVideoThumbLoader::IsArtTypeInWhitelist(const std::string& artType, const s
   if (!exact)
     StringUtils::TrimRight(compareArtType, "0123456789");
 
-  return std::find(whitelist.begin(), whitelist.end(), compareArtType) != whitelist.end();
+  return std::ranges::find(whitelist, compareArtType) != whitelist.end();
 }
 
 /**
@@ -315,9 +315,17 @@ bool CVideoThumbLoader::LoadItemLookup(CFileItem* pItem)
 
     // flag extraction mostly for non-library items - should end up somewhere else,
     // like a VideoInfoLoader if it existed
+    bool update = false;
+    if (pItem->HasVideoInfoTag() && pItem->GetVideoInfoTag()->HasStreamDetails())
+    {
+      if (pItem->GetVideoInfoTag()->m_streamDetails.GetVideoHdrType() == std::string("--"))
+      {
+        update = true;
+      }
+    }
     if (settings->GetBool(CSettings::SETTING_MYVIDEOS_EXTRACTFLAGS) &&
         CDVDFileInfo::CanExtract(*pItem) &&
-        (!pItem->HasVideoInfoTag() || !pItem->GetVideoInfoTag()->HasStreamDetails()))
+        (!pItem->HasVideoInfoTag() || !pItem->GetVideoInfoTag()->HasStreamDetails() || update))
     {
       // No tag or no details set, so extract them
       CLog::LogF(LOGDEBUG, "trying to extract filestream details from video file {}",
@@ -340,7 +348,7 @@ bool CVideoThumbLoader::LoadItemLookup(CFileItem* pItem)
           info->SetDuration(info->GetDuration());
 
           // store the updated information in the database
-          m_videoDatabase->SetDetailsForItem(info->m_iDbId, info->m_type, *info, pItem->GetArt());
+          SetDetailsForItem(*info, pItem->GetArt());
         }
 
         m_videoDatabase->CommitTransaction();
@@ -351,6 +359,36 @@ bool CVideoThumbLoader::LoadItemLookup(CFileItem* pItem)
 
   m_videoDatabase->Close();
   return true;
+}
+
+int CVideoThumbLoader::SetDetailsForItem(CVideoInfoTag& details, const KODI::ART::Artwork& artwork)
+{
+  int id = details.m_iDbId;
+  MediaType_view mediaType = details.m_type;
+
+  if (mediaType == MediaTypeNone)
+    return -1;
+
+  if (mediaType == MediaTypeMovie)
+    return m_videoDatabase->SetDetailsForMovie(details, artwork, id);
+  else if (mediaType == MediaTypeVideoCollection)
+    return m_videoDatabase->SetDetailsForMovieSet(details, artwork, id);
+  else if (mediaType == MediaTypeTvShow)
+  {
+    KODI::ART::SeasonsArtwork seasonArtwork;
+    if (!m_videoDatabase->UpdateDetailsForTvShow(id, details, artwork, seasonArtwork))
+      return -1;
+
+    return id;
+  }
+  else if (mediaType == MediaTypeSeason)
+    return m_videoDatabase->SetDetailsForSeason(details, artwork, details.m_iIdShow, id);
+  else if (mediaType == MediaTypeEpisode)
+    return m_videoDatabase->SetDetailsForEpisode(details, artwork, details.m_iIdShow, id);
+  else if (mediaType == MediaTypeMusicVideo)
+    return m_videoDatabase->SetDetailsForMusicVideo(details, artwork, id);
+
+  return -1;
 }
 
 bool CVideoThumbLoader::FillLibraryArt(CFileItem &item)
@@ -574,6 +612,14 @@ void CVideoThumbLoader::DetectAndAddMissingItemData(CFileItem &item)
   {
     CStreamDetails& details = item.GetVideoInfoTag()->m_streamDetails;
 
+    // add video stream HDR details
+    for (int i = 1; i <= details.GetVideoStreamCount(); i++)
+    {
+      std::string index = std::to_string(i);
+      item.SetProperty("HdrType." + index, details.GetVideoHdrType(i).c_str());
+      item.SetProperty("HdrDetail." + index, details.GetVideoHdrDetail(i).c_str());
+    }
+
     // add audio language properties
     for (int i = 1; i <= details.GetAudioStreamCount(); i++)
     {
@@ -608,9 +654,11 @@ void CVideoThumbLoader::DetectAndAddMissingItemData(CFileItem &item)
     // check for custom stereomode setting in video settings
     CVideoSettings itemVideoSettings;
     m_videoDatabase->Open();
-    if (m_videoDatabase->GetVideoSettings(item, itemVideoSettings) && itemVideoSettings.m_StereoMode != RENDER_STEREO_MODE_OFF)
+    if (m_videoDatabase->GetVideoSettings(item, itemVideoSettings) &&
+        itemVideoSettings.m_StereoMode != static_cast<int>(RenderStereoMode::OFF))
     {
-      stereoMode = CStereoscopicsManager::ConvertGuiStereoModeToString(static_cast<RENDER_STEREO_MODE>(itemVideoSettings.m_StereoMode));
+      stereoMode = CStereoscopicsManager::ConvertGuiStereoModeToString(
+          static_cast<RenderStereoMode>(itemVideoSettings.m_StereoMode));
     }
     m_videoDatabase->Close();
 

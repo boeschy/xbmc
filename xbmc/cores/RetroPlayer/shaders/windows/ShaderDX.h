@@ -30,18 +30,19 @@ public:
   ~CShaderDX() override;
 
   // Implementation of IShader
-  bool Create(std::string shaderSource,
+  bool Create(unsigned int passIdx,
+              std::string passAlias,
               std::string shaderPath,
+              std::string shaderSource,
               ShaderParameterMap shaderParameters,
               std::vector<std::shared_ptr<IShaderLut>> luts,
-              float2 viewPortSize,
-              unsigned int passIdx,
               unsigned int frameCountMod = 0) override;
   void Render(IShaderTexture& source, IShaderTexture& target) override;
   void SetSizes(const float2& prevSize,
                 const float2& prevTextureSize,
                 const float2& nextSize) override;
   void PrepareParameters(const RETRO::ViewportCoordinates& dest,
+                         const float2 fullDestSize,
                          IShaderTexture& sourceTexture,
                          const std::vector<std::unique_ptr<IShaderTexture>>& pShaderTextures,
                          const std::vector<std::unique_ptr<IShader>>& pShaders,
@@ -90,17 +91,23 @@ private:
   cbInput GetInputData(uint64_t frameCount = 0) const;
   void SetShaderParameters(const CD3DTexture& sourceTexture);
 
-  // Currently loaded shader's source code
-  std::string m_shaderSource;
+  // Index of the video shader pass
+  unsigned int m_passIdx{0};
+
+  // Alias name for the video shader pass
+  std::string m_passAlias;
 
   // Currently loaded shader's relative path
   std::string m_shaderPath;
+
+  // Currently loaded shader's source code
+  std::string m_shaderSource;
 
   // Struct with all parameters pertaining to the shader
   ShaderParameterMap m_shaderParameters;
 
   // Look-up textures pertaining to the shader
-  std::vector<std::shared_ptr<IShaderLut>> m_luts; //! @todo Back to DX maybe
+  std::vector<std::shared_ptr<IShaderLut>> m_luts;
 
   // Resolution of the input of the shader
   float2 m_inputSize;
@@ -114,17 +121,10 @@ private:
   // Resolution of the destination rectangle of the shader
   float2 m_destSize;
 
-  // Resolution of the viewport/window
-  float2 m_viewportSize;
-
   // Projection matrix
   DirectX::XMFLOAT4X4 m_MVP{};
 
-  // Index of the video shader pass
-  unsigned int m_passIdx{0};
-
-  // Value to modulo (%) frame count with
-  // Unused if 0
+  // Value to modulo (%) frame count with (unused if 0)
   unsigned int m_frameCountMod{0};
 
   // Holds the data bound to the input cbuffer (cbInput here)
@@ -133,5 +133,4 @@ private:
   // Sampler state
   //ID3D11SamplerState* m_pSampler{nullptr};
 };
-
 } // namespace KODI::SHADER

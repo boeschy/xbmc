@@ -33,8 +33,6 @@
 
 #include <memory>
 
-#include <music/MusicLibraryQueue.h>
-
 using namespace MUSIC_INFO;
 using namespace JSONRPC;
 using namespace XFILE;
@@ -188,7 +186,8 @@ JSONRPC_STATUS CAudioLibrary::GetArtistDetails(const std::string &method, ITrans
 
   CFileItemList items;
   CDatabase::Filter filter;
-  if (!musicdatabase.GetArtistsByWhere(musicUrl.ToString(), filter, items) || items.Size() != 1)
+  if (!musicdatabase.GetArtistsByWhere(musicUrl.ToString(), items, SortDescription(), filter) ||
+      items.Size() != 1)
     return InvalidParams;
 
   // Add "artist" to "properties" array by default
@@ -519,18 +518,17 @@ JSONRPC_STATUS CAudioLibrary::GetRecentlyAddedAlbums(const std::string &method, 
   if (!musicdatabase.Open())
     return InternalError;
 
-  VECALBUMS albums;
+  std::vector<CAlbum> albums;
   if (!musicdatabase.GetRecentlyAddedAlbums(albums))
     return InternalError;
 
   CFileItemList items;
-  for (unsigned int index = 0; index < albums.size(); index++)
+  for (const CAlbum& album : albums)
   {
-    std::string path =
-        StringUtils::Format("musicdb://recentlyaddedalbums/{}/", albums[index].idAlbum);
+    std::string path = StringUtils::Format("musicdb://recentlyaddedalbums/{}/", album.idAlbum);
 
     CFileItemPtr item;
-    FillAlbumItem(albums[index], path, item);
+    FillAlbumItem(album, path, item);
     items.Add(item);
   }
 
@@ -570,18 +568,17 @@ JSONRPC_STATUS CAudioLibrary::GetRecentlyPlayedAlbums(const std::string &method,
   if (!musicdatabase.Open())
     return InternalError;
 
-  VECALBUMS albums;
+  std::vector<CAlbum> albums;
   if (!musicdatabase.GetRecentlyPlayedAlbums(albums))
     return InternalError;
 
   CFileItemList items;
-  for (unsigned int index = 0; index < albums.size(); index++)
+  for (const CAlbum& album : albums)
   {
-    std::string path =
-        StringUtils::Format("musicdb://recentlyplayedalbums/{}/", albums[index].idAlbum);
+    std::string path = StringUtils::Format("musicdb://recentlyplayedalbums/{}/", album.idAlbum);
 
     CFileItemPtr item;
-    FillAlbumItem(albums[index], path, item);
+    FillAlbumItem(album, path, item);
     items.Add(item);
   }
 
@@ -1149,7 +1146,8 @@ bool CAudioLibrary::FillFileItemList(const CVariant &parameterObject, CFileItemL
   }
 
   if (artistID != -1 || albumID != -1 || genreID != -1)
-    success |= musicdatabase.GetSongsNav("musicdb://songs/", list, genreID, artistID, albumID);
+    success |= musicdatabase.GetSongsNav("musicdb://songs/", list, SortDescription(), genreID,
+                                         artistID, albumID);
 
   int songID = (int)parameterObject["songid"].asInteger(-1);
   if (songID != -1)
@@ -1167,15 +1165,22 @@ bool CAudioLibrary::FillFileItemList(const CVariant &parameterObject, CFileItemL
     // If we retrieved the list of songs by "artistid"
     // we sort by album (and implicitly by track number)
     if (artistID != -1)
-      list.Sort(SortByAlbum, SortOrderAscending, CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING) ? SortAttributeIgnoreArticle : SortAttributeNone);
+      list.Sort(SortBy::ALBUM, SortOrder::ASCENDING,
+                CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                    CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING)
+                    ? SortAttributeIgnoreArticle
+                    : SortAttributeNone);
     // If we retrieve the list of songs by "genreid"
     // we sort by artist (and implicitly by album and track number)
     else if (genreID != -1)
-      list.Sort(SortByArtist, SortOrderAscending, CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING) ? SortAttributeIgnoreArticle : SortAttributeNone);
+      list.Sort(SortBy::ARTIST, SortOrder::ASCENDING,
+                CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                    CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING)
+                    ? SortAttributeIgnoreArticle
+                    : SortAttributeNone);
     // otherwise we sort by track number
     else
-      list.Sort(SortByTrackNumber, SortOrderAscending);
-
+      list.Sort(SortBy::TRACK_NUMBER, SortOrder::ASCENDING);
   }
 
   return success;
@@ -1363,25 +1368,20 @@ JSONRPC_STATUS CAudioLibrary::RefreshArtist(const std::string& method,
                                             const CVariant& parameterObject,
                                             CVariant& result)
 {
-  int artistID = (int)parameterObject["artistid"].asInteger();
-
-  CMusicDbUrl musicUrl;
-  if (!musicUrl.FromString("musicdb://artists/"))
-    return InternalError;
-
   CMusicDatabase musicdatabase;
   if (!musicdatabase.Open())
     return InternalError;
 
-  //checking if artistID is a valid one
+  // Checking if artistID is a valid one
+  const CVariant artistIdVariant{parameterObject["artistid"]};
+  const auto artistID{static_cast<int>(artistIdVariant.asInteger())};
   if (!musicdatabase.GetArtistExists(artistID))
     return InvalidParams;
 
-  //set the artist id on the musicdb url
-  musicUrl.AddOption("artistid", artistID);
-
-  //executing the StartArtistScan for refreshing the artist scraped information
-  CMusicLibraryQueue::GetInstance().StartArtistScan(musicUrl.ToString(), true);
+  // Start rescraping additional information for the given artist
+  const std::string cmd = StringUtils::Format("musiclibrary.refreshartist({})",
+                                              StringUtils::Paramify(artistIdVariant.asString()));
+  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, cmd);
 
   return ACK;
 }
@@ -1392,21 +1392,21 @@ JSONRPC_STATUS CAudioLibrary::RefreshAlbum(const std::string& method,
                                            const CVariant& parameterObject,
                                            CVariant& result)
 {
-  int albumID = (int)parameterObject["albumid"].asInteger();
-
   CMusicDatabase musicdatabase;
   if (!musicdatabase.Open())
     return InternalError;
 
-  //check if albumID is a valid one
+  // Check if albumID is a valid one
   CAlbum album;
+  const CVariant albumIdVariant{parameterObject["albumid"]};
+  const int albumID = static_cast<int>(albumIdVariant.asInteger());
   if (!musicdatabase.GetAlbum(albumID, album, false))
     return InvalidParams;
 
-  std::string path = StringUtils::Format("musicdb://albums/{}/", albumID);
-
-  //execute the album refresh job
-  CMusicLibraryQueue::GetInstance().StartAlbumScan(path, true);
+  // Start rescraping additional information for the given album
+  const std::string cmd = StringUtils::Format("musiclibrary.refreshalbum({})",
+                                              StringUtils::Paramify(albumIdVariant.asString()));
+  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, cmd);
 
   return ACK;
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -18,11 +18,13 @@
 #include "settings/SettingsComponent.h"
 #include "threads/SystemClock.h"
 #include "utils/Base64.h"
+#include "utils/Map.h"
 #include "utils/XTimeUtils.h"
 
 #include <algorithm>
 #include <cassert>
 #include <climits>
+#include <utility>
 #include <vector>
 
 #ifdef TARGET_POSIX
@@ -44,14 +46,20 @@ using namespace std::chrono_literals;
 
 #define FITS_INT(a) (((a) <= INT_MAX) && ((a) >= INT_MIN))
 
-static const auto proxyType2CUrlProxyType = std::unordered_map<XFILE::CCurlFile::ProxyType, int>{
+namespace
+{
+constexpr auto proxyType2CUrlProxyType{make_map<XFILE::CCurlFile::ProxyType, long>({
     {CCurlFile::ProxyType::HTTP, CURLPROXY_HTTP},
     {CCurlFile::ProxyType::SOCKS4, CURLPROXY_SOCKS4},
     {CCurlFile::ProxyType::SOCKS4A, CURLPROXY_SOCKS4A},
     {CCurlFile::ProxyType::SOCKS5, CURLPROXY_SOCKS5},
     {CCurlFile::ProxyType::SOCKS5_REMOTE, CURLPROXY_SOCKS5_HOSTNAME},
     {CCurlFile::ProxyType::HTTPS, CURLPROXY_HTTPS},
-};
+})};
+
+std::vector<uint8_t> cachedCaCertsBlob; // cached CA certs file
+
+} // unnamed namespace
 
 #define FILLBUFFER_OK         0
 #define FILLBUFFER_NO_DATA    1
@@ -584,6 +592,8 @@ void CCurlFile::SetCommonOptions(CReadState* state, bool failOnError /* = true *
       g_curlInterface.easy_setopt(h, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST);
     else if( m_httpauth == "ntlm" )
       g_curlInterface.easy_setopt(h, CURLOPT_HTTPAUTH, CURLAUTH_NTLM);
+    else if (m_httpauth == "basic")
+      g_curlInterface.easy_setopt(h, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
     else
       bAuthSet = false;
   }
@@ -691,12 +701,15 @@ void CCurlFile::SetCommonOptions(CReadState* state, bool failOnError /* = true *
   // set CA bundle file
   std::string caCert = CSpecialProtocol::TranslatePath(
       CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_caTrustFile);
-#ifdef TARGET_WINDOWS_STORE
-  // UWP Curl - Setting CURLOPT_CAINFO with a valid cacert file path is required for UWP
-  g_curlInterface.easy_setopt(h, CURLOPT_CAINFO, "system\\certs\\cacert.pem");
-#endif
   if (!caCert.empty() && XFILE::CFile::Exists(caCert))
     g_curlInterface.easy_setopt(h, CURLOPT_CAINFO, caCert.c_str());
+
+  // From OpenSSL 3.0 CURLOPT_CAINFO not works (on UWP), use CURLOPT_CAINFO_BLOB instead
+  if (!cachedCaCertsBlob.empty())
+  {
+    curl_blob blob{cachedCaCertsBlob.data(), cachedCaCertsBlob.size(), CURL_BLOB_NOCOPY};
+    g_curlInterface.easy_setopt(h, CURLOPT_CAINFO_BLOB, &blob);
+  }
 }
 
 void CCurlFile::SetRequestHeaders(CReadState* state)
@@ -748,7 +761,8 @@ void CCurlFile::ParseAndCorrectUrl(CURL &url2)
 
   // lookup host in DNS cache
   std::string resolvedHost;
-  if (CServiceBroker::GetDNSNameCache()->GetCached(url2.GetHostName(), resolvedHost))
+  const std::shared_ptr<CDNSNameCache> dnsCache = CServiceBroker::GetDNSNameCache();
+  if (dnsCache && dnsCache->GetCached(url2.GetHostName(), resolvedHost))
   {
     struct curl_slist* tempCache;
     int entryPort = url2.GetPort();
@@ -1275,7 +1289,7 @@ ssize_t CCurlFile::Write(const void* lpBuf, size_t uiBufSize)
 
 CCurlFile::ReadLineResult CCurlFile::CReadState::ReadLine(char* buffer, std::size_t bufferSize)
 {
-  unsigned int want = (unsigned int)bufferSize;
+  unsigned int want = (unsigned int)bufferSize - 1; // leave one byte for '\0'
 
   if((m_fileSize == 0 || m_filePos < m_fileSize) && FillBuffer(want) != FILLBUFFER_OK)
     return {ReadLineResult::FAILURE, 0};
@@ -1298,7 +1312,7 @@ CCurlFile::ReadLineResult CCurlFile::CReadState::ReadLine(char* buffer, std::siz
   std::size_t bytesRead = 0;
   bool foundNewline = false;
   bool reachedEnd = false;
-  for (; bytesRead < want - 1 && !foundNewline; ++bytesRead)
+  for (; bytesRead < want && !foundNewline; ++bytesRead)
   {
     reachedEnd = m_buffer.ReadData(buffer + bytesRead, 1) == 0;
     if (reachedEnd)
@@ -2154,9 +2168,8 @@ const std::vector<std::string> CCurlFile::GetPropertyValues(XFILE::FileProperty 
   std::vector<std::string> values;
   std::string value = GetProperty(type, name);
   if (!value.empty())
-  {
-    values.emplace_back(value);
-  }
+    values.push_back(std::move(value));
+
   return values;
 }
 
@@ -2177,4 +2190,15 @@ double CCurlFile::GetDownloadSpeed()
   }
 #endif
   return 0.0;
+}
+
+void CCurlFile::PreloadCaCertsBlob()
+{
+  XFILE::CFile file;
+
+  if (file.LoadFile(CSpecialProtocol::TranslatePath("special://xbmc/system/certs/cacert.pem"),
+                    cachedCaCertsBlob) <= 0)
+  {
+    CLog::LogF(LOGERROR, "failed to load 'system/certs/cacert.pem'");
+  }
 }

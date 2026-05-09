@@ -9,6 +9,7 @@
 #pragma once
 
 #include "DRMUtils.h"
+#include "utils/log.h"
 
 #include <cstdint>
 #include <deque>
@@ -32,6 +33,7 @@ public:
   bool SetActive(bool active) override;
   bool InitDrm() override;
   void DestroyDrm() override;
+  bool SupportsFencing() override { return true; }
   bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
 
 private:
@@ -50,6 +52,7 @@ private:
     drmModeAtomicReqPtr Get() const { return m_atomicRequest.get(); }
 
     bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
+    void CacheProperties();
     void LogAtomicRequest();
 
     static void LogAtomicDiff(CDRMAtomicRequest* current, CDRMAtomicRequest* old);

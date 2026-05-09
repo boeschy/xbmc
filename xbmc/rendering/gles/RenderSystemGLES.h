@@ -110,14 +110,14 @@ public:
   void SetScissors(const CRect& rect) override;
   void ResetScissors() override;
 
-  void SetDepthCulling(DEPTH_CULLING culling) override;
+  void SetDepthCulling(DepthCulling culling) override;
 
   void CaptureStateBlock() override;
   void ApplyStateBlock() override;
 
   void SetCameraPosition(const CPoint &camera, int screenWidth, int screenHeight, float stereoFactor = 0.0f) override;
 
-  bool SupportsStereo(RENDER_STEREO_MODE mode) const override;
+  bool SupportsStereo(RenderStereoMode mode) const override;
 
   void Project(float &x, float &y, float &z) override;
 

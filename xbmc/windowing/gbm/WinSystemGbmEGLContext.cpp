@@ -33,24 +33,18 @@ bool CWinSystemGbmEGLContext::InitWindowSystemEGL(EGLint renderableType, EGLint 
     return false;
   }
 
-  auto plane = m_DRM->GetGuiPlane();
-  uint32_t visualId = plane != nullptr ? plane->GetFormat() : DRM_FORMAT_XRGB2101010;
-
-  // prefer alpha visual id, fallback to non-alpha visual id
-  if (!m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithAlpha(visualId)) &&
-      !m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithoutAlpha(visualId)))
+  // InitWindowSystemEGL runs only at boot for GUI init, so the output
+  // surface is always the gui surface here.
+  auto guiformats = m_DRM->GetOutputFormats();
+  if (!std::ranges::any_of(guiformats,
+                           [&](struct outputformat format)
+                           {
+                             return format.active &&
+                                    m_eglContext.ChooseConfig(renderableType, format.drm, false,
+                                                              format.alpha);
+                           }))
   {
-    // fallback to 8bit format if no EGL config was found for 10bit
-    if (plane)
-      plane->SetFormat(DRM_FORMAT_XRGB8888);
-
-    visualId = plane != nullptr ? plane->GetFormat() : DRM_FORMAT_XRGB8888;
-
-    if (!m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithAlpha(visualId)) &&
-        !m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithoutAlpha(visualId)))
-    {
-      return false;
-    }
+    return false;
   }
 
   if (!CreateContext())
@@ -61,7 +55,15 @@ bool CWinSystemGbmEGLContext::InitWindowSystemEGL(EGLint renderableType, EGLint 
   if (CEGLUtils::HasExtension(m_eglContext.GetEGLDisplay(), "EGL_ANDROID_native_fence_sync") &&
       CEGLUtils::HasExtension(m_eglContext.GetEGLDisplay(), "EGL_KHR_fence_sync"))
   {
-    m_eglFence = std::make_unique<KODI::UTILS::EGL::CEGLFence>(m_eglContext.GetEGLDisplay());
+    if (m_DRM->SupportsFencing())
+    {
+      m_eglFence = std::make_unique<KODI::UTILS::EGL::CEGLFence>(m_eglContext.GetEGLDisplay());
+    }
+    else
+    {
+      CLog::Log(LOGWARNING, "[GBM] EGL_KHR_fence_sync and EGL_ANDROID_native_fence_sync supported"
+                            ", but DRM backend doesn't support fencing");
+    }
   }
   else
   {
@@ -91,15 +93,20 @@ bool CWinSystemGbmEGLContext::CreateNewWindow(const std::string& name,
   }
 
   uint32_t format = m_eglContext.GetConfigAttrib(EGL_NATIVE_VISUAL_ID);
+  std::vector<uint64_t> fallbackModifiers = {DRM_FORMAT_MOD_LINEAR};
+  std::vector<uint64_t>* modifiers = &fallbackModifiers;
 
-  std::vector<uint64_t> modifiers;
+  for (auto& fmt : m_DRM->GetOutputFormats())
+  {
+    if (fmt.drm == format && fmt.active)
+    {
+      modifiers = &fmt.modifiers;
+      break;
+    }
+  }
 
-  auto plane = m_DRM->GetGuiPlane();
-  if (plane)
-    modifiers = plane->GetModifiersForFormat(format);
-
-  if (!m_GBM->GetDevice().CreateSurface(res.iWidth, res.iHeight, format, modifiers.data(),
-                                        modifiers.size()))
+  if (!m_GBM->GetDevice().CreateSurface(res.iWidth, res.iHeight, format, modifiers->data(),
+                                        modifiers->size()))
   {
     CLog::Log(LOGERROR, "CWinSystemGbmEGLContext::{} - failed to initialize GBM", __FUNCTION__);
     return false;
@@ -121,11 +128,31 @@ bool CWinSystemGbmEGLContext::CreateNewWindow(const std::string& name,
     return false;
   }
 
+  if (!m_eglContext.TrySwapBuffers())
+  {
+    return false;
+  }
+
+  struct gbm_bo* bo = m_GBM->GetDevice().GetSurface().LockFrontBuffer().Get();
+  if (!bo)
+  {
+    CLog::Log(LOGERROR, "CWinSystemGbmEGLContext::{} - failed to lock front buffer", __FUNCTION__);
+    return false;
+  }
+
+#if defined(HAS_GBM_MODIFIERS)
+  uint64_t modifier = gbm_bo_get_modifier(bo);
+#else
+  uint64_t modifier = DRM_FORMAT_MOD_LINEAR;
+#endif
+  if (!m_DRM->FindGuiPlane(gbm_bo_get_format(bo), modifier))
+  {
+    return false;
+  }
   m_bFullScreen = fullScreen;
   m_nWidth = res.iWidth;
   m_nHeight = res.iHeight;
   m_fRefreshRate = res.fRefreshRate;
-
   CLog::Log(LOGDEBUG, "CWinSystemGbmEGLContext::{} - initialized GBM", __FUNCTION__);
   return true;
 }

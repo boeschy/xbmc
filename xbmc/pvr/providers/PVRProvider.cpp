@@ -9,7 +9,6 @@
 #include "PVRProvider.h"
 
 #include "ServiceBroker.h"
-#include "guilib/LocalizeStrings.h"
 #include "pvr/PVRDatabase.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClient.h"
@@ -23,7 +22,6 @@
 #include <string>
 
 using namespace PVR;
-
 
 const std::string CPVRProvider::IMAGE_OWNER_PATTERN = "pvrprovider";
 
@@ -390,7 +388,7 @@ std::string CPVRProvider::GetClientThumbPath() const
 void CPVRProvider::ToSortable(SortItem& sortable, Field field) const
 {
   std::unique_lock lock(m_critSection);
-  if (field == FieldProvider)
-    sortable[FieldProvider] = StringUtils::Format(
+  if (field == Field::PROVIDER)
+    sortable[Field::PROVIDER] = StringUtils::Format(
         "{} {} {} {}", m_iClientId, m_type == PVR_PROVIDER_TYPE_ADDON ? 0 : 1, m_type, m_strName);
 }

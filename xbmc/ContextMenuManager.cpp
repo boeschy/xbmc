@@ -35,9 +35,12 @@
 using namespace ADDON;
 using namespace PVR;
 
-const CContextMenuItem CContextMenuManager::MAIN = CContextMenuItem::CreateGroup("", "", "kodi.core.main", "");
-const CContextMenuItem CContextMenuManager::MANAGE = CContextMenuItem::CreateGroup("", "", "kodi.core.manage", "");
-
+const CContextMenuItem CContextMenuManager::MAIN(CContextMenuItem::CGroup{
+    .groupId = "kodi.core.main",
+});
+const CContextMenuItem CContextMenuManager::MANAGE(CContextMenuItem::CGroup{
+    .groupId = "kodi.core.manage",
+});
 
 CContextMenuManager::CContextMenuManager(CAddonMgr& addonMgr)
   : m_addonMgr(addonMgr) {}
@@ -94,6 +97,7 @@ void CContextMenuManager::Init()
       std::make_shared<CONTEXTMENU::CVideoMarkWatched>(),
       std::make_shared<CONTEXTMENU::CVideoMarkUnWatched>(),
       std::make_shared<CONTEXTMENU::CVideoRemoveResumePoint>(),
+      std::make_shared<CONTEXTMENU::CTVShowScanForNewContent>(),
       std::make_shared<CONTEXTMENU::CEjectDisk>(),
       std::make_shared<CONTEXTMENU::CEjectDrive>(),
       std::make_shared<CONTEXTMENU::CFavouritesTargetBrowse>(),
@@ -111,9 +115,8 @@ void CContextMenuManager::Init()
 
   ReloadAddonItems();
 
-  const std::vector<std::shared_ptr<IContextMenuItem>> pvrItems(CPVRContextMenuManager::GetInstance().GetMenuItems());
-  for (const auto &item : pvrItems)
-    m_items.emplace_back(item);
+  std::ranges::copy(CPVRContextMenuManager::GetInstance().GetMenuItems(),
+                    std::back_inserter(m_items));
 }
 
 void CContextMenuManager::ReloadAddonItems()
@@ -125,12 +128,8 @@ void CContextMenuManager::ReloadAddonItems()
   for (const auto& addon : addons)
   {
     auto items = std::static_pointer_cast<CContextMenuAddon>(addon)->GetItems();
-    for (auto& item : items)
-    {
-      auto it = std::find(addonItems.begin(), addonItems.end(), item);
-      if (it == addonItems.end())
-        addonItems.push_back(item);
-    }
+    std::ranges::copy_if(items, std::back_inserter(addonItems), [&addonItems](const auto& item)
+                         { return std::ranges::find(addonItems, item) == addonItems.end(); });
   }
 
   std::unique_lock lock(m_criticalSection);
@@ -156,7 +155,7 @@ void CContextMenuManager::OnEvent(const ADDON::AddonEvent& event)
       auto items = std::static_pointer_cast<CContextMenuAddon>(addon)->GetItems();
       for (auto& item : items)
       {
-        auto it = std::find(m_addonItems.begin(), m_addonItems.end(), item);
+        auto it = std::ranges::find(m_addonItems, item);
         if (it == m_addonItems.end())
           m_addonItems.push_back(item);
       }
@@ -185,7 +184,7 @@ void CContextMenuManager::OnPVREvent(const PVRContextMenuEvent& event)
     case PVRContextMenuEventAction::REMOVE_ITEM:
     {
       std::unique_lock lock(m_criticalSection);
-      auto it = std::find(m_items.begin(), m_items.end(), event.item);
+      auto it = std::ranges::find(m_items, event.item);
       if (it != m_items.end())
         m_items.erase(it);
       break;
@@ -205,8 +204,8 @@ bool CContextMenuManager::IsVisible(
   if (menuItem.IsGroup())
   {
     std::unique_lock lock(m_criticalSection);
-    return std::any_of(m_addonItems.begin(), m_addonItems.end(),
-        [&](const CContextMenuItem& other){ return menuItem.IsParentOf(other) && other.IsVisible(fileItem); });
+    return std::ranges::any_of(m_addonItems, [&](const CContextMenuItem& other)
+                               { return menuItem.IsParentOf(other) && other.IsVisible(fileItem); });
   }
 
   return menuItem.IsVisible(fileItem);
@@ -218,10 +217,9 @@ bool CContextMenuManager::HasItems(const CFileItem& fileItem, const CContextMenu
   if (&root == &CContextMenuManager::MAIN)
   {
     std::unique_lock lock(m_criticalSection);
-    return std::any_of(m_items.cbegin(), m_items.cend(),
-                       [&fileItem](const std::shared_ptr<const IContextMenuItem>& menu) {
-                         return menu->IsVisible(fileItem);
-                       });
+    return std::ranges::any_of(m_items,
+                               [&fileItem](const std::shared_ptr<const IContextMenuItem>& menu)
+                               { return menu->IsVisible(fileItem); });
   }
   return false;
 }
@@ -234,8 +232,9 @@ ContextMenuView CContextMenuManager::GetItems(const CFileItem& fileItem,
   if (&root == &CContextMenuManager::MAIN)
   {
     std::unique_lock lock(m_criticalSection);
-    std::copy_if(m_items.begin(), m_items.end(), std::back_inserter(result),
-        [&](const std::shared_ptr<IContextMenuItem>& menu){ return menu->IsVisible(fileItem); });
+    std::ranges::copy_if(m_items, std::back_inserter(result),
+                         [&](const std::shared_ptr<IContextMenuItem>& menu)
+                         { return menu->IsVisible(fileItem); });
   }
   return result;
 }
@@ -244,10 +243,8 @@ bool CContextMenuManager::HasAddonItems(const CFileItem& fileItem,
                                         const CContextMenuItem& root) const
 {
   std::unique_lock lock(m_criticalSection);
-  return std::any_of(m_addonItems.cbegin(), m_addonItems.cend(),
-                     [this, root, &fileItem](const CContextMenuItem& menu) {
-                       return IsVisible(menu, root, fileItem);
-                     });
+  return std::ranges::any_of(m_addonItems, [this, &root, &fileItem](const CContextMenuItem& menu)
+                             { return IsVisible(menu, root, fileItem); });
 }
 
 ContextMenuView CContextMenuManager::GetAddonItems(const CFileItem& fileItem,

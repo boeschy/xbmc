@@ -437,7 +437,7 @@ static int PlayDVD(const std::vector<std::string>& params)
 /*! \brief Play currently inserted Bluray, allowing the user to choose the playlist.
  *  \param params Not used here (but needed for builtin interface).
  */
-static int PlayPlaylist(const std::vector<std::string>& params)
+static int PlayPlaylist(const std::vector<std::string>& /*params*/)
 {
 #ifdef HAS_OPTICAL_DRIVE
   MEDIA_DETECT::PlayDiscOptions options(
@@ -453,7 +453,8 @@ namespace
 void GetItemsForPlayList(const std::shared_ptr<CFileItem>& item, CFileItemList& queuedItems)
 {
   if (VIDEO::UTILS::IsItemPlayable(*item))
-    VIDEO::UTILS::GetItemsForPlayList(item, queuedItems);
+    VIDEO::UTILS::GetItemsForPlayList(item, queuedItems,
+                                      ContentUtils::PlayMode::CHECK_AUTO_PLAY_NEXT_ITEM);
   else if (MUSIC_UTILS::IsItemPlayable(*item))
     MUSIC_UTILS::GetItemsForPlayList(item, queuedItems);
 }

@@ -160,7 +160,7 @@ bool CActiveAEBufferPoolResample::Create(
   if (m_inputFormat.m_channelLayout != m_format.m_channelLayout ||
       m_inputFormat.m_sampleRate != m_format.m_sampleRate ||
       m_inputFormat.m_dataFormat != m_format.m_dataFormat ||
-      m_changeResampler)
+      m_inputFormat.m_frames != m_format.m_frames || m_changeResampler)
   {
     ChangeResampler();
   }
@@ -587,10 +587,11 @@ bool CActiveAEBufferPoolAtempo::ProcessBuffers()
         }
 
         // check if draining is finished
-        if (m_drain && m_procSample->pkt->nb_samples == 0)
+        if (m_procSample->pkt->nb_samples == 0)
         {
           m_procSample->Return();
-          busy = false;
+          if (m_drain)
+            busy = false;
         }
         else
           m_outputSamples.push_back(m_procSample);
@@ -605,7 +606,14 @@ bool CActiveAEBufferPoolAtempo::ProcessBuffers()
       // some methods like encode require completely filled packets
       else if (!m_fillPackets || (m_procSample->pkt->nb_samples == m_procSample->pkt->max_nb_samples))
       {
-        m_outputSamples.push_back(m_procSample);
+        if (m_procSample->pkt->nb_samples == 0)
+        {
+          m_procSample->Return();
+        }
+        else
+        {
+          m_outputSamples.push_back(m_procSample);
+        }
         m_procSample = nullptr;
       }
 

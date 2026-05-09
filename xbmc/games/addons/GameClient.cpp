@@ -23,16 +23,18 @@
 #include "filesystem/SpecialProtocol.h"
 #include "games/GameServices.h"
 #include "games/addons/cheevos/GameClientCheevos.h"
+#include "games/addons/disc/GameClientDiscs.h"
 #include "games/addons/input/GameClientInput.h"
 #include "games/addons/streams/GameClientStreams.h"
 #include "games/addons/streams/IGameClientStream.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/WindowIDs.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/helpers/DialogOKHelper.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
@@ -59,6 +61,8 @@ using namespace GAME;
 
 namespace
 {
+constexpr const char* GAME_PROPERTY_SUPPORTS_DISC_CONTROL = "supports_disc_control";
+
 /*
  * \brief Convert to lower case and canonicalize with a leading "."
  */
@@ -89,8 +93,8 @@ CGameClient::CGameClient(const ADDON::AddonInfoPtr& addonInfo)
 
   std::vector<std::string> extensions = StringUtils::Split(
       Type(AddonType::GAMEDLL)->GetValue(GAME_PROPERTY_EXTENSIONS).asString(), EXTENSION_SEPARATOR);
-  std::transform(extensions.begin(), extensions.end(),
-                 std::inserter(m_extensions, m_extensions.begin()), NormalizeExtension);
+  std::ranges::transform(extensions, std::inserter(m_extensions, m_extensions.begin()),
+                         NormalizeExtension);
 
   // Check for wildcard extension
   if (m_extensions.contains(EXTENSION_WILDCARD))
@@ -103,6 +107,9 @@ CGameClient::CGameClient(const ADDON::AddonInfoPtr& addonInfo)
       addonInfo->Type(AddonType::GAMEDLL)->GetValue(GAME_PROPERTY_SUPPORTS_VFS).asBoolean();
   m_bSupportsStandalone =
       addonInfo->Type(AddonType::GAMEDLL)->GetValue(GAME_PROPERTY_SUPPORTS_STANDALONE).asBoolean();
+  m_supportsDiscControl = addonInfo->Type(AddonType::GAMEDLL)
+                              ->GetValue(GAME_PROPERTY_SUPPORTS_DISC_CONTROL)
+                              .asBoolean();
 
   std::tie(m_emulatorName, m_platforms) = ParseLibretroName(Name());
 }
@@ -206,10 +213,11 @@ bool CGameClient::OpenFile(const CFileItem& file,
   // Some cores "succeed" to load the file even if it doesn't exist
   if (!CFileUtils::Exists(file.GetPath()))
   {
-
     // Failed to play game
     // The required files can't be found.
-    MESSAGING::HELPERS::ShowOKDialogText(CVariant{35210}, CVariant{g_localizeStrings.Get(35219)});
+    MESSAGING::HELPERS::ShowOKDialogText(
+        CVariant{35210},
+        CVariant{CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(35219)});
     return false;
   }
 
@@ -238,6 +246,10 @@ bool CGameClient::OpenFile(const CFileItem& file,
   // Loading the game might require the stream subsystem to be initialized
   Streams().Initialize(streamManager);
 
+  // Initialize disc control subsystem, if supported
+  if (SupportsDiscControl())
+    Discs().Initialize(path);
+
   try
   {
     LogError(error = m_ifc.game->toAddon->LoadGame(m_ifc.game, path.c_str()), "LoadGame()");
@@ -254,7 +266,7 @@ bool CGameClient::OpenFile(const CFileItem& file,
     return false;
   }
 
-  if (!InitializeGameplay(file.GetPath(), streamManager, input))
+  if (!InitializeGameplay(path, streamManager, input))
   {
     NotifyError(GAME_ERROR_UNKNOWN);
     Streams().Deinitialize();
@@ -312,9 +324,16 @@ bool CGameClient::InitializeGameplay(const std::string& gamePath,
 {
   if (LoadGameInfo())
   {
+    if (SupportsDiscControl())
+    {
+      Discs().RestoreDiscList();
+      Discs().RefreshDiscState();
+    }
+
     Input().Start(input);
 
     m_bIsPlaying = true;
+    m_hasFrameRun = false;
     m_gamePath = gamePath;
     m_input = input;
 
@@ -420,14 +439,18 @@ void CGameClient::NotifyError(GAME_ERROR error)
     // This game requires the following add-on: %s
     MESSAGING::HELPERS::ShowOKDialogText(
         CVariant{35210},
-        CVariant{StringUtils::Format(g_localizeStrings.Get(35211), missingResource)});
+        CVariant{StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(35211),
+            missingResource)});
   }
   else
   {
     // Failed to play game
     // The emulator "%s" had an internal error.
     MESSAGING::HELPERS::ShowOKDialogText(
-        CVariant{35210}, CVariant{StringUtils::Format(g_localizeStrings.Get(35213), Name())});
+        CVariant{35210},
+        CVariant{StringUtils::Format(
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(35213), Name())});
   }
 }
 
@@ -484,11 +507,15 @@ void CGameClient::CloseFile()
     m_inGameSaves.reset();
 
     m_bIsPlaying = false;
+    m_hasFrameRun = false;
     m_gamePath.clear();
     m_serializeSize = 0;
     m_input = nullptr;
 
     Input().Stop();
+
+    if (SupportsDiscControl())
+      Discs().Deinitialize();
 
     try
     {
@@ -522,6 +549,7 @@ void CGameClient::RunFrame()
     try
     {
       LogError(m_ifc.game->toAddon->RunFrame(m_ifc.game), "RunFrame()");
+      m_hasFrameRun = true;
     }
     catch (...)
     {
@@ -558,11 +586,15 @@ bool CGameClient::Deserialize(const uint8_t* data, size_t size)
   if (data == nullptr || size == 0)
     return false;
 
-  std::unique_lock lock(m_critSection);
-
   bool bSuccess = false;
   if (m_bIsPlaying)
   {
+    // Deserialization may result in stale disc state, so insert disc now
+    if (SupportsDiscControl())
+      Discs().SetEjected(false);
+
+    std::unique_lock lock(m_critSection);
+
     try
     {
       bSuccess =
@@ -571,6 +603,27 @@ bool CGameClient::Deserialize(const uint8_t* data, size_t size)
     catch (...)
     {
       LogException("Deserialize()");
+    }
+  }
+
+  // Some cores, like Mupen64Plus-NX, initialize on the first frame, so run
+  // a frame and try again
+  if (!bSuccess && !m_hasFrameRun)
+  {
+    RunFrame();
+
+    std::unique_lock lock(m_critSection);
+
+    bSuccess = LogError(m_ifc.game->toAddon->Deserialize(m_ifc.game, data, size), "Deserialize()");
+  }
+
+  if (bSuccess)
+  {
+    // Deserialization may reset disc information, so restore it now
+    if (SupportsDiscControl())
+    {
+      Discs().RestoreDiscList();
+      Discs().RefreshDiscState();
     }
   }
 
@@ -586,6 +639,7 @@ void CGameClient::LogAddonProperties(void) const
   CLog::Log(LOGINFO, "GAME: Valid extensions:    {}", StringUtils::Join(m_extensions, " "));
   CLog::Log(LOGINFO, "GAME: Supports VFS:        {}", m_bSupportsVFS);
   CLog::Log(LOGINFO, "GAME: Supports standalone: {}", m_bSupportsStandalone);
+  CLog::Log(LOGINFO, "GAME: Disc control:        {}", m_supportsDiscControl);
   CLog::Log(LOGINFO, "GAME: ------------------------------------");
 }
 

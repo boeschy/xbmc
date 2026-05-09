@@ -74,6 +74,14 @@ T NumberFromSS(std::string_view str, T fallback)
   iss >> result;
   return result;
 }
+
+/*!
+ * Locale unaware version of toupper
+ */
+[[nodiscard]] constexpr char ToUpperAscii(char c)
+{
+  return 'a' <= c && c <= 'z' ? c - 'a' + 'A' : c;
+}
 } // unnamed namespace
 
 static constexpr const char* ADDON_GUID_RE = "^(\\{){0,1}[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}(\\}){0,1}$";
@@ -362,13 +370,13 @@ wchar_t toupperUnicode(const wchar_t& c)
 template<typename StrIn, typename StrOut, typename Fn>
 void transformString(const StrIn& input, StrOut& output, Fn fn)
 {
-  std::transform(input.begin(), input.end(), output.begin(), fn);
+  std::ranges::transform(input, output.begin(), fn);
 }
 
 std::string StringUtils::ToUpper(std::string_view str)
 {
   std::string result(str.size(), '\0');
-  transformString(str, result, ::toupper);
+  transformString(str, result, ToUpperAscii);
   return result;
 }
 
@@ -381,7 +389,7 @@ std::wstring StringUtils::ToUpper(std::wstring_view str)
 
 void StringUtils::ToUpper(std::string& str) noexcept
 {
-  transformString(str, str, ::toupper);
+  transformString(str, str, ToUpperAscii);
 }
 
 void StringUtils::ToUpper(std::wstring& str) noexcept
@@ -392,7 +400,7 @@ void StringUtils::ToUpper(std::wstring& str) noexcept
 std::string StringUtils::ToLower(std::string_view str)
 {
   std::string result(str.size(), '\0');
-  transformString(str, result, ::tolower);
+  transformString(str, result, ToLowerAscii);
   return result;
 }
 
@@ -405,7 +413,7 @@ std::wstring StringUtils::ToLower(std::wstring_view str)
 
 void StringUtils::ToLower(std::string& str) noexcept
 {
-  transformString(str, str, ::tolower);
+  transformString(str, str, ToLowerAscii);
 }
 
 void StringUtils::ToLower(std::wstring& str) noexcept
@@ -441,27 +449,8 @@ void StringUtils::ToCapitalize(std::wstring& str) noexcept
 bool StringUtils::EqualsNoCase(std::string_view str1, std::string_view str2) noexcept
 {
   return std::ranges::equal(str1, str2,
-                            [](unsigned char c1, unsigned char c2)
-                            { return c1 == c2 || ::tolower(c1) == ::tolower(c2); });
-}
-
-int StringUtils::CompareNoCase(std::string_view str1,
-                               std::string_view str2,
-                               size_t n /* = 0 */) noexcept
-{
-  str1 = n ? str1.substr(0, std::min(n, str1.length())) : str1;
-  str2 = n ? str2.substr(0, std::min(n, str2.length())) : str2;
-  auto diff = std::ranges::mismatch(str1, str2,
-                                    [](unsigned char c1, unsigned char c2)
-                                    { return c1 == c2 || ::tolower(c1) == ::tolower(c2); });
-  if (diff.in1 == str1.end() && diff.in2 == str2.end())
-    return 0;
-  if (diff.in1 == str1.end())
-    return '\0' - ::tolower(static_cast<unsigned char>(*diff.in2));
-  if (diff.in2 == str2.end())
-    return ::tolower(static_cast<unsigned char>(*diff.in1)) - '\0';
-  return ::tolower(static_cast<unsigned char>(*diff.in1)) -
-         ::tolower(static_cast<unsigned char>(*diff.in2));
+                            [](char c1, char c2)
+                            { return c1 == c2 || ToLowerAscii(c1) == ToLowerAscii(c2); });
 }
 
 std::string StringUtils::Left(std::string_view str, size_t count)
@@ -1619,7 +1608,7 @@ size_t StringUtils::FindWords(std::string_view str, std::string_view wordLowerCa
     {
       const auto [_, wordCmpEnd] =
           std::mismatch(strIter, str.end(), wordLowerCase.begin(), wordLowerCase.end(),
-                        [](unsigned char a, unsigned char b) { return ::tolower(a) == b; });
+                        [](char a, char b) { return ToLowerAscii(a) == b; });
 
       if (wordCmpEnd == wordLowerCase.end())
         return std::distance(str.begin(), strIter);
@@ -1900,11 +1889,9 @@ bool StringUtils::Contains(std::string_view str,
 {
   if (isCaseInsensitive)
   {
-    auto itStr = std::search(str.begin(), str.end(), keyword.begin(), keyword.end(),
-                             [](unsigned char ch1, unsigned char ch2) {
-                               return std::toupper(ch1) == std::toupper(ch2);
-                             });
-    return (itStr != str.end());
+    const auto itStr{std::ranges::search(str, keyword, [](char ch1, char ch2)
+                                         { return ToUpperAscii(ch1) == ToUpperAscii(ch2); })};
+    return (!itStr.empty());
   }
 
   return str.find(keyword) != std::string_view::npos;

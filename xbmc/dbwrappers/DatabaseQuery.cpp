@@ -9,8 +9,10 @@
 #include "DatabaseQuery.h"
 
 #include "Database.h"
+#include "ServiceBroker.h"
 #include "XBDateTime.h"
-#include "guilib/LocalizeStrings.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/CharsetConverter.h"
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
@@ -50,7 +52,7 @@ const std::array<OperatorField, 15> operators = {{
   {"notinthelast",    OPERATOR_NOT_IN_THE_LAST,   21411},
   {"true",            OPERATOR_TRUE,              20122},
   {"false",           OPERATOR_FALSE,             20424},
-  {"between",         OPERATOR_BETWEEN,           21456},
+  {"between",         OPERATOR_BETWEEN,           21398},
 }};
 // clang-format on
 
@@ -212,8 +214,8 @@ std::string CDatabaseQueryRule::GetLocalizedOperator(SearchOperator oper)
 {
   for (const auto& o : operators)
     if (oper == o.op)
-      return g_localizeStrings.Get(o.localizedName);
-  return g_localizeStrings.Get(16018);
+      return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(o.localizedName);
+  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(16018);
 }
 
 void CDatabaseQueryRule::GetAvailableOperators(std::vector<std::string>& operatorList)

@@ -24,11 +24,12 @@
 #include "filesystem/StackDirectory.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "messaging/helpers/DialogHelper.h"
 #include "music/MusicFileItemClassify.h"
 #include "playlists/PlayList.h"
 #include "profiles/ProfileManager.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/Setting.h"
@@ -182,7 +183,7 @@ bool CAutorun::RunDisc(IDirectory* pDir,
   }
 
   // Sorting necessary for easier HDDVD handling
-  vecItems.Sort(SortByLabel, SortOrderAscending);
+  vecItems.Sort(SortBy::LABEL, SortOrder::ASCENDING);
 
   bool bAllowVideo = true;
 //  bool bAllowPictures = true;
@@ -289,7 +290,7 @@ bool CAutorun::RunDisc(IDirectory* pDir,
           {
             // HD DVD Standard says the highest numbered playlist has to be handled first.
             CLog::Log(LOGINFO,"HD DVD: Playlist found. Set filetypes to *.xpl for external player.");
-            items.Sort(SortByLabel, SortOrderDescending);
+            items.Sort(SortBy::LABEL, SortOrder::DESCENDING);
             phddvdItem = pItem;
             hddvdname = URIUtils::GetFileName(items[0]->GetPath());
             CLog::Log(LOGINFO, "HD DVD: {}", items[0]->GetPath());
@@ -309,7 +310,7 @@ bool CAutorun::RunDisc(IDirectory* pDir,
             {
               // HD DVD Standard says the lowest numbered ifo has to be handled first.
               CLog::Log(LOGINFO,"HD DVD: IFO found. Set filename to HV* and filetypes to *.ifo for external player.");
-              items.Sort(SortByLabel, SortOrderAscending);
+              items.Sort(SortBy::LABEL, SortOrder::ASCENDING);
               phddvdItem = pItem;
               hddvdname = URIUtils::GetFileName(items[0]->GetPath());
               CLog::Log(LOGINFO, "HD DVD: {}", items[0]->GetPath());
@@ -322,7 +323,7 @@ bool CAutorun::RunDisc(IDirectory* pDir,
           if (items.Size())
           {
             // Sort *.evo files in alphabetical order.
-            items.Sort(SortByLabel, SortOrderAscending);
+            items.Sort(SortBy::LABEL, SortOrder::ASCENDING);
             int64_t asize = 0;
             int ecount = 0;
             // calculate average size of elements above 1gb
@@ -344,7 +345,7 @@ bool CAutorun::RunDisc(IDirectory* pDir,
                 sitems.Add (items[j]);
             }
             // Sort *.evo files by size.
-            items.Sort(SortBySize, SortOrderDescending);
+            items.Sort(SortBy::SIZE, SortOrder::DESCENDING);
             // Add other files with descending size to bottom of new list.
             for (int j = 0; j < items.Size(); j++)
             {
@@ -405,7 +406,7 @@ bool CAutorun::RunDisc(IDirectory* pDir,
           CDirectory::GetDirectory(pItem->GetPath(), items, strExt, DIR_FLAG_DEFAULTS);
           if (items.Size())
           {
-            items.Sort(SortByLabel, SortOrderAscending);
+            items.Sort(SortBy::LABEL, SortOrder::ASCENDING);
             CServiceBroker::GetPlaylistPlayer().ClearPlaylist(PLAYLIST::Id::TYPE_VIDEO);
             CServiceBroker::GetPlaylistPlayer().Add(PLAYLIST::Id::TYPE_VIDEO, items);
             CServiceBroker::GetPlaylistPlayer().SetCurrentPlaylist(PLAYLIST::Id::TYPE_VIDEO);
@@ -545,7 +546,7 @@ void CAutorun::HandleAutorun()
   if (mediadetect.m_evAutorun.Wait(0ms))
   {
     if (!ExecuteAutorun(""))
-      CLog::Log(LOGDEBUG, "{}: Could not execute autorun", __func__);
+      CLog::LogF(LOGDEBUG, "Could not execute autorun");
     mediadetect.m_evAutorun.Reset();
   }
 #endif
@@ -595,9 +596,12 @@ void CAutorun::SettingOptionAudioCdActionsFiller(const SettingConstPtr& setting,
                                                  std::vector<IntegerSettingOption>& list,
                                                  int& current)
 {
-  list.emplace_back(g_localizeStrings.Get(16018), static_cast<int>(AutoCDAction::NONE));
-  list.emplace_back(g_localizeStrings.Get(14098), static_cast<int>(AutoCDAction::PLAY));
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(16018),
+                    static_cast<int>(AutoCDAction::NONE));
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(14098),
+                    static_cast<int>(AutoCDAction::PLAY));
 #ifdef HAS_CDDA_RIPPER
-  list.emplace_back(g_localizeStrings.Get(14096), static_cast<int>(AutoCDAction::RIP));
+  list.emplace_back(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(14096),
+                    static_cast<int>(AutoCDAction::RIP));
 #endif
 }

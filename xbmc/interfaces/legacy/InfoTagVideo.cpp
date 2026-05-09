@@ -301,6 +301,11 @@ namespace XBMCAddon
       return infoTag->m_strOriginalTitle;
     }
 
+    String InfoTagVideo::getOriginalLanguage()
+    {
+      return infoTag->GetOriginalLanguage();
+    }
+
     String InfoTagVideo::getPremiered()
     {
       CLog::Log(LOGWARNING, "InfoTagVideo.getPremiered() is deprecated and might be removed in "
@@ -500,6 +505,12 @@ namespace XBMCAddon
       setOriginalTitleRaw(infoTag, originalTitle);
     }
 
+    bool InfoTagVideo::setOriginalLanguage(const String& language)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      return setOriginalLanguageRaw(infoTag, language);
+    }
+
     void InfoTagVideo::setSortTitle(const String& sortTitle)
     {
       XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
@@ -685,16 +696,18 @@ namespace XBMCAddon
       setResumePointRaw(infoTag, time, totalTime);
     }
 
-    void InfoTagVideo::addSeason(int number, std::string name /* = "" */)
+    void InfoTagVideo::addSeason(int number,
+                                 std::string name /* = "" */,
+                                 std::string plot /* = "" */)
     {
       XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
-      addSeasonRaw(infoTag, number, std::move(name));
+      addSeasonRaw(infoTag, number, std::move(name), std::move(plot));
     }
 
-    void InfoTagVideo::addSeasons(const std::vector<Tuple<int, std::string>>& namedSeasons)
+    void InfoTagVideo::addSeasons(const std::vector<Tuple<int, std::string, std::string>>& seasons)
     {
       XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
-      addSeasonsRaw(infoTag, namedSeasons);
+      addSeasonsRaw(infoTag, seasons);
     }
 
     void InfoTagVideo::addVideoStream(const VideoStreamDetail* stream)
@@ -744,6 +757,12 @@ namespace XBMCAddon
     {
       XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
       addAvailableArtworkRaw(infoTag, url, art_type, preview, referrer, cache, post, isgz, season);
+    }
+
+    void InfoTagVideo::setAvailableFanart(const std::vector<Properties>& images)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setAvailableFanartRaw(infoTag, images);
     }
 
     void InfoTagVideo::setDbIdRaw(CVideoInfoTag* infoTag, int dbId)
@@ -867,6 +886,17 @@ namespace XBMCAddon
     void InfoTagVideo::setOriginalTitleRaw(CVideoInfoTag* infoTag, const String& originalTitle)
     {
       infoTag->SetOriginalTitle(originalTitle);
+    }
+
+    bool InfoTagVideo::setOriginalLanguageRaw(CVideoInfoTag* infoTag, const String& language)
+    {
+      if (!infoTag->SetOriginalLanguage(language,
+                                        CVideoInfoTag::LanguageTagSource::SOURCE_EXTERNAL))
+      {
+        CLog::LogF(LOGWARNING, "the language {} is not recognized", language);
+        return false;
+      }
+      return true;
     }
 
     void InfoTagVideo::setSortTitleRaw(CVideoInfoTag* infoTag, const String& sortTitle)
@@ -1034,16 +1064,20 @@ namespace XBMCAddon
       infoTag->SetResumePoint(resumePoint);
     }
 
-    void InfoTagVideo::addSeasonRaw(CVideoInfoTag* infoTag, int number, std::string name /* = "" */)
+    void InfoTagVideo::addSeasonRaw(CVideoInfoTag* infoTag,
+                                    int number,
+                                    std::string name /* = "" */,
+                                    std::string plot /* = "" */)
     {
-      infoTag->m_namedSeasons[number] = std::move(name);
+      infoTag->m_seasons[number].m_name = std::move(name);
+      infoTag->m_seasons[number].m_plot = std::move(plot);
     }
 
-    void InfoTagVideo::addSeasonsRaw(CVideoInfoTag* infoTag,
-                                     const std::vector<Tuple<int, std::string>>& namedSeasons)
+    void InfoTagVideo::addSeasonsRaw(
+        CVideoInfoTag* infoTag, const std::vector<Tuple<int, std::string, std::string>>& seasons)
     {
-      for (const auto& season : namedSeasons)
-        addSeasonRaw(infoTag, season.first(), season.second());
+      for (const auto& season : seasons)
+        addSeasonRaw(infoTag, season.first(), season.second(), season.third());
     }
 
     void InfoTagVideo::addStreamRaw(CVideoInfoTag* infoTag, CStreamDetail* stream)
@@ -1068,6 +1102,31 @@ namespace XBMCAddon
     {
       infoTag->m_strPictureURL.AddParsedUrl(url, art_type, preview, referrer, cache, post, isgz,
                                             season);
+    }
+
+    void InfoTagVideo::setAvailableFanartRaw(CVideoInfoTag* infoTag,
+                                             const std::vector<Properties>& images)
+    {
+      infoTag->m_fanart.Clear();
+      for (const auto& dictionary : images)
+      {
+        auto getValue = [&](std::string_view str) -> const std::string&
+        {
+          const auto iter = dictionary.find(str);
+          if (iter != dictionary.end())
+            return iter->second;
+          else
+            return StringUtils::Empty;
+        };
+
+        if (const std::string& image = getValue("image"); !image.empty())
+        {
+          const std::string& preview = getValue("preview");
+          const std::string& colors = getValue("colors");
+          infoTag->m_fanart.AddFanart(image, preview, colors);
+        }
+      }
+      infoTag->m_fanart.Pack();
     }
   }
 }

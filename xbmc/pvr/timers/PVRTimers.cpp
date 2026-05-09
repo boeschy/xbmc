@@ -9,6 +9,7 @@
 #include "PVRTimers.h"
 
 #include "ServiceBroker.h"
+#include "jobs/JobManager.h"
 #include "pvr/PVRConstants.h" // PVR_CLIENT_INVALID_UID
 #include "pvr/PVRDatabase.h"
 #include "pvr/PVREventLogJob.h"
@@ -116,9 +117,8 @@ bool CPVRTimers::LoadFromDatabase(const std::vector<std::shared_ptr<CPVRClient>>
     const std::vector<std::shared_ptr<CPVRTimerInfoTag>> timers{database->GetTimers(clients)};
 
     if (std::accumulate(timers.cbegin(), timers.cend(), false,
-                        [this](bool changed, const auto& timer) {
-                          return (UpdateEntry(timer) != nullptr) ? true : changed;
-                        }))
+                        [this](bool changed, const auto& timer)
+                        { return (UpdateEntry(timer) != nullptr) ? true : changed; }))
       NotifyTimersEvent();
   }
 
@@ -137,36 +137,24 @@ void CPVRTimers::Unload()
 void CPVRTimers::Start()
 {
   Stop();
-
-  CServiceBroker::GetPVRManager().Events().Subscribe(
-      this,
-      [this](const PVREvent& event)
-      {
-        switch (event)
-        {
-          using enum PVREvent;
-
-          case EpgContainer:
-            CServiceBroker::GetPVRManager().TriggerTimersUpdate();
-            break;
-          case Epg:
-          case EpgItemUpdate:
-          {
-            std::unique_lock lock(m_critSection);
-            m_bReminderRulesUpdatePending = true;
-            break;
-          }
-          default:
-            break;
-        }
-      });
   Create();
 }
 
 void CPVRTimers::Stop()
 {
   StopThread();
-  CServiceBroker::GetPVRManager().Events().Unsubscribe(this);
+}
+
+void CPVRTimers::OnSleep()
+{
+  CPowerState::OnSleep();
+  Stop();
+}
+
+void CPVRTimers::OnWake()
+{
+  CPowerState::OnWake();
+  Start();
 }
 
 bool CPVRTimers::UpdateFromClients(const std::vector<std::shared_ptr<CPVRClient>>& clients)
@@ -190,19 +178,42 @@ bool CPVRTimers::UpdateFromClients(const std::vector<std::shared_ptr<CPVRClient>
 
 void CPVRTimers::Process()
 {
+  auto& mgr = CServiceBroker::GetPVRManager();
+  mgr.Events().Subscribe(this,
+                         [this, &mgr](const PVREvent& event)
+                         {
+                           switch (event)
+                           {
+                             using enum PVREvent;
+
+                             case EpgContainer:
+                               mgr.TriggerTimersUpdate();
+                               break;
+                             case Epg:
+                             case EpgItemUpdate:
+                             {
+                               std::unique_lock lock(m_critSection);
+                               m_bReminderRulesUpdatePending = true;
+                               break;
+                             }
+                             default:
+                               break;
+                           }
+                         });
+
   while (!m_bStop)
   {
-    if (IsSleeping())
+    if (!m_bStop)
     {
-      CThread::Sleep(10s);
-      continue;
+      // update all timers not owned by a client (e.g. reminders)
+      UpdateEntries(MAX_NOTIFICATION_DELAY.count());
     }
 
-    // update all timers not owned by a client (e.g. reminders)
-    UpdateEntries(MAX_NOTIFICATION_DELAY.count());
-
-    CThread::Sleep(MAX_NOTIFICATION_DELAY);
+    if (!m_bStop)
+      CThread::Sleep(1s);
   }
+
+  mgr.Events().Unsubscribe(this);
 }
 
 bool CPVRTimers::IsRecording() const
@@ -1289,7 +1300,7 @@ std::shared_ptr<CPVRTimerInfoTag> CPVRTimers::GetTimerRule(
 
 CDateTime CPVRTimers::GetNextEventTime() const
 {
-  const bool dailywakup{
+  const bool dailywakeup{
       m_settings->GetBoolValue(CSettings::SETTING_PVRPOWERMANAGEMENT_DAILYWAKEUP)};
   const CDateTime now = CDateTime::GetUTCDateTime();
   const CDateTimeSpan prewakeup{
@@ -1310,16 +1321,19 @@ CDateTime CPVRTimers::GetNextEventTime() const
   }
 
   /* check daily wake up */
-  if (dailywakup)
+  if (dailywakeup)
   {
     CDateTime dailywakeuptime;
     dailywakeuptime.SetFromDBTime(
         m_settings->GetStringValue(CSettings::SETTING_PVRPOWERMANAGEMENT_DAILYWAKEUPTIME));
-    dailywakeuptime = dailywakeuptime.GetAsUTCDateTime();
 
-    dailywakeuptime.SetDateTime(now.GetYear(), now.GetMonth(), now.GetDay(),
-                                dailywakeuptime.GetHour(), dailywakeuptime.GetMinute(),
-                                dailywakeuptime.GetSecond());
+    const CDateTime nowAsLocalTime{CDateTime::GetCurrentDateTime()};
+
+    dailywakeuptime.SetDateTime(nowAsLocalTime.GetYear(), nowAsLocalTime.GetMonth(),
+                                nowAsLocalTime.GetDay(), dailywakeuptime.GetHour(),
+                                dailywakeuptime.GetMinute(), dailywakeuptime.GetSecond());
+
+    dailywakeuptime = dailywakeuptime.GetAsUTCDateTime();
 
     if ((dailywakeuptime - idle) < now)
     {

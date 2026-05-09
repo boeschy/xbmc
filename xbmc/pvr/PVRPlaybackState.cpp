@@ -44,7 +44,10 @@ public:
   CLastWatchedUpdateTimer(CPVRPlaybackState& state,
                           const std::shared_ptr<CPVRChannelGroupMember>& channel,
                           const CDateTime& time)
-    : CTimer(this), m_state(state), m_channel(channel), m_time(time)
+    : CTimer(this),
+      m_state(state),
+      m_channel(channel),
+      m_time(time)
   {
   }
 
@@ -153,7 +156,10 @@ bool ResolveChannel(CFileItem& item,
   if (source == PVR_SOURCE::DEFAULT)
     client->StreamClosed();
 
-  client->GetChannelStreamProperties(item.GetPVRChannelInfoTag(), source, props);
+  const PVR_ERROR ret{
+      client->GetChannelStreamProperties(item.GetPVRChannelInfoTag(), source, props)};
+  if (ret != PVR_ERROR_NO_ERROR && ret != PVR_ERROR_NOT_IMPLEMENTED)
+    return false;
 
   if (props.LivePlaybackAsEPG())
   {
@@ -169,7 +175,10 @@ bool ResolveEPG(CFileItem& item,
                 const std::shared_ptr<const CPVRClient>& client)
 {
   client->StreamClosed();
-  client->GetEpgTagStreamProperties(item.GetEPGInfoTag(), props);
+
+  const PVR_ERROR ret{client->GetEpgTagStreamProperties(item.GetEPGInfoTag(), props)};
+  if (ret != PVR_ERROR_NO_ERROR && ret != PVR_ERROR_NOT_IMPLEMENTED)
+    return false;
 
   if (props.EPGPlaybackAsLive())
   {
@@ -192,7 +201,10 @@ bool ResolveRecording(const CFileItem& item,
                       CPVRStreamProperties& props,
                       const std::shared_ptr<const CPVRClient>& client)
 {
-  client->GetRecordingStreamProperties(item.GetPVRRecordingInfoTag(), props);
+  const PVR_ERROR ret{client->GetRecordingStreamProperties(item.GetPVRRecordingInfoTag(), props)};
+  if (ret != PVR_ERROR_NO_ERROR && ret != PVR_ERROR_NOT_IMPLEMENTED)
+    return false;
+
   return true;
 }
 } // unnamed namespace
@@ -343,7 +355,7 @@ bool CPVRPlaybackState::OnPlaybackStopped(const CFileItem& item)
     if (bUpdateLastWatched)
     {
       // If last watched timer is not running (any more), channel was watched long enough to store the value.
-      UpdateLastWatched(m_playingChannel, CDateTime::GetUTCDateTime());
+      UpdateLastWatched(item.GetPVRChannelGroupMemberInfoTag(), CDateTime::GetUTCDateTime());
     }
 
     bChanged = true;

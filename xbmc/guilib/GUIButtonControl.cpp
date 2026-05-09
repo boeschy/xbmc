@@ -9,9 +9,11 @@
 #include "GUIButtonControl.h"
 
 #include "GUIFontManager.h"
+#include "ServiceBroker.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "input/mouse/MouseEvent.h"
+#include "windowing/WinSystem.h"
 
 using namespace KODI;
 
@@ -89,8 +91,14 @@ void CGUIButtonControl::Process(unsigned int currentTime, CDirtyRegionList &dirt
       alphaChannel += 192;
       alphaChannel = (unsigned int)((float)m_alpha * (float)alphaChannel / 255.0f);
     }
-    if (m_imgFocus->SetAlpha((unsigned char)alphaChannel))
-      MarkDirtyRegion();
+
+    const auto newAlpha = static_cast<unsigned char>(alphaChannel);
+    if (m_lastFocusAlpha != newAlpha)
+    {
+      if (m_imgFocus->SetAlpha(newAlpha))
+        MarkDirtyRegion();
+      m_lastFocusAlpha = newAlpha;
+    }
 
     m_imgFocus->SetVisible(true);
     m_imgNoFocus->SetVisible(false);
@@ -413,6 +421,7 @@ void CGUIButtonControl::OnFocus()
 void CGUIButtonControl::OnUnFocus()
 {
   m_unfocusActions.ExecuteActions(GetID(), GetParentID());
+  m_lastFocusAlpha.reset();
 }
 
 void CGUIButtonControl::SetSelected(bool bSelected)

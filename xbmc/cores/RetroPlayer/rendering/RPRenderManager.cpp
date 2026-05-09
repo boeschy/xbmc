@@ -92,7 +92,12 @@ void CRPRenderManager::Deinitialize()
   }
   m_savestateBuffers.clear();
 
-  m_renderers.clear();
+  // Renderers may still hold GPU resources, so defer cleanup to the rendering
+  // or destructor thread
+  {
+    std::unique_lock<std::mutex> lock{m_oldRenderersMutex};
+    m_oldRenderers.merge(m_renderers);
+  }
 
   m_state = RENDER_STATE::UNCONFIGURED;
 }
@@ -270,6 +275,17 @@ void CRPRenderManager::AddFrame(const uint8_t* data,
   }
 }
 
+void CRPRenderManager::Flush()
+{
+  m_bFlush = true;
+}
+
+void CRPRenderManager::DestroyContext()
+{
+  for (IRenderBufferPool* bufferPool : m_processInfo.GetBufferManager().GetBufferPools())
+    bufferPool->DestroyContext();
+}
+
 bool CRPRenderManager::Create(unsigned int width, unsigned int height)
 {
   //! @todo
@@ -326,6 +342,7 @@ void CRPRenderManager::FrameMove()
 
   if (bIsConfigured)
   {
+    std::unique_lock<std::mutex> lock{m_oldRenderersMutex};
     for (auto& renderer : m_renderers)
       renderer->FrameMove();
   }
@@ -348,8 +365,11 @@ void CRPRenderManager::CheckFlush()
       m_bHasCachedFrame = false;
     }
 
-    for (const auto& renderer : m_renderers)
-      renderer->Flush();
+    {
+      std::unique_lock<std::mutex> lock{m_oldRenderersMutex};
+      for (const auto& renderer : m_renderers)
+        renderer->Flush();
+    }
 
     m_processInfo.GetBufferManager().FlushPools();
 
@@ -357,13 +377,14 @@ void CRPRenderManager::CheckFlush()
   }
 }
 
-void CRPRenderManager::Flush()
-{
-  m_bFlush = true;
-}
-
 void CRPRenderManager::RenderWindow(bool bClear, const RESOLUTION_INFO& coordsRes)
 {
+  // Clear any old renderers on the rendering thread
+  {
+    std::unique_lock<std::mutex> lock{m_oldRenderersMutex};
+    m_oldRenderers.clear();
+  }
+
   // Get a renderer for the fullscreen window
   std::shared_ptr<CRPBaseRenderer> renderer = GetRendererForSettings(nullptr);
   if (!renderer)
@@ -384,6 +405,12 @@ void CRPRenderManager::RenderControl(bool bClear,
                                      const CRect& renderRegion,
                                      const IGUIRenderSettings* renderSettings)
 {
+  // Clear any old renderers on the rendering thread
+  {
+    std::unique_lock<std::mutex> lock{m_oldRenderersMutex};
+    m_oldRenderers.clear();
+  }
+
   // Get a renderer for the control
   std::shared_ptr<CRPBaseRenderer> renderer = GetRendererForSettings(renderSettings);
   if (!renderer)
@@ -451,6 +478,8 @@ void CRPRenderManager::ClearBackground()
 bool CRPRenderManager::SupportsRenderFeature(RENDERFEATURE feature) const
 {
   //! @todo Move to ProcessInfo
+  std::unique_lock<std::mutex> lock{m_oldRenderersMutex};
+
   for (const auto& renderer : m_renderers)
   {
     if (renderer->Supports(feature))
@@ -544,6 +573,8 @@ std::shared_ptr<CRPBaseRenderer> CRPRenderManager::GetRendererForPool(
     CLog::Log(LOGDEBUG, "RetroPlayer[RENDER]: buffer pool is not compatible with renderer");
     return renderer;
   }
+
+  std::unique_lock<std::mutex> lock{m_oldRenderersMutex};
 
   // Get compatible renderer for this buffer pool
   for (const auto& it : m_renderers)

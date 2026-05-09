@@ -16,6 +16,7 @@
 #include "FileItem.h"
 #include "threads/CriticalSection.h"
 
+#include <compare>
 #include <map>
 #include <string>
 #include <string_view>
@@ -35,6 +36,31 @@ public:
     ALWAYS
   };
 
+  enum class StackCandidateType : uint8_t
+  {
+    FOLDER_CANDIDATE,
+    FILE_CANDIDATE
+  };
+
+  struct StackCandidate
+  {
+    StackCandidateType type;
+    std::string title;
+    std::string volume;
+    int64_t size;
+    int index; // index in m_items
+
+    auto operator<=>(const StackCandidate&) const = default;
+  };
+
+  struct CountedStackCandidate
+  {
+    StackCandidateType type;
+    std::string title;
+
+    auto operator<=>(const CountedStackCandidate& other) const = default;
+  };
+
   CFileItemList();
   explicit CFileItemList(const std::string& strPath);
   ~CFileItemList() override;
@@ -46,6 +72,8 @@ public:
   void Add(CFileItemPtr item);
   void Add(CFileItem&& item);
   void AddFront(const CFileItemPtr& pItem, int itemPosition);
+  void AddItems(const std::vector<CFileItemPtr>& items);
+  void AddItems(std::vector<CFileItemPtr>&& items);
   void Remove(const CFileItem* pItem);
   void Remove(int iItem);
   CFileItemPtr Get(int iItem) const;
@@ -80,11 +108,9 @@ public:
   bool GetFastLookup() const { return m_fastLookup; }
 
   /*! \brief stack a CFileItemList
-   By default we stack all items (files and folders) in a CFileItemList
-   \param stackFiles whether to stack all items or just collapse folders (defaults to true)
-   \sa StackFiles,StackFolders
+   We stack all items (files and folders) in a CFileItemList
    */
-  void Stack(bool stackFiles = true);
+  void Stack();
 
   SortOrder GetSortOrder() const { return m_sortDescription.sortOrder; }
   SortBy GetSortMethod() const { return m_sortDescription.sortBy; }
@@ -185,17 +211,8 @@ public:
 private:
   std::string GetDiscFileCache(int windowID) const;
 
-  /*!
-   \brief stack files in a CFileItemList
-   \sa Stack
-   */
-  void StackFiles();
-
-  /*!
-   \brief stack folders in a CFileItemList
-   \sa Stack
-   */
-  void StackFolders();
+  void AddFastLookupItem(const CFileItemPtr& item);
+  void AddFastLookupItems(const std::vector<CFileItemPtr>& items);
 
   std::vector<std::shared_ptr<CFileItem>> m_items;
   std::map<std::string, std::shared_ptr<CFileItem>, std::less<>> m_map;

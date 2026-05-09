@@ -8,20 +8,25 @@
 
 #pragma once
 
-#include "BlurayDirectory.h"
 #include "DiscDirectoryHelper.h"
+#include "FileItemList.h"
+#include "bluray/M2TSParser.h"
+#include "bluray/PlaylistStructure.h"
 #include "threads/CriticalSection.h"
 
 #include <map>
 
 struct Disc
 {
-  std::map<unsigned int, XFILE::PlaylistInformation> m_playlists;
-  std::map<unsigned int, unsigned int> m_titleMap;
+  std::map<unsigned int, XFILE::BlurayPlaylistInformation, std::less<>> playlists;
+  std::map<unsigned int, unsigned int, std::less<>> titleMap;
 
-  bool m_mapsSet{false};
-  XFILE::PlaylistMap m_playlistmap;
-  XFILE::ClipMap m_clipmap;
+  bool mapsSet{false};
+  XFILE::PlaylistMap playlistMap;
+  XFILE::ClipMap clipMap;
+  CFileItemList itemMap;
+
+  std::map<unsigned int, XFILE::StreamMap, std::less<>> streamMap;
 };
 
 using CacheMapEntry = std::pair<std::string, Disc>;
@@ -36,18 +41,31 @@ public:
   ~CBlurayDiscCache() = default;
   CBlurayDiscCache(const CBlurayDiscCache&) = delete;
   CBlurayDiscCache& operator=(const CBlurayDiscCache&) = delete;
+
   void Clear();
 
   CacheMap::iterator SetDisc(const std::string& path);
   void SetPlaylistInfo(const std::string& path,
                        unsigned int playlist,
-                       const PlaylistInformation& playlistInfo);
-  void SetMaps(const std::string& path, const PlaylistMap& playlistmap, const ClipMap& clipmap);
+                       const BlurayPlaylistInformation& playlistInfo);
+  void SetMaps(const std::string& path,
+               const PlaylistMap& playlistmap,
+               const ClipMap& clipmap,
+               const CFileItemList& itemmap);
+  void SetPlaylistStreamInfo(const std::string& path,
+                             unsigned int playlist,
+                             const StreamMap& streams);
 
   bool GetPlaylistInfo(const std::string& path,
                        unsigned int playlist,
-                       PlaylistInformation& playlistInfo) const;
-  bool GetMaps(const std::string& path, PlaylistMap& playlistmap, ClipMap& clipmap) const;
+                       BlurayPlaylistInformation& playlistInfo) const;
+  bool GetMaps(const std::string& path,
+               PlaylistMap& playlistmap,
+               ClipMap& clipmap,
+               CFileItemList& itemmap) const;
+  bool GetPlaylistStreamInfo(const std::string& path,
+                             unsigned int playlist,
+                             StreamMap& streams) const;
 
   void ClearDisc(const std::string& path);
 

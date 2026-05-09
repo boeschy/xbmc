@@ -8,7 +8,8 @@
 #include "UDisks2Provider.h"
 
 #include "ServiceBroker.h"
-#include "guilib/LocalizeStrings.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/StringUtils.h"
@@ -42,8 +43,8 @@ CUDisks2Provider::Drive::Drive(const char *object) : m_object(object)
 
 bool CUDisks2Provider::Drive::IsOptical() const
 {
-  return std::any_of(m_mediaCompatibility.begin(), m_mediaCompatibility.end(),
-                     [](const std::string& kind) { return kind.compare(0, 7, "optical") == 0; });
+  return std::ranges::any_of(m_mediaCompatibility, [](const std::string& kind)
+                             { return kind.compare(0, 7, "optical") == 0; });
 }
 
 std::string CUDisks2Provider::Drive::ToString() const
@@ -172,7 +173,8 @@ std::string CUDisks2Provider::Filesystem::GetDisplayName() const
   if (m_block->m_label.empty())
   {
     std::string strSize = StringUtils::SizeToString(m_block->m_size);
-    return StringUtils::Format("{} {}", strSize, g_localizeStrings.Get(155));
+    return StringUtils::Format(
+        "{} {}", strSize, CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(155));
   }
   else
     return m_block->m_label;

@@ -29,27 +29,25 @@ CShaderPresetDX::CShaderPresetDX(RETRO::CRenderContext& context,
 
 bool CShaderPresetDX::CreateShaders()
 {
-  const auto numPasses = static_cast<unsigned int>(m_passes.size());
+  std::vector<std::shared_ptr<IShaderLut>> presetLUTsDX;
 
-  //! @todo Is this pass specific?
+  if (!m_passes.empty())
+  {
+    const auto numLuts = static_cast<unsigned int>(m_passes[0].luts.size());
+    for (unsigned int i = 0; i < numLuts; ++i)
+    {
+      const ShaderLut& lutStruct = m_passes[0].luts[i];
+
+      auto presetLut = std::make_shared<CShaderLutDX>(lutStruct.strId, lutStruct.path);
+      if (presetLut->Create(lutStruct))
+        presetLUTsDX.emplace_back(std::move(presetLut));
+    }
+  }
+
+  const auto numPasses = static_cast<unsigned int>(m_passes.size());
   for (unsigned int shaderIdx = 0; shaderIdx < numPasses; ++shaderIdx)
   {
-    std::vector<std::shared_ptr<IShaderLut>> passLUTsDX;
-
     const ShaderPass& pass = m_passes[shaderIdx];
-    const auto numPassLuts = static_cast<unsigned int>(pass.luts.size());
-
-    for (unsigned int i = 0; i < numPassLuts; ++i)
-    {
-      const ShaderLut& lutStruct = pass.luts[i];
-
-      auto passLut = std::make_shared<CShaderLutDX>(lutStruct.strId, lutStruct.path);
-      if (passLut->Create(lutStruct))
-        passLUTsDX.emplace_back(std::move(passLut));
-    }
-
-    // Create the shader
-    auto videoShader = std::make_unique<CShaderDX>();
 
     const std::string& shaderSource = pass.vertexSource; // Also contains fragment source
     const std::string& shaderPath = pass.sourcePath;
@@ -57,8 +55,10 @@ bool CShaderPresetDX::CreateShaders()
     // Get only the parameters belonging to this specific shader
     ShaderParameterMap passParameters = GetShaderParameters(pass.parameters, pass.vertexSource);
 
-    if (!videoShader->Create(shaderSource, shaderPath, std::move(passParameters),
-                             std::move(passLUTsDX), m_outputSize, shaderIdx, pass.frameCountMod))
+    // Create the shader
+    auto videoShader = std::make_unique<CShaderDX>();
+    if (!videoShader->Create(shaderIdx, pass.alias, shaderPath, shaderSource,
+                             std::move(passParameters), presetLUTsDX, pass.frameCountMod))
     {
       CLog::Log(LOGERROR, "CShaderPresetDX::CreateShaders: Couldn't create a video shader");
       return false;
@@ -117,50 +117,20 @@ bool CShaderPresetDX::CreateBuffers()
 
 bool CShaderPresetDX::CreateShaderTextures()
 {
-  m_pShaderTextures.clear();
+  DisposeShaderTextures();
 
   float2 prevSize = m_videoSize;
   float2 prevTextureSize = m_videoSize;
 
   const auto numPasses = static_cast<unsigned int>(m_passes.size());
-
   for (unsigned int shaderIdx = 0; shaderIdx < numPasses; ++shaderIdx)
   {
-    const ShaderPass& pass = m_passes[shaderIdx];
+    const auto& pass = m_passes[shaderIdx];
 
     // Resolve final texture resolution, taking scale type and scale multiplier into account
     float2 scaledSize;
     float2 textureSize;
-    switch (pass.fbo.scaleX.scaleType)
-    {
-      case ScaleType::ABSOLUTE_SCALE:
-        scaledSize.x = static_cast<float>(pass.fbo.scaleX.abs);
-        break;
-      case ScaleType::VIEWPORT:
-        scaledSize.x =
-            pass.fbo.scaleX.scale != 0.0f ? pass.fbo.scaleX.scale * m_outputSize.x : m_outputSize.x;
-        break;
-      case ScaleType::INPUT:
-      default:
-        scaledSize.x =
-            pass.fbo.scaleX.scale != 0.0f ? pass.fbo.scaleX.scale * prevSize.x : prevSize.x;
-        break;
-    }
-    switch (pass.fbo.scaleY.scaleType)
-    {
-      case ScaleType::ABSOLUTE_SCALE:
-        scaledSize.y = static_cast<float>(pass.fbo.scaleY.abs);
-        break;
-      case ScaleType::VIEWPORT:
-        scaledSize.y =
-            pass.fbo.scaleY.scale != 0.0f ? pass.fbo.scaleY.scale * m_outputSize.y : m_outputSize.y;
-        break;
-      case ScaleType::INPUT:
-      default:
-        scaledSize.y =
-            pass.fbo.scaleY.scale != 0.0f ? pass.fbo.scaleY.scale * prevSize.y : prevSize.y;
-        break;
-    }
+    CalculateScaledSize(pass, prevSize, scaledSize);
 
     if (shaderIdx + 1 == numPasses)
     {
@@ -246,7 +216,6 @@ bool CShaderPresetDX::CreateSamplers()
   memcpy(sampDesc.BorderColor, &blackBorder, 4 * sizeof(FLOAT));
 
   ID3D11Device1* pDevice = DX::DeviceResources::Get()->GetD3DDevice();
-
   if (FAILED(pDevice->CreateSamplerState(&sampDesc, &m_pSampNearest)))
     return false;
 
@@ -263,6 +232,5 @@ void CShaderPresetDX::RenderShader(IShader& shader, IShaderTexture& source, ISha
   const CRect newViewPort(0.f, 0.f, target.GetWidth(), target.GetHeight());
   m_context.SetViewPort(newViewPort);
   m_context.SetScissors(newViewPort);
-
   shader.Render(source, target);
 }

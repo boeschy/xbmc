@@ -7,7 +7,7 @@ msgstr ""
 "Project-Id-Version: KODI Main\n"
 "Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2025-06-22 02:10+0000\n"
+"PO-Revision-Date: 2026-01-21 09:42+0000\n"
 "Last-Translator: Massimo Pissarello <mapi68@gmail.com>\n"
 "Language-Team: Italian <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estuary/it_it/>\n"
 "Language: it_it\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.12.2\n"
+"X-Generator: Weblate 5.15.2\n"
 
 msgctxt "Addon Summary"
 msgid "Estuary skin by phil65. (Kodi's default skin)"
@@ -130,11 +130,11 @@ msgstr "Tipo di vista"
 
 msgctxt "#31024"
 msgid "Choose rating to display for media items"
-msgstr "Scegli la valutazione da mostrare per gli elementi multimediali"
+msgstr "Scegli valutazione da mostrare per gli elementi multimediali"
 
 msgctxt "#31025"
-msgid "No favourites found. You can add any item from media views to this list by using the context menu."
-msgstr "Nessun preferito trovato. Puoi aggiungere qualunque elemento dalle viste multimediali a questa lista usando il menu contestuale."
+msgid "No favourites found. You can add items from media and other views by using the context menu."
+msgstr "Nessun preferito trovato. Puoi aggiungere elementi dai media e da altre viste utilizzando il menu contestuale."
 
 msgctxt "#31026"
 msgid "Timeshift"
@@ -397,7 +397,7 @@ msgstr "Televideo"
 #. viewtype name
 msgctxt "#31107"
 msgid "WideList"
-msgstr "Elenco ampio"
+msgstr "ElencoAmpio"
 
 #. viewtype name
 msgctxt "#31108"
@@ -566,8 +566,8 @@ msgid "Categories"
 msgstr "Categorie"
 
 msgctxt "#31149"
-msgid "Select genre fanart pack"
-msgstr "Scegli pacchetto fanart per genere"
+msgid "Choose genre fanart pack"
+msgstr "Scegli genere del pacchetto fanart"
 
 msgctxt "#31150"
 msgid "Origin"
@@ -690,6 +690,10 @@ msgctxt "#31176"
 msgid "Default select action for movie sets on the home screen"
 msgstr "Azione di selezione predefinita per le saghe nella schermata principale"
 
+msgctxt "#31177"
+msgid "Choose weather icon pack"
+msgstr "Scegli pacchetto di icone meteo"
+
 # empty strings from id 31177 to 31596
 #. Button to select Player Process Info window
 msgctxt "#31597"
@@ -771,6 +775,14 @@ msgstr "Sistema"
 msgctxt "#31612"
 msgid "channels"
 msgstr "canali"
+
+#~ msgctxt "#31025"
+#~ msgid "No favourites found. You can add any item from media views to this list by using the context menu."
+#~ msgstr "Nessun preferito trovato. Puoi aggiungere qualunque elemento dalle viste multimediali a questa lista usando il menu contestuale."
+
+#~ msgctxt "#31149"
+#~ msgid "Select genre fanart pack"
+#~ msgstr "Scegli pacchetto fanart per genere"
 
 #~ msgctxt "#31112"
 #~ msgid "Toggle audio stream"

@@ -7,7 +7,7 @@ msgstr ""
 "Project-Id-Version: KODI Main\n"
 "Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: 2025-06-22 14:37+0000\n"
+"PO-Revision-Date: 2026-03-18 15:13+0000\n"
 "Last-Translator: Kai Sommerfeld <ksooo@users.noreply.kodi.weblate.cloud>\n"
 "Language-Team: German <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estuary/de_de/>\n"
 "Language: de_de\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.12.2\n"
+"X-Generator: Weblate 5.16.2\n"
 
 msgctxt "Addon Summary"
 msgid "Estuary skin by phil65. (Kodi's default skin)"
@@ -101,7 +101,7 @@ msgstr "Zuletzt gesehene Sender"
 
 msgctxt "#31017"
 msgid "Rated"
-msgstr "Bewertung"
+msgstr "Altersfreigabe"
 
 #. home screen channel widget: recently played radio channels. (please note that in some non-english languages #31018 and #31016 might not be equal)
 msgctxt "#31018"
@@ -133,8 +133,8 @@ msgid "Choose rating to display for media items"
 msgstr "Bewertung, die für Medieninhalte angezeigt werden soll"
 
 msgctxt "#31025"
-msgid "No favourites found. You can add any item from media views to this list by using the context menu."
-msgstr "Keine Favoriten gefunden. Es kann jeder beliebige Eintrag aus den Medienansichten via Kontextmenü zu den Favoriten hinzugefügt werden."
+msgid "No favourites found. You can add items from media and other views by using the context menu."
+msgstr "Keine Favoriten gefunden. Es können Einträge aus Medien- und anderen Ansichten über das Kontextmenü hinzugefügt werden."
 
 msgctxt "#31026"
 msgid "Timeshift"
@@ -259,7 +259,7 @@ msgstr "Hauptmenüeinträge"
 
 msgctxt "#31062"
 msgid "Choose weather fanart pack"
-msgstr "Fanart-Pack für Wetterbildschirm auswählen"
+msgstr "Fanart-Pack für Wetterbedingungen auswählen"
 
 msgctxt "#31063"
 msgid "Sections"
@@ -566,8 +566,8 @@ msgid "Categories"
 msgstr "Kategorien"
 
 msgctxt "#31149"
-msgid "Select genre fanart pack"
-msgstr "Genre-Fanart-Pack auswählen"
+msgid "Choose genre fanart pack"
+msgstr "Fanart-Pack für Genres auswählen"
 
 msgctxt "#31150"
 msgid "Origin"
@@ -690,6 +690,10 @@ msgctxt "#31176"
 msgid "Default select action for movie sets on the home screen"
 msgstr "Aktion bei Auswahl von Filmreihen auf dem Hauptbildschirm"
 
+msgctxt "#31177"
+msgid "Choose weather icon pack"
+msgstr "Icon-Pack für Wetterbedingungen auswählen"
+
 # empty strings from id 31177 to 31596
 #. Button to select Player Process Info window
 msgctxt "#31597"
@@ -771,6 +775,14 @@ msgstr "System"
 msgctxt "#31612"
 msgid "channels"
 msgstr "Kanäle"
+
+#~ msgctxt "#31025"
+#~ msgid "No favourites found. You can add any item from media views to this list by using the context menu."
+#~ msgstr "Keine Favoriten gefunden. Es kann jeder beliebige Eintrag aus den Medienansichten via Kontextmenü zu den Favoriten hinzugefügt werden."
+
+#~ msgctxt "#31149"
+#~ msgid "Select genre fanart pack"
+#~ msgstr "Genre-Fanart-Pack auswählen"
 
 #~ msgctxt "#31112"
 #~ msgid "Toggle audio stream"

@@ -87,10 +87,10 @@ IFileDirectory* CFileDirectoryFactory::Create(const CURL& url, CFileItem* pItem,
         std::unique_ptr<CAudioDecoder> result = std::make_unique<CAudioDecoder>(addonInfo.second);
         if (!result->CreateDecoder() || !result->ContainsFiles(url))
         {
-          CLog::Log(LOGINFO,
-                    "CFileDirectoryFactory::{}: Addon '{}' support extension '{}' but creation "
-                    "failed (seems not supported), trying other addons and Kodi",
-                    __func__, addonInfo.second->ID(), strExtension);
+          CLog::LogF(LOGWARNING,
+                     "Addon '{}' support extension '{}' but creation failed (seems not supported), "
+                     "trying other addons and Kodi",
+                     addonInfo.second->ID(), strExtension);
           continue;
         }
         return result.release();
@@ -105,11 +105,21 @@ IFileDirectory* CFileDirectoryFactory::Create(const CURL& url, CFileItem* pItem,
       if (vfsAddon->HasFileDirectories())
       {
         auto exts = StringUtils::Split(vfsAddon->GetExtensions(), "|");
-        if (std::find(exts.begin(), exts.end(), strExtension) != exts.end())
+        if (std::ranges::find(exts, strExtension) != exts.end())
         {
           CVFSEntryIFileDirectoryWrapper* wrap = new CVFSEntryIFileDirectoryWrapper(vfsAddon);
           if (wrap->ContainsFiles(url))
           {
+            // Paths returned may contain encoded urls but with capitals (eg. %2A rather than %2a)
+            // CURL will always use lower case for encoded chars, so we need to normalize here
+            // Otherwise there may be file/path mismatches later on
+            for (auto& item : wrap->GetItems())
+            {
+              CURL itemUrl{item->GetPath()};
+              if (URIUtils::HasParentInHostname(itemUrl))
+                item->SetPath(itemUrl.Get());
+            }
+
             if (wrap->GetItems().Size() == 1)
             {
               // one STORED file - collapse it down

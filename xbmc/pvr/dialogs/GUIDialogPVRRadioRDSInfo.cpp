@@ -13,11 +13,12 @@
 #include "guilib/GUIMessage.h"
 #include "guilib/GUISpinControl.h"
 #include "guilib/GUITextBox.h"
-#include "guilib/LocalizeStrings.h"
 #include "pvr/PVRManager.h"
 #include "pvr/PVRPlaybackState.h"
 #include "pvr/channels/PVRChannel.h"
 #include "pvr/channels/PVRRadioRDSInfoTag.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 
 using namespace PVR;
 
@@ -41,16 +42,16 @@ constexpr unsigned int INFO_HOROSCOPE = 9;
 } // unnamed namespace
 
 CGUIDialogPVRRadioRDSInfo::CGUIDialogPVRRadioRDSInfo()
-  : CGUIDialog(WINDOW_DIALOG_PVR_RADIO_RDS_INFO, "DialogPVRRadioRDSInfo.xml")
-  , m_InfoNews(29916, INFO_NEWS)
-  , m_InfoNewsLocal(29917, INFO_NEWS_LOCAL)
-  , m_InfoSport(29918, INFO_SPORT)
-  , m_InfoWeather(400, INFO_WEATHER)
-  , m_InfoLottery(29919, INFO_LOTTERY)
-  , m_InfoStock(29920, INFO_STOCK)
-  , m_InfoOther(29921, INFO_OTHER)
-  , m_InfoCinema(19602, INFO_CINEMA)
-  , m_InfoHoroscope(29922, INFO_HOROSCOPE)
+  : CGUIDialog(WINDOW_DIALOG_PVR_RADIO_RDS_INFO, "DialogPVRRadioRDSInfo.xml"),
+    m_InfoNews(29916, INFO_NEWS),
+    m_InfoNewsLocal(29917, INFO_NEWS_LOCAL),
+    m_InfoSport(29918, INFO_SPORT),
+    m_InfoWeather(400, INFO_WEATHER),
+    m_InfoLottery(29919, INFO_LOTTERY),
+    m_InfoStock(29920, INFO_STOCK),
+    m_InfoOther(29921, INFO_OTHER),
+    m_InfoCinema(19602, INFO_CINEMA),
+    m_InfoHoroscope(29922, INFO_HOROSCOPE)
 {
 }
 
@@ -192,8 +193,8 @@ void CGUIDialogPVRRadioRDSInfo::UpdateInfoControls()
 }
 
 CGUIDialogPVRRadioRDSInfo::InfoControl::InfoControl(uint32_t iSpinLabelId, uint32_t iSpinControlId)
-: m_iSpinLabelId(iSpinLabelId),
-  m_iSpinControlId(iSpinControlId)
+  : m_iSpinLabelId(iSpinLabelId),
+    m_iSpinControlId(iSpinControlId)
 {
 }
 
@@ -211,7 +212,9 @@ bool CGUIDialogPVRRadioRDSInfo::InfoControl::Update(const std::string& textboxVa
   {
     if (!m_bSpinLabelPresent)
     {
-      m_spinControl->AddLabel(g_localizeStrings.Get(m_iSpinLabelId), m_iSpinControlId);
+      m_spinControl->AddLabel(
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(m_iSpinLabelId),
+          m_iSpinControlId);
       m_bSpinLabelPresent = true;
     }
 

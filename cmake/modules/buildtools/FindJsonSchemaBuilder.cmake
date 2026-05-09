@@ -3,8 +3,9 @@
 # ---------------------
 # Finds the JsonSchemaBuilder
 #
-# If WITH_JSONSCHEMABUILDER is defined and points to a directory,
-# this path will be used to search for the JsonSchemaBuilder binary
+# If WITH_JSONSCHEMABUILDER is defined, it will be used as the location of an
+# existing JsonSchemaBuilder binary to execute during the build. Useful when
+# cross-compiling. The file must exist and be executable at configure time.
 #
 #
 # This will define the following (imported) targets::
@@ -17,11 +18,13 @@ if(NOT TARGET JsonSchemaBuilder::JsonSchemaBuilder)
 
   if(WITH_JSONSCHEMABUILDER)
     get_filename_component(_jsbpath ${WITH_JSONSCHEMABUILDER} ABSOLUTE)
-    get_filename_component(_jsbpath ${_jsbpath} DIRECTORY)
-    find_program(JSONSCHEMABUILDER_EXECUTABLE NAMES "${APP_NAME_LC}-JsonSchemaBuilder" JsonSchemaBuilder
-                                                    "${APP_NAME_LC}-JsonSchemaBuilder.exe" JsonSchemaBuilder.exe
-                                              HINTS ${_jsbpath})
-
+    if(NOT IS_DIRECTORY ${_jsbpath})
+      get_filename_component(_jsbpath ${_jsbpath} DIRECTORY)
+    endif()
+    find_program(JSONSCHEMABUILDER_EXECUTABLE
+                 NAMES "${APP_NAME_LC}-JsonSchemaBuilder" JsonSchemaBuilder
+                 HINTS ${_jsbpath}
+                 NO_DEFAULT_PATH)
     if(NOT JSONSCHEMABUILDER_EXECUTABLE)
       message(FATAL_ERROR "Could not find 'JsonSchemaBuilder' executable in ${_jsbpath} supplied by -DWITH_JSONSCHEMABUILDER")
     endif()
@@ -35,7 +38,24 @@ if(NOT TARGET JsonSchemaBuilder::JsonSchemaBuilder)
     # Override build type detection and always build as release
     set(JSONSCHEMABUILDER_BUILD_TYPE Release)
 
-    set(CMAKE_ARGS -DDUMMY_ARG=1)
+    unset(CMAKE_ARGS)
+    if(ENABLE_CLANGTIDY)
+      set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIST_SEPARATOR LIST_SEPARATOR |)
+      string(REPLACE ";" "|" string_CMAKE_CXX_CLANG_TIDY "${CMAKE_CXX_CLANG_TIDY}")
+      list(APPEND CMAKE_ARGS "-DCMAKE_CXX_CLANG_TIDY=${string_CMAKE_CXX_CLANG_TIDY}")
+    else()
+      list(APPEND CMAKE_ARGS -UCMAKE_CXX_CLANG_TIDY)
+    endif()
+    if(ENABLE_CPPCHECK)
+      list(APPEND CMAKE_ARGS "-DCMAKE_CXX_CPPCHECK:FILEPATH=${CMAKE_CXX_CPPCHECK}")
+    else()
+      list(APPEND CMAKE_ARGS -UCMAKE_CXX_CPPCHECK)
+    endif()
+    if(ENABLE_INCLUDEWHATYOUUSE)
+      list(APPEND CMAKE_ARGS "-DCMAKE_CXX_INCLUDE_WHAT_YOU_USE:FILEPATH=${CMAKE_CXX_INCLUDE_WHAT_YOU_USE}")
+    else()
+      list(APPEND CMAKE_ARGS -UCMAKE_CXX_INCLUDE_WHAT_YOU_USE)
+    endif()
 
     if(NATIVEPREFIX)
       set(INSTALL_DIR "${NATIVEPREFIX}/bin")

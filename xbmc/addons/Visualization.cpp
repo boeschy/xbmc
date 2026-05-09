@@ -8,9 +8,11 @@
 
 #include "Visualization.h"
 
+#include "ServiceBroker.h"
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/GUIWindowManager.h"
 #include "utils/log.h"
+#include "windowing/WinSystem.h"
 
 using namespace ADDON;
 using namespace KODI::ADDONS;

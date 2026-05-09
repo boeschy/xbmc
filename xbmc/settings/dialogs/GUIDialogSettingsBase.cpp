@@ -22,9 +22,10 @@
 #include "guilib/GUISpinControlEx.h"
 #include "guilib/GUIToggleButtonControl.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/SettingControl.h"
 #include "settings/lib/SettingSection.h"
 #include "settings/windows/GUIControlSettings.h"
@@ -505,7 +506,35 @@ void CGUIDialogSettingsBase::OnSettingChanged(const std::shared_ptr<const CSetti
       setting->GetType() == SettingType::Action)
     return;
 
-  UpdateSettingControl(setting->GetId(), true);
+  // Update the changed control and any controls whose visibility or value
+  // depends on the setting that just changed (e.g. addon settings using
+  // <dependency type="visible" setting="...">). Skip m_delayedSetting to
+  // avoid a redundant update.
+  for (const auto& control : m_settingControls)
+  {
+    if (!control || control == m_delayedSetting)
+      continue;
+
+    const auto& controlSetting = control->GetSetting();
+    if (!controlSetting)
+      continue;
+
+    if (controlSetting == setting)
+    {
+      UpdateSettingControl(control, false);
+      continue;
+    }
+
+    const auto& deps = controlSetting->GetDependencies();
+    for (const auto& dep : deps)
+    {
+      if (dep.GetSettings().contains(setting->GetId()))
+      {
+        UpdateSettingControl(control, true);
+        break;
+      }
+    }
+  }
 }
 
 void CGUIDialogSettingsBase::OnSettingPropertyChanged(
@@ -519,7 +548,7 @@ void CGUIDialogSettingsBase::OnSettingPropertyChanged(
 
 std::string CGUIDialogSettingsBase::GetLocalizedString(uint32_t labelId) const
 {
-  return g_localizeStrings.Get(labelId);
+  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(labelId);
 }
 
 void CGUIDialogSettingsBase::SetupView()
@@ -650,7 +679,8 @@ CGUIControl* CGUIDialogSettingsBase::AddSetting(const std::shared_ptr<CSetting>&
     std::string indentation;
     for (int index = 1; index < parentLevels; index++)
       indentation.append("  ");
-    label = StringUtils::Format(g_localizeStrings.Get(168), indentation, label);
+    label = StringUtils::Format(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(168), indentation, label);
   }
 
   // create the proper controls

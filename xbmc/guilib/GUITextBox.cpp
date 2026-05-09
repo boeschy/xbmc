@@ -10,13 +10,15 @@
 
 #include "GUIInfoManager.h"
 #include "GUIMessage.h"
+#include "ServiceBroker.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "utils/MathUtils.h"
-#include "utils/StringUtils.h"
-#include "utils/XBMCTinyXML.h"
+#include "windowing/WinSystem.h"
 
 #include <algorithm>
+
+#include <tinyxml.h>
 
 using namespace KODI::GUILIB;
 

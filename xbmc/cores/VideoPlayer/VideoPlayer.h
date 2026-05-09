@@ -56,6 +56,7 @@ struct SPlayerState
     cache_bytes = 0;
     cache_level = 0.0;
     cache_offset = 0.0;
+    cache_time = 0.0;
     lastSeek = 0;
     streamsReady = false;
   }
@@ -75,8 +76,9 @@ struct SPlayerState
   MenuType menuType;
   bool streamsReady;
 
-  int chapter;              // current chapter
-  std::vector<std::pair<std::string, int64_t>> chapters; // name and position for chapters
+  int chapter; // 1-based current chapter. <=0 means no chapter / unknown
+  // name and start timestamp of chapters.
+  std::vector<std::pair<std::string, std::chrono::milliseconds>> chapters;
 
   bool canpause;            // pvr: can pause the current playing item
   bool canseek;             // pvr: can seek in the current playing item
@@ -176,7 +178,7 @@ public:
 //------------------------------------------------------------------------------
 struct SelectionStream
 {
-  StreamType type = STREAM_NONE;
+  StreamType type = StreamType::NONE;
   int type_index = 0;
   std::string filename;
   std::string filename2;  // for vobsub subtitles, 2 files are necessary (idx/sub)
@@ -188,6 +190,8 @@ struct SelectionStream
   int64_t demuxerId = -1;
   std::string codec;
   std::string codecDesc;
+  AVCodecID codecId = AV_CODEC_ID_NONE;
+  int profile = AV_PROFILE_UNKNOWN;
   int channels = 0;
   int bitrate = 0;
   int width = 0;
@@ -198,6 +202,7 @@ struct SelectionStream
   std::string stereo_mode;
   float aspect_ratio = 0.0f;
   StreamHdrType hdrType = StreamHdrType::HDR_TYPE_NONE;
+  AVDOVIDecoderConfigurationRecord dovi{};
   uint32_t fpsScale{0};
   uint32_t fpsRate{0};
 };
@@ -253,6 +258,12 @@ class CJobQueue;
 class CVideoPlayer : public IPlayer, public CThread, public IVideoPlayer,
                      public IDispResource, public IRenderLoop, public IRenderMsg
 {
+  enum class UpdateStreamDetails : bool
+  {
+    UPDATE_IF_FLAGGED,
+    ALWAYS_UPDATE
+  };
+
 public:
   explicit CVideoPlayer(IPlayerCallback& callback);
   ~CVideoPlayer() override;
@@ -387,7 +398,7 @@ protected:
   void UpdateGuiRender(bool gui) override;
   void UpdateVideoRender(bool video) override;
 
-  void CreatePlayers();
+  virtual void CreatePlayers();
   void DestroyPlayers();
 
   void Prepare();
@@ -424,6 +435,15 @@ protected:
   void SetEnableStream(CCurrentStream& current, bool isEnabled);
 
   void SetSubtitleVisibleInternal(bool bVisible);
+
+  enum SubtitleChange
+  {
+    FLAG_STATUS_CHANGE = 0x0001,
+    FLAG_STREAMINFO_CHANGE = 0x0002,
+  };
+  void NotifySubtitleUpdate(int flags);
+  void NotifyAudioUpdate();
+  void NotifyVideoUpdate();
 
   /**
    * one of the DVD_PLAYSPEED defines
@@ -476,10 +496,12 @@ protected:
   int64_t GetTime();
   float GetPercentage();
 
-  void UpdateContent();
+  virtual bool CanTempo();
+
+  virtual void UpdateContent();
   void UpdateContentState();
 
-  void UpdateFileItemStreamDetails(CFileItem& item);
+  void UpdateFileItemStreamDetails(CFileItem& item, UpdateStreamDetails update);
   int GetPreviousChapter();
 
   bool m_players_created;
@@ -540,11 +562,11 @@ protected:
   CDVDMessageQueue m_messenger;
   std::unique_ptr<CJobQueue> m_outboundEvents;
 
-  IDVDStreamPlayerVideo *m_VideoPlayerVideo;
-  IDVDStreamPlayerAudio *m_VideoPlayerAudio;
-  CVideoPlayerSubtitle *m_VideoPlayerSubtitle;
-  CDVDTeletextData *m_VideoPlayerTeletext;
-  CDVDRadioRDSData *m_VideoPlayerRadioRDS;
+  std::unique_ptr<IDVDStreamPlayerVideo> m_VideoPlayerVideo;
+  std::unique_ptr<IDVDStreamPlayerAudio> m_VideoPlayerAudio;
+  std::unique_ptr<CVideoPlayerSubtitle> m_VideoPlayerSubtitle;
+  std::unique_ptr<CDVDTeletextData> m_VideoPlayerTeletext;
+  std::unique_ptr<CDVDRadioRDSData> m_VideoPlayerRadioRDS;
   std::unique_ptr<CVideoPlayerAudioID3> m_VideoPlayerAudioID3;
 
   CDVDClock m_clock;
@@ -592,7 +614,7 @@ protected:
   bool m_HasVideo;
   bool m_HasAudio;
 
-  bool m_UpdateStreamDetails;
+  bool m_updateStreamDetails{false};
 
   std::atomic<bool> m_displayLost;
 

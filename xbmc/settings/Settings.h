@@ -131,12 +131,14 @@ public:
   static constexpr auto SETTING_VIDEOPLAYER_USEDXVA2 = "videoplayer.usedxva2";
   static constexpr auto SETTING_VIDEOPLAYER_USEVTB = "videoplayer.usevtb";
   static constexpr auto SETTING_VIDEOPLAYER_USEPRIMEDECODER = "videoplayer.useprimedecoder";
+  static constexpr auto SETTING_VIDEOPLAYER_USEPRIMERENDERER = "videoplayer.useprimerenderer";
   static constexpr auto SETTING_VIDEOPLAYER_USESTARFISHDECODER = "videoplayer.usestarfishdecoder";
   static constexpr auto SETTING_VIDEOPLAYER_USESTAGEFRIGHT = "videoplayer.usestagefright";
   static constexpr auto SETTING_VIDEOPLAYER_LIMITGUIUPDATE = "videoplayer.limitguiupdate";
   static constexpr auto SETTING_VIDEOPLAYER_SUPPORTMVC = "videoplayer.supportmvc";
   static constexpr auto SETTING_VIDEOPLAYER_CONVERTDOVI = "videoplayer.convertdovi";
   static constexpr auto SETTING_VIDEOPLAYER_ALLOWEDHDRFORMATS = "videoplayer.allowedhdrformats";
+  static constexpr auto SETTING_VIDEOPLAYER_DOVIZEROLEVEL5 = "videoplayer.dovizerolevel5";
   static constexpr auto SETTING_VIDEOPLAYER_QUEUETIMESIZE = "videoplayer.queuetimesize";
   static constexpr auto SETTING_VIDEOPLAYER_QUEUEDATASIZE = "videoplayer.queuedatasize";
   static constexpr auto SETTING_MYVIDEOS_SELECTACTION = "myvideos.selectaction";
@@ -413,6 +415,7 @@ public:
   static constexpr auto SETTING_AUDIOOUTPUT_DTSHDPASSTHROUGH = "audiooutput.dtshdpassthrough";
   static constexpr auto SETTING_AUDIOOUTPUT_DTSHDCOREFALLBACK = "audiooutput.dtshdcorefallback";
   static constexpr auto SETTING_AUDIOOUTPUT_VOLUMESTEPS = "audiooutput.volumesteps";
+  static constexpr auto SETTING_AUDIOOUTPUT_LOWLATENCY = "audiooutput.lowlatency";
   static constexpr auto SETTING_INPUT_PERIPHERALS = "input.peripherals";
   static constexpr auto SETTING_INPUT_PERIPHERALLIBRARIES = "input.peripherallibraries";
   static constexpr auto SETTING_INPUT_ENABLEMOUSE = "input.enablemouse";
@@ -421,9 +424,6 @@ public:
   static constexpr auto SETTING_INPUT_RUMBLENOTIFY = "input.rumblenotify";
   static constexpr auto SETTING_INPUT_TESTRUMBLE = "input.testrumble";
   static constexpr auto SETTING_INPUT_CONTROLLERPOWEROFF = "input.controllerpoweroff";
-  static constexpr auto SETTING_INPUT_APPLEREMOTEMODE = "input.appleremotemode";
-  static constexpr auto SETTING_INPUT_APPLEREMOTEALWAYSON = "input.appleremotealwayson";
-  static constexpr auto SETTING_INPUT_APPLEREMOTESEQUENCETIME = "input.appleremotesequencetime";
   static constexpr auto SETTING_INPUT_SIRIREMOTEIDLETIMERENABLED = "input.siriremoteidletimerenabled";
   static constexpr auto SETTING_INPUT_SIRIREMOTEIDLETIME = "input.siriremoteidletime";
   static constexpr auto SETTING_INPUT_SIRIREMOTEHORIZONTALSENSITIVITY =

@@ -27,7 +27,6 @@
 #include "games/windows/GUIViewStateWindowGames.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/TextureManager.h"
 #include "music/GUIViewStateMusic.h"
 #include "pictures/GUIViewStatePictures.h"
@@ -35,6 +34,8 @@
 #include "profiles/ProfileManager.h"
 #include "programs/GUIViewStatePrograms.h"
 #include "pvr/windows/GUIViewStatePVR.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/MediaSourceSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -62,7 +63,7 @@ CGUIViewState* CGUIViewState::GetViewState(int windowId, const CFileItemList& it
   if (windowId == 0)
     return GetViewState(CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow(),items);
 
-  const CURL url=items.GetURL();
+  const CURL& url = items.GetURL();
 
   if (items.IsAddonsPath())
     return new CGUIViewStateAddonBrowser(items);
@@ -203,10 +204,10 @@ CGUIViewState::~CGUIViewState() = default;
 
 SortOrder CGUIViewState::SetNextSortOrder()
 {
-  if (GetSortOrder() == SortOrderAscending)
-    SetSortOrder(SortOrderDescending);
+  if (GetSortOrder() == SortOrder::ASCENDING)
+    SetSortOrder(SortOrder::DESCENDING);
   else
-    SetSortOrder(SortOrderAscending);
+    SetSortOrder(SortOrder::ASCENDING);
 
   SaveViewState();
 
@@ -218,13 +219,13 @@ SortOrder CGUIViewState::GetSortOrder() const
   if (m_currentSortMethod >= 0 && m_currentSortMethod < (int)m_sortMethods.size())
     return m_sortMethods[m_currentSortMethod].m_sortDescription.sortOrder;
 
-  return SortOrderAscending;
+  return SortOrder::ASCENDING;
 }
 
 int CGUIViewState::GetSortOrderLabel() const
 {
   if (m_currentSortMethod >= 0 && m_currentSortMethod < (int)m_sortMethods.size())
-    if (m_sortMethods[m_currentSortMethod].m_sortDescription.sortOrder == SortOrderDescending)
+    if (m_sortMethods[m_currentSortMethod].m_sortDescription.sortOrder == SortOrder::DESCENDING)
       return 585;
 
   return 584; // default sort order label 'Ascending'
@@ -296,28 +297,36 @@ std::vector<SortDescription> CGUIViewState::GetSortDescriptions() const
   return descriptions;
 }
 
-void CGUIViewState::AddSortMethod(SortBy sortBy, int buttonLabel, const LABEL_MASKS &labelMasks, SortAttribute sortAttributes /* = SortAttributeNone */, SortOrder sortOrder /* = SortOrderNone */)
+void CGUIViewState::AddSortMethod(SortBy sortBy,
+                                  int buttonLabel,
+                                  const LABEL_MASKS& labelMasks,
+                                  SortAttribute sortAttributes /* = SortAttributeNone */,
+                                  SortOrder sortOrder /* = SortOrder::NONE */)
 {
   AddSortMethod(sortBy, sortAttributes, buttonLabel, labelMasks, sortOrder);
 }
 
-void CGUIViewState::AddSortMethod(SortBy sortBy, SortAttribute sortAttributes, int buttonLabel, const LABEL_MASKS &labelMasks, SortOrder sortOrder /* = SortOrderNone */)
+void CGUIViewState::AddSortMethod(SortBy sortBy,
+                                  SortAttribute sortAttributes,
+                                  int buttonLabel,
+                                  const LABEL_MASKS& labelMasks,
+                                  SortOrder sortOrder /* = SortOrder::NONE */)
 {
   for (size_t i = 0; i < m_sortMethods.size(); ++i)
     if (m_sortMethods[i].m_sortDescription.sortBy == sortBy)
       return;
 
   // handle unspecified sort order
-  if (sortBy != SortByNone && sortOrder == SortOrderNone)
+  if (sortBy != SortBy::NONE && sortOrder == SortOrder::NONE)
   {
     // the following sort methods are sorted in descending order by default
-    if (sortBy == SortByDate || sortBy == SortBySize || sortBy == SortByPlaycount ||
-        sortBy == SortByRating || sortBy == SortByProgramCount ||
-        sortBy == SortByBitrate || sortBy == SortByListeners ||
-        sortBy == SortByUserRating || sortBy == SortByLastPlayed)
-      sortOrder = SortOrderDescending;
+    if (sortBy == SortBy::DATE || sortBy == SortBy::SIZE || sortBy == SortBy::PLAYCOUNT ||
+        sortBy == SortBy::RATING || sortBy == SortBy::PROGRAM_COUNT || sortBy == SortBy::BITRATE ||
+        sortBy == SortBy::LISTENERS || sortBy == SortBy::USER_RATING ||
+        sortBy == SortBy::LAST_PLAYED)
+      sortOrder = SortOrder::DESCENDING;
     else
-      sortOrder = SortOrderAscending;
+      sortOrder = SortOrder::ASCENDING;
   }
 
   GUIViewSortDetails sort;
@@ -338,15 +347,14 @@ void CGUIViewState::AddSortMethod(const SortDescription& sortDescription,
 
 void CGUIViewState::SetCurrentSortMethod(int method)
 {
-  SortBy sortBy = (SortBy)method;
-  if (sortBy < SortByNone || sortBy > SortByLastUsed)
+  if (method < static_cast<int>(SortBy::NONE) || method > static_cast<int>(SortBy::LAST_USED))
     return; // invalid
 
-  SetSortMethod(sortBy);
+  SetSortMethod(static_cast<SortBy>(method));
   SaveViewState();
 }
 
-void CGUIViewState::SetSortMethod(SortBy sortBy, SortOrder sortOrder /* = SortOrderNone */)
+void CGUIViewState::SetSortMethod(SortBy sortBy, SortOrder sortOrder /* = SortOrder::NONE */)
 {
   for (int i = 0; i < (int)m_sortMethods.size(); ++i)
   {
@@ -357,7 +365,7 @@ void CGUIViewState::SetSortMethod(SortBy sortBy, SortOrder sortOrder /* = SortOr
     }
   }
 
-  if (sortOrder != SortOrderNone)
+  if (sortOrder != SortOrder::NONE)
     SetSortOrder(sortOrder);
 }
 
@@ -374,8 +382,9 @@ bool CGUIViewState::ChooseSortMethod()
     return false;
   dialog->Reset();
   dialog->SetHeading(CVariant{ 39010 }); // Label "Sort by"
-  for (auto &sortMethod : m_sortMethods)
-    dialog->Add(g_localizeStrings.Get(sortMethod.m_buttonLabel));
+  for (const auto& sortMethod : m_sortMethods)
+    dialog->Add(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(sortMethod.m_buttonLabel));
   dialog->SetSelected(m_currentSortMethod);
   dialog->Open();
   int newSelected = dialog->GetSelectedItem();
@@ -489,7 +498,7 @@ void CGUIViewState::AddLiveTVSources()
 
 void CGUIViewState::SetSortOrder(SortOrder sortOrder)
 {
-  if (sortOrder == SortOrderNone)
+  if (sortOrder == SortOrder::NONE)
     return;
 
   if (m_currentSortMethod < 0 || m_currentSortMethod >= (int)m_sortMethods.size())
@@ -542,16 +551,17 @@ void CGUIViewState::SaveViewToDb(const std::string &path, int windowID, CViewSta
 
 void CGUIViewState::AddPlaylistOrder(const CFileItemList& items, const LABEL_MASKS& label_masks)
 {
-  SortBy sortBy = SortByPlaylistOrder;
+  SortBy sortBy = SortBy::PLAYLIST_ORDER;
   int sortLabel = 559;
-  SortOrder sortOrder = SortOrderAscending;
+  SortOrder sortOrder = SortOrder::ASCENDING;
   if (items.HasProperty(PROPERTY_SORT_ORDER))
   {
-    sortBy = (SortBy)items.GetProperty(PROPERTY_SORT_ORDER).asInteger();
-    if (sortBy != SortByNone)
+    sortBy = static_cast<SortBy>(items.GetProperty(PROPERTY_SORT_ORDER).asInteger());
+    if (sortBy != SortBy::NONE)
     {
       sortLabel = SortUtils::GetSortLabel(sortBy);
-      sortOrder = items.GetProperty(PROPERTY_SORT_ASCENDING).asBoolean() ? SortOrderAscending : SortOrderDescending;
+      sortOrder = items.GetProperty(PROPERTY_SORT_ASCENDING).asBoolean() ? SortOrder::ASCENDING
+                                                                         : SortOrder::DESCENDING;
     }
   }
 
@@ -561,8 +571,9 @@ void CGUIViewState::AddPlaylistOrder(const CFileItemList& items, const LABEL_MAS
 
 CGUIViewStateGeneral::CGUIViewStateGeneral(const CFileItemList& items) : CGUIViewState(items)
 {
-  AddSortMethod(SortByLabel, 551, LABEL_MASKS("%F", "%I", "%L", ""));  // Filename, size | Foldername, empty
-  SetSortMethod(SortByLabel);
+  AddSortMethod(SortBy::LABEL, 551,
+                LABEL_MASKS("%F", "%I", "%L", "")); // Filename, size | Foldername, empty
+  SetSortMethod(SortBy::LABEL);
 
   SetViewAsControl(DEFAULT_VIEW_LIST);
 }
@@ -610,8 +621,9 @@ void CGUIViewStateFromItems::SaveViewState()
 
 CGUIViewStateLibrary::CGUIViewStateLibrary(const CFileItemList &items) : CGUIViewState(items)
 {
-  AddSortMethod(SortByNone, 551, LABEL_MASKS("%F", "%I", "%L", ""));  // Filename, Size | Foldername, empty
-  SetSortMethod(SortByNone);
+  AddSortMethod(SortBy::NONE, 551,
+                LABEL_MASKS("%F", "%I", "%L", "")); // Filename, Size | Foldername, empty
+  SetSortMethod(SortBy::NONE);
 
   SetViewAsControl(DEFAULT_VIEW_LIST);
 

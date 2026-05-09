@@ -14,14 +14,16 @@
 #include "filesystem/CurlFile.h"
 #include "filesystem/File.h"
 #include "guilib/GUIRSSControl.h"
-#include "guilib/LocalizeStrings.h"
 #include "log.h"
 #include "network/Network.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "threads/SystemClock.h"
 #include "utils/HTMLUtil.h"
 #include "utils/XTimeUtils.h"
+#include "windowing/WinSystem.h"
 
 #include <mutex>
 
@@ -135,7 +137,9 @@ void CRssReader::Process()
         !CServiceBroker::GetNetwork().IsAvailable())
     {
       CLog::Log(LOGWARNING, "RSS: No network connection");
-      strXML = "<rss><item><title>"+g_localizeStrings.Get(15301)+"</title></item></rss>";
+      strXML = "<rss><item><title>" +
+               CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(15301) +
+               "</title></item></rss>";
     }
     else
     {
@@ -255,7 +259,7 @@ void CRssReader::GetNewsItems(tinyxml2::XMLNode* channelXmlNode, int iFeed)
           // This usually happens in right-to-left languages where they want to
           // specify in the RSS body that the text should be RTL.
           // <title>
-          //  <div dir="RTL">��� ����: ���� �� �����</div>
+          //  <div dir="RTL">פעילות הבינאום, W3C!</div>
           // </title>
           if (htmlText == "div" || htmlText == "span")
             htmlText = childNode->FirstChild()->FirstChild()->Value();

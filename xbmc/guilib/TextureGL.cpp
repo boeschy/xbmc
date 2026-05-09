@@ -11,10 +11,12 @@
 #include "ServiceBroker.h"
 #include "guilib/TextureFormats.h"
 #include "guilib/TextureManager.h"
+#include "rendering/GLExtensions.h"
 #include "rendering/RenderSystem.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/GLUtils.h"
+#include "utils/Map.h"
 #include "utils/MemUtils.h"
 #include "utils/log.h"
 
@@ -23,7 +25,7 @@
 namespace
 {
 // clang-format off
-static const std::map<KD_TEX_FMT, TextureFormat> TextureMapping
+constexpr auto TextureMapping =  make_map<KD_TEX_FMT, TextureFormat>(
 {
 #if defined(GL_EXT_texture_sRGB_R8) && (GL_EXT_texture_sRGB_RG8)
   {KD_TEX_FMT_SDR_R8, {GL_R8, GL_SR8_EXT, GL_RED}},
@@ -114,9 +116,9 @@ static const std::map<KD_TEX_FMT, TextureFormat> TextureMapping
   {KD_TEX_FMT_ASTC_HDR_12x10, {GL_COMPRESSED_RGBA_ASTC_12x10_KHR}},
   {KD_TEX_FMT_ASTC_HDR_12x12, {GL_COMPRESSED_RGBA_ASTC_12x12_KHR}},
 #endif
-};
+});
 
-static const std::map<KD_TEX_SWIZ, Textureswizzle> SwizzleMap
+constexpr auto SwizzleMap = make_map<KD_TEX_SWIZ, Textureswizzle>(
 {
   {KD_TEX_SWIZ_RGBA, {GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA}},
   {KD_TEX_SWIZ_RGB1, {GL_RED, GL_GREEN, GL_BLUE, GL_ONE}},
@@ -128,7 +130,7 @@ static const std::map<KD_TEX_SWIZ, Textureswizzle> SwizzleMap
   {KD_TEX_SWIZ_111G, {GL_ONE, GL_ONE, GL_ONE, GL_GREEN}},
   {KD_TEX_SWIZ_GGGA, {GL_GREEN, GL_GREEN, GL_GREEN, GL_ALPHA}},
   {KD_TEX_SWIZ_GGGG, {GL_GREEN, GL_GREEN, GL_GREEN, GL_GREEN}},
-};
+});
 // clang-format on
 } // namespace
 
@@ -139,8 +141,8 @@ std::unique_ptr<CTexture> CTexture::CreateTexture(unsigned int width,
   return std::make_unique<CGLTexture>(width, height, format);
 }
 
-CGLTexture::CGLTexture(unsigned int width, unsigned int height, XB_FMT format, GLuint texture)
-  : CTexture(width, height, format), m_texture(texture)
+CGLTexture::CGLTexture(unsigned int width, unsigned int height, XB_FMT format)
+  : CTexture(width, height, format)
 {
   unsigned int major, minor;
   CServiceBroker::GetRenderSystem()->GetRenderVersion(major, minor);
@@ -206,7 +208,7 @@ void CGLTexture::LoadToGPU()
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 #ifdef GL_TEXTURE_MAX_ANISOTROPY_EXT
-  if (CServiceBroker::GetRenderSystem()->IsExtSupported("GL_EXT_texture_filter_anisotropic"))
+  if (CGLExtensions::IsExtensionSupported(CGLExtensions::EXT_texture_filter_anisotropic))
   {
     int32_t aniso =
         CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_guiAnisotropicFiltering;
@@ -299,14 +301,14 @@ void CGLTexture::SetSwizzle()
   // token, but just to be sure...
 #if defined(GL_VERSION_3_3) || (GL_ARB_texture_swizzle)
   if (m_isOglVersion33orNewer ||
-      CServiceBroker::GetRenderSystem()->IsExtSupported("GL_ARB_texture_swizzle"))
+      CGLExtensions::IsExtensionSupported(CGLExtensions::ARB_texture_swizzle))
   {
     glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, &swiz.r);
     return;
   }
 #endif
 #if defined(GL_EXT_texture_swizzle)
-  if (CServiceBroker::GetRenderSystem()->IsExtSupported("GL_EXT_texture_swizzle"))
+  if (CGLExtensions::IsExtensionSupported(CGLExtensions::EXT_texture_swizzle))
   {
     glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA_EXT, &swiz.r);
     return;

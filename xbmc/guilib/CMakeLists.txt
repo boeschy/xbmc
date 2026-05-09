@@ -55,6 +55,7 @@ set(SOURCES DDSImage.cpp
             GUITexture.cpp
             GUITextureCallbackManager.cpp
             GUIToggleButtonControl.cpp
+            GUIUtils.cpp
             GUIVideoControl.cpp
             GUIVisualisationControl.cpp
             GUIWindow.cpp
@@ -63,7 +64,6 @@ set(SOURCES DDSImage.cpp
             imagefactory.cpp
             ImageSettings.cpp
             IWindowManagerCallback.cpp
-            LocalizeStrings.cpp
             StereoscopicsManager.cpp
             TextureBundle.cpp
             TextureBundleXBT.cpp
@@ -115,7 +115,9 @@ set(HEADERS AspectRatio.h
             GUIListItem.h
             GUIListItemLayout.h
             GUIListLabel.h
+            GUIMacros.h
             GUIMessage.h
+            GUIMessageIDs.h
             GUIMoverControl.h
             GUIMultiImage.h
             GUIPanelContainer.h
@@ -136,6 +138,7 @@ set(HEADERS AspectRatio.h
             GUITexture.h
             GUITextureCallbackManager.h
             GUIToggleButtonControl.h
+            GUIUtils.h
             GUIVideoControl.h
             GUIVisualisationControl.h
             GUIWindow.h
@@ -151,7 +154,6 @@ set(HEADERS AspectRatio.h
             IRenderingCallback.h
             ISliderCallback.h
             IWindowManagerCallback.h
-            LocalizeStrings.h
             StereoscopicsManager.h
             Texture.h
             TextureBase.h

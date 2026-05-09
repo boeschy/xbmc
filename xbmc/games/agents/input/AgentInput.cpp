@@ -26,7 +26,8 @@ using namespace KODI;
 using namespace GAME;
 
 CAgentInput::CAgentInput(PERIPHERALS::CPeripherals& peripheralManager, CInputManager& inputManager)
-  : m_peripheralManager(peripheralManager), m_inputManager(inputManager)
+  : m_peripheralManager(peripheralManager),
+    m_inputManager(inputManager)
 {
   // Register callbacks
   m_peripheralManager.RegisterObserver(this);
@@ -183,7 +184,7 @@ std::vector<std::shared_ptr<const CAgentController>> CAgentInput::GetControllers
   std::lock_guard<std::mutex> lock(m_controllerMutex);
 
   std::vector<std::shared_ptr<const CAgentController>> controllers{m_controllers.size()};
-  std::copy(m_controllers.begin(), m_controllers.end(), controllers.begin());
+  std::ranges::copy(m_controllers, controllers.begin());
 
   return controllers;
 }

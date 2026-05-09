@@ -8,10 +8,16 @@
 
 #include "StreamUtils.h"
 
+#include "ServiceBroker.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
+
+#include <array>
+
 extern "C"
 {
 #include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
+#include <libavcodec/defs.h>
 }
 
 int StreamUtils::GetCodecPriority(const std::string &codec)
@@ -20,13 +26,21 @@ int StreamUtils::GetCodecPriority(const std::string &codec)
    * Technically flac, truehd, and dtshd_ma are equivalently good as they're all lossless. However,
    * ffmpeg can't decode dtshd_ma losslessy yet.
    */
+  if (codec == "truehd_atmos") // Dolby TrueHD with Atmos
+    return 11;
+  if (codec == "dtshd_ma_x_imax") // DTS:X IMAX Enhanced
+    return 10;
+  if (codec == "dtshd_ma_x") // DTS:X
+    return 9;
   if (codec == "flac") // Lossless FLAC
-    return 7;
+    return 8;
   if (codec == "truehd") // Dolby TrueHD
-    return 6;
+    return 7;
   if (codec == "dtshd_ma") // DTS-HD Master Audio (previously known as DTS++)
-    return 5;
+    return 6;
   if (codec == "dtshd_hra") // DTS-HD High Resolution Audio
+    return 5;
+  if (codec == "eac3_ddp_atmos") // Dolby Digital Plus with Atmos
     return 4;
   if (codec == "eac3") // Dolby Digital Plus
     return 3;
@@ -43,13 +57,13 @@ std::string StreamUtils::GetCodecName(int codecId, int profile)
 
   if (codecId == AV_CODEC_ID_DTS)
   {
-    if (profile == FF_PROFILE_DTS_HD_MA)
+    if (profile == AV_PROFILE_DTS_HD_MA)
       codecName = "dtshd_ma";
-    else if (profile == FF_PROFILE_DTS_HD_MA_X)
+    else if (profile == AV_PROFILE_DTS_HD_MA_X)
       codecName = "dtshd_ma_x";
-    else if (profile == FF_PROFILE_DTS_HD_MA_X_IMAX)
+    else if (profile == AV_PROFILE_DTS_HD_MA_X_IMAX)
       codecName = "dtshd_ma_x_imax";
-    else if (profile == FF_PROFILE_DTS_HD_HRA)
+    else if (profile == AV_PROFILE_DTS_HD_HRA)
       codecName = "dtshd_hra";
     else
       codecName = "dca";
@@ -61,21 +75,21 @@ std::string StreamUtils::GetCodecName(int codecId, int profile)
   {
     switch (profile)
     {
-      case FF_PROFILE_AAC_LOW:
-      case FF_PROFILE_MPEG2_AAC_LOW:
+      case AV_PROFILE_AAC_LOW:
+      case AV_PROFILE_MPEG2_AAC_LOW:
         codecName = "aac_lc";
         break;
-      case FF_PROFILE_AAC_HE:
-      case FF_PROFILE_MPEG2_AAC_HE:
+      case AV_PROFILE_AAC_HE:
+      case AV_PROFILE_MPEG2_AAC_HE:
         codecName = "he_aac";
         break;
-      case FF_PROFILE_AAC_HE_V2:
+      case AV_PROFILE_AAC_HE_V2:
         codecName = "he_aac_v2";
         break;
-      case FF_PROFILE_AAC_SSR:
+      case AV_PROFILE_AAC_SSR:
         codecName = "aac_ssr";
         break;
-      case FF_PROFILE_AAC_LTP:
+      case AV_PROFILE_AAC_LTP:
         codecName = "aac_ltp";
         break;
       default:
@@ -95,4 +109,53 @@ std::string StreamUtils::GetCodecName(int codecId, int profile)
     codecName = avcodec_get_name(codec->id);
 
   return codecName;
+}
+
+std::string StreamUtils::GetDefaultLayout(unsigned int channels)
+{
+  static constexpr std::array layouts{
+      "0.0", // 0
+      "1.0", // 1
+      "2.0", // 2
+      "2.1", // 3
+      "4.0", // 4
+      "5.0", // 5
+      "5.1", // 6
+      "6.1", // 7
+      "7.1", // 8
+      "", // 9
+      "5.1.4", // 10
+      "", // 11
+      "7.1.4", // 12
+      "", // 13
+      "9.1.4", // 14
+      "", // 15
+      "9.1.6", // 16
+  };
+
+  if (channels < layouts.size())
+    return layouts[channels];
+
+  return {};
+}
+
+std::string StreamUtils::GetLayout(unsigned int channels)
+{
+  std::string layout{GetDefaultLayout(channels)};
+
+  if (layout.empty())
+  {
+    layout = std::to_string(channels);
+    layout.append(" ");
+    layout.append(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(10127)); // "channels"
+  }
+
+  return layout;
+}
+
+bool StreamUtils::IsCodecSupportForcedOverlay(int codecId)
+{
+  return codecId == AV_CODEC_ID_DVD_SUBTITLE || codecId == AV_CODEC_ID_HDMV_PGS_SUBTITLE ||
+         codecId == AV_CODEC_ID_DVB_SUBTITLE;
 }

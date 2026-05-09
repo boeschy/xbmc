@@ -32,6 +32,7 @@
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
+#include "windowing/WinSystem.h"
 
 #include <algorithm>
 #include <array>
@@ -1171,18 +1172,40 @@ constexpr std::array<InfoMap, 13> player_process = {{
 ///     @return **True** if the weather data has been downloaded.
 ///     <p>
 ///   }
+///   \table_row3{   <b>`Weather.IsUpdating`</b>,
+///                  \anchor Weather_IsUpdating
+///                  _boolean_,
+///     @return **True** if weather data are currently updating.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Weather_IsUpdating `Weather.IsUpdating`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Weather.LastUpdated`</b>,
+///                  \anchor Weather_LastUpdated
+///                  _string_,
+///     @return The localized date and time weather data were last updated\, empty string if not available.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Weather_LastUpdated `Weather.LastUpdated`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Weather.Data(property)`</b>,
+///                  \anchor Weather_Data
+///                  _string_,
+///     @return Weather data\, as specified by the parameter.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Weather_Data `Weather.Data(property)`\endlink
+///     <p>
+///   }
 ///   \table_row3{   <b>`Weather.Conditions`</b>,
 ///                  \anchor Weather_Conditions
 ///                  _string_,
 ///     @return The current weather conditions as textual description.
-///     @note This is looked up in a background process.
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`Weather.ConditionsIcon`</b>,
 ///                  \anchor Weather_ConditionsIcon
 ///                  _string_,
 ///     @return The current weather conditions as an icon.
-///     @note This is looked up in a background process.
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`Weather.Temperature`</b>,
@@ -1213,9 +1236,12 @@ constexpr std::array<InfoMap, 13> player_process = {{
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 7> weather = {{
+constexpr std::array<InfoMap, 10> weather = {{
     {"isfetched",       WEATHER_IS_FETCHED},
-    {"conditions",      WEATHER_CONDITIONS_TEXT}, // labels from here
+    {"isupdating",      WEATHER_IS_UPDATING},
+    {"lastupdated",     WEATHER_LAST_UPDATED}, // labels from here
+    {"data",            WEATHER_DATA},
+    {"conditions",      WEATHER_CONDITIONS_TEXT},
     {"temperature",     WEATHER_TEMPERATURE},
     {"location",        WEATHER_LOCATION},
     {"fanartcode",      WEATHER_FANART_CODE},
@@ -2781,10 +2807,16 @@ constexpr std::array<InfoMap, 7> musicpartymode = {{
 ///     @return The bitrate of current song.
 ///     <p>
 ///   }
-///   \table_row3{   <b>`MusicPlayer.Channels`</b>,
+///   \table_row3{   <b>`MusicPlayer.Channels(format)`</b>,
 ///                  \anchor MusicPlayer_Channels
 ///                  _string_,
-///     @return The number of channels of current song.
+///     @param[in] format (optional) format of the infolabel.
+///     (possible values: see \ref ListItem_AudioChannels "ListItem.AudioChannels").
+///     @return The channel information of the current song\, formatted in the optional format.
+///     (possible values: see \ref ListItem_AudioChannels "ListItem.AudioChannels").
+///     <p><hr>
+///     @skinning_v22 **[Infolabel Updated]** \link MusicPlayer_Channels `MusicPlayer.Channels`\endlink
+///     added optional format parameter
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`MusicPlayer.BitsPerSample`</b>,
@@ -3857,15 +3889,20 @@ constexpr std::array<InfoMap, 46> musicplayer = {{
 ///     \ref ListItem_AudioCodec "ListItem.AudioCodec").
 ///     <p>
 ///   }
-///   \table_row3{   <b>`VideoPlayer.AudioChannels`</b>,
+///   \table_row3{   <b>`VideoPlayer.AudioChannels(format)`</b>,
 ///                  \anchor VideoPlayer_AudioChannels
 ///                  _string_,
-///     @return The number of audio channels of the currently playing video
+///     @param[in] format (optional) format of the infolabel.
+///     (possible values: see \ref ListItem_AudioChannels "ListItem.AudioChannels").
+///     @return The audio channel information of the currently playing video\, formatted in the optional format
 ///     (possible values: see \ref ListItem_AudioChannels "ListItem.AudioChannels").
 ///     <p><hr>
 ///     @skinning_v16 **[Infolabel Updated]** \link VideoPlayer_AudioChannels `VideoPlayer.AudioChannels`\endlink
 ///     if a video contains no audio\, these infolabels will now return empty.
 ///     (they used to return 0)
+///
+///     @skinning_v22 **[Infolabel Updated]** \link VideoPlayer_AudioChannels `VideoPlayer.AudioChannels`\endlink
+///     added optional format parameter
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`VideoPlayer.AudioLanguage`</b>,
@@ -4089,6 +4126,15 @@ constexpr std::array<InfoMap, 46> musicplayer = {{
 ///     @skinning_v20 **[New Infolabel]** \link VideoPlayer_HdrType `VideoPlayer.HdrType`\endlink
 ///     <p>
 ///   }
+///   \table_row3{   <b>`VideoPlayer.HdrDetail`</b>,
+///                  \anchor VideoPlayer_HdrDetail
+///                  _string_,
+///     @return String containing details for the HDR type (currently only for DV - profile and EL type) or empty if not HDR. Prints eg 5\, 7FEL\,
+///     and compatibility ID for profile 8 eg 8.4.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link VideoPlayer_HdrDetail `VideoPlayer.HdrDetail`\endlink
+///     <p>
+///   }
 ///   \table_row3{   <b>`VideoPlayer.VideoVersionName`</b>,
 ///                  \anchor VideoPlayer_VideoVersionName
 ///                  _string_,
@@ -4125,7 +4171,7 @@ constexpr std::array<InfoMap, 46> musicplayer = {{
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 82> videoplayer = {{
+constexpr std::array<InfoMap, 83> videoplayer = {{
     {"title",                 VIDEOPLAYER_TITLE},
     {"genre",                 VIDEOPLAYER_GENRE},
     {"country",               VIDEOPLAYER_COUNTRY},
@@ -4208,6 +4254,7 @@ constexpr std::array<InfoMap, 82> videoplayer = {{
     {"episodepart",           VIDEOPLAYER_EPISODEPART},
     {"mediaproviders",        VIDEOPLAYER_MEDIAPROVIDERS},
     {"titleextrainfo",        VIDEOPLAYER_TITLE_EXTRAINFO},
+    {"hdrdetail",             VIDEOPLAYER_HDR_DETAIL},
 }};
 // clang-format on
 
@@ -4253,14 +4300,140 @@ constexpr std::array<InfoMap, 82> videoplayer = {{
 ///     @skinning_v18 **[New Infolabel]** \link RetroPlayer_VideoRotation `RetroPlayer.VideoRotation`\endlink
 ///     <p>
 ///   }
+///   \table_row3{   <b>`RetroPlayer.SupportsEject`</b>,
+///                  \anchor RetroPlayer_SupportsEject
+///                  _boolean_,
+///     @return **True** if the game's disc can be ejected\, **False** if the
+///     game isn't disc-based or doesn't support ejecting the disc.
+///     <p><hr>
+///     @skinning_v22 **[New Boolean Condition]** \link RetroPlayer_SupportsEject `RetroPlayer.SupportsEject`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.DiscEjected`</b>,
+///                  \anchor RetroPlayer_DiscEjected
+///                  _boolean_,
+///     @return **True** if the game's disc is ejected (tray is open)\, **False**
+///     if the game isn't disc-based or the tray is closed.
+///     <p><hr>
+///     @skinning_v22 **[New Boolean Condition]** \link RetroPlayer_DiscEjected `RetroPlayer.DiscEjected`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.DiscLabel`</b>,
+///                  \anchor RetroPlayer_DiscLabel
+///                  _string_,
+///     @return The human-readable label of the currently inserted disc\, or
+///     an empty string if no disc is in the tray/floppy drive or the game
+///     isn't disc-based.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_DiscLabel `RetroPlayer.DiscLabel`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.EmptyTray`</b>,
+///                  \anchor RetroPlayer_EmptyTray
+///                  _boolean_,
+///     @return **True** if the selected disc state is "No disc"\, **False** if a
+///     disc is selected or the game isn't disc-based.
+///     <p><hr>
+///     @skinning_v22 **[New Boolean Condition]** \link RetroPlayer_EmptyTray `RetroPlayer.EmptyTray`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.Title`</b>,
+///                  \anchor RetroPlayer_Title
+///                  _string_,
+///     @return The title of the currently-playing game.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_Title `RetroPlayer.Title`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.Platform`</b>,
+///                  \anchor RetroPlayer_Platform
+///                  _string_,
+///     @return The platform of the currently-playing game\, or an empty string
+///     if the platform is unknown.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_Platform `RetroPlayer.Platform`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.Genres`</b>,
+///                  \anchor RetroPlayer_Genres
+///                  _string_,
+///     @return The genres of the currently-playing game\, joined by "\, ".
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_Genres `RetroPlayer.Genres`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.Publisher`</b>,
+///                  \anchor RetroPlayer_Publisher
+///                  _string_,
+///     @return The publisher of the currently-playing game (e.g. "Nintendo").
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_Publisher `RetroPlayer.Publisher`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.Developer`</b>,
+///                  \anchor RetroPlayer_Developer
+///                  _string_,
+///     @return The developer of the currently-playing game (e.g. "Square").
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_Developer `RetroPlayer.Developer`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.Overview`</b>,
+///                  \anchor RetroPlayer_Overview
+///                  _string_,
+///     @return The overview/summary of the currently-playing game.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_Overview `RetroPlayer.Overview`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.GameClient`</b>,
+///                  \anchor RetroPlayer_GameClient
+///                  _string_,
+///     @return The add-on ID of the game client (a.k.a. emulator) used to play the
+///     currently-playing game (e.g. `game.libretro.beetle-psx`).
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_GameClient `RetroPlayer.GameClient`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.GameClientName`</b>,
+///                  \anchor RetroPlayer_GameClientName
+///                  _string_,
+///     @return The emulator/core name parsed from the game client's add-on name
+///     (e.g. `bsnes-mercury Performance`).
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_GameClientName `RetroPlayer.GameClientName`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`RetroPlayer.GameClientPlatforms`</b>,
+///                  \anchor RetroPlayer_GameClientPlatforms
+///                  _string_,
+///     @return The platform or platform group supported by the game client
+///     (e.g. an emulator might report "Nintendo - SNES / SFC / Game Boy / Color").
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link RetroPlayer_GameClientPlatforms `RetroPlayer.GameClientPlatforms`\endlink
+///     <p>
+///   }
 /// \table_end
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 3> retroplayer = {{
+constexpr std::array<InfoMap, 16> retroplayer = {{
     {"videofilter",   RETROPLAYER_VIDEO_FILTER},
     {"stretchmode",   RETROPLAYER_STRETCH_MODE},
     {"videorotation", RETROPLAYER_VIDEO_ROTATION},
+    {"title", RETROPLAYER_TITLE},
+    {"platform", RETROPLAYER_PLATFORM},
+    {"genres", RETROPLAYER_GENRES},
+    {"publisher", RETROPLAYER_PUBLISHER},
+    {"developer", RETROPLAYER_DEVELOPER},
+    {"overview", RETROPLAYER_OVERVIEW},
+    {"gameclient", RETROPLAYER_GAME_CLIENT},
+    {"gameclientname", RETROPLAYER_GAME_CLIENT_NAME},
+    {"gameclientplatforms", RETROPLAYER_GAME_CLIENT_PLATFORMS},
+    {"supportseject", RETROPLAYER_SUPPORTS_EJECT},
+    {"discejected", RETROPLAYER_DISC_EJECTED},
+    {"disclabel", RETROPLAYER_DISC_LABEL},
+    {"emptytray", RETROPLAYER_EMPTY_TRAY},
 }};
 // clang-format on
 
@@ -6357,10 +6530,17 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///       - <b>wmav2</b>
 ///     <p>
 ///   }
-///   \table_row3{   <b>`ListItem.AudioChannels`</b>,
+///   \table_row3{   <b>`ListItem.AudioChannels(format)`</b>,
 ///                  \anchor ListItem_AudioChannels
 ///                  _string_,
-///     @return The number of audio channels of the currently selected video. Possible values:
+///     @param format (optional) format of the infolabel. Possible values for the format:
+///       - <b>(blank)</b> no format value: count of channels
+///       - <b>defaultlayout</b> return a default channel layout in the format x.y.z for the
+///         channel count (x=listener level speakers\, y=lfe channels\, z=overhead channels).
+///         If a default layout is not defined for the channel count then the text "x channels" is
+///         returned\, with x replaced by the channel count and "channels" localized to the user language.
+///     @return The audio channel information of the currently selected video. Possible values
+///       for the default format:
 ///       - <b>1</b>
 ///       - <b>2</b>
 ///       - <b>4</b>
@@ -6368,10 +6548,23 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///       - <b>6</b>
 ///       - <b>8</b>
 ///       - <b>10</b>
+///
+///     Possible values for format "defaultlayout":
+///       - <b>1.0</b>
+///       - <b>2.0</b>
+///       - <b>5.1</b>
+///       - <b>6.1</b>
+///       - <b>7.1</b>
+///       - <b>9 channels</b>
+///       - <b>9.1.6</b>
+///
 ///     <p><hr>
 ///     @skinning_v16 **[Infolabel Updated]** \link ListItem_AudioChannels `ListItem.AudioChannels`\endlink
 ///     if a video contains no audio\, these infolabels will now return empty.
 ///     (they used to return 0)
+///
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_AudioChannels `ListItem.AudioChannels`\endlink
+///     added optional format parameter
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`ListItem.AudioLanguage`</b>,
@@ -7200,12 +7393,18 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///     @skinning_v19 **[New Infolabel]** \link ListItem_SampleRate `ListItem.SampleRate`\endlink
 ///     <p>
 ///   }
-///   \table_row3{   <b>`ListItem.MusicChannels`</b>,
+///   \table_row3{   <b>`ListItem.MusicChannels(format)`</b>,
 ///                  \anchor ListItem_MusicChannels
 ///                  _string_,
+///     @param[in] format (optional) format of the infolabel.
+///     (possible values: see \ref ListItem_AudioChannels "ListItem.AudioChannels").
 ///     @return The number of audio channels of a song.
+///     (possible values: see \ref ListItem_AudioChannels "ListItem.AudioChannels").
 ///     <p><hr>
 ///     @skinning_v19 **[New Infolabel]** \link ListItem_No_Of_Channels `ListItem.NoOfChannels`\endlink
+///
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_MusicChannels `ListItem.MusicChannels`\endlink
+///     added optional format parameter
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`ListItem.TvShowDBID`</b>,
@@ -7229,6 +7428,15 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///     @return String containing the name of the detected HDR type or empty if not HDR. See \ref StreamHdrType for the list of possible values.
 ///     <p><hr>
 ///     @skinning_v20 **[New Infolabel]** \link ListItem_HdrType `ListItem.HdrType`\endlink
+///   }
+///   \table_row3{   <b>`ListItem.HdrDetail`</b>,
+///                  \anchor ListItem_HdrDetail
+///                  _string_,
+///     @return String containing details for the HDR type (currently only for DV - profile and EL type) or empty if not HDR. Prints eg 5\, 7FEL\,
+///     and compatibility ID for profile 8 eg 8.4.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link ListItem_HdrDetail `ListItem.HdrDetail`\endlink
+///     <p>
 ///   }
 ///   \table_row3{   <b>`ListItem.SongVideoURL`</b>,
 ///                  \anchor ListItem_SongVideoURL
@@ -7335,7 +7543,7 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 227> listitem_labels = {{
+constexpr std::array<InfoMap, 228> listitem_labels = {{
     {"thumb",                         LISTITEM_THUMB},
     {"icon",                          LISTITEM_ICON},
     {"actualicon",                    LISTITEM_ACTUAL_ICON},
@@ -7563,6 +7771,7 @@ constexpr std::array<InfoMap, 227> listitem_labels = {{
     {"episodepart",                   LISTITEM_EPISODEPART},
     {"mediaproviders",                LISTITEM_MEDIAPROVIDERS},
     {"titleextrainfo",                LISTITEM_TITLE_EXTRAINFO},
+    {"hdrdetail",                     LISTITEM_VIDEO_HDR_DETAIL},
 }};
 // clang-format on
 
@@ -10484,21 +10693,21 @@ namespace
 std::string TranslateListSeparator(const std::string& param)
 {
   if (StringUtils::EqualsNoCase(param, "comma"))
-    return ",";
+    return ", ";
   else if (StringUtils::EqualsNoCase(param, "pipe"))
-    return "|";
+    return " | ";
   else if (StringUtils::EqualsNoCase(param, "slash"))
-    return "/";
+    return " / ";
   else if (StringUtils::EqualsNoCase(param, "cr"))
     return "\n";
   else if (StringUtils::EqualsNoCase(param, "dash"))
-    return "-";
+    return " - ";
   else if (StringUtils::EqualsNoCase(param, "colon"))
-    return ":";
+    return " : ";
   else if (StringUtils::EqualsNoCase(param, "semicolon"))
-    return ";";
+    return "; ";
   else if (StringUtils::EqualsNoCase(param, "fullstop"))
-    return ".";
+    return ". ";
   else
   {
     CLog::Log(LOGERROR, "unhandled separator param {}", param);
@@ -10635,10 +10844,18 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
     }
     else if (cat.Name() == "weather")
     {
-      for (const auto& i : weather)
+      if (prop.num_params() == 0)
       {
-        if (prop.Name() == i.str)
-          return i.val;
+        for (const auto& i : weather)
+        {
+          if (prop.Name() == i.str)
+            return i.val;
+        }
+      }
+      else if (prop.num_params() == 1)
+      {
+        if (prop.Name() == "data")
+          return AddMultiInfo(CGUIInfo(WEATHER_DATA, prop.param(), 0));
       }
     }
     else if (cat.Name() == "network")
@@ -10826,6 +11043,11 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
 
         return AddMultiInfo(CGUIInfo(MUSICPLAYER_PROPERTY, prop.param()));
       }
+      else if (prop.Name() == "channels" && prop.num_params() == 1)
+      {
+        return AddMultiInfo(CGUIInfo(MUSICPLAYER_CHANNELS, prop.param()));
+      }
+
       return TranslateMusicPlayerString(prop.Name());
     }
     else if (cat.Name() == "videoplayer")
@@ -10878,6 +11100,10 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
         return AddMultiInfo(
             CGUIInfo(VIDEOPLAYER_NEXT_GENRE, TranslateListSeparator(prop.param()), 0));
       }
+
+      if (prop.Name() == "audiochannels" && prop.num_params() == 1)
+        return AddMultiInfo(CGUIInfo(VIDEOPLAYER_AUDIO_CHANNELS, prop.param(), 0));
+
       return TranslateVideoPlayerString(prop.Name());
     }
     else if (cat.Name() == "retroplayer")
@@ -10923,12 +11149,12 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
       }
       if (prop.Name() == "sortdirection")
       {
-        SortOrder order = SortOrderNone;
+        SortOrder order = SortOrder::NONE;
         if (StringUtils::EqualsNoCase(prop.param(), "ascending"))
-          order = SortOrderAscending;
+          order = SortOrder::ASCENDING;
         else if (StringUtils::EqualsNoCase(prop.param(), "descending"))
-          order = SortOrderDescending;
-        return AddMultiInfo(CGUIInfo(CONTAINER_SORT_DIRECTION, order));
+          order = SortOrder::DESCENDING;
+        return AddMultiInfo(CGUIInfo(CONTAINER_SORT_DIRECTION, static_cast<int>(order)));
       }
     }
     else if (cat.Name() == "listitem" || cat.Name() == "listitemposition" ||
@@ -11208,6 +11434,10 @@ int CGUIInfoManager::TranslateListItem(const Property& cat, const Property& prop
     else if (prop.Name() == "duration" || prop.Name() == "nextduration")
     {
       data4 = TranslateTimeFormat(prop.param());
+    }
+    else if (prop.Name() == "audiochannels" || prop.Name() == "musicchannels")
+    {
+      data3 = prop.param();
     }
   }
 
@@ -11878,7 +12108,7 @@ std::string CGUIInfoManager::GetMultiInfoItemLabel(const CFileItem *item, int co
       case LISTITEM_THUMB:
         return item->GetThumbHideIfUnwatched(item);
       case LISTITEM_FOLDERPATH:
-        return CURL(item->GetPath()).GetWithoutUserDetails();
+        return item->GetURL().GetWithoutUserDetails();
       case LISTITEM_FOLDERNAME:
       case LISTITEM_PATH:
       {
@@ -11995,12 +12225,16 @@ void CGUIInfoManager::SetCurrentVideoTag(const CVideoInfoTag &tag)
 {
   m_currentFile->SetFromVideoInfoTag(tag);
   m_currentFile->SetStartOffset(0);
+
+  CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Info, "OnChanged");
 }
 
 void CGUIInfoManager::SetCurrentSongTag(const MUSIC_INFO::CMusicInfoTag &tag)
 {
   m_currentFile->SetFromMusicInfoTag(tag);
   m_currentFile->SetStartOffset(0);
+
+  CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Info, "OnChanged");
 }
 
 const MUSIC_INFO::CMusicInfoTag* CGUIInfoManager::GetCurrentSongTag() const

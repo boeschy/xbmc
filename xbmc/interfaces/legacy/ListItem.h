@@ -848,6 +848,7 @@ namespace XBMCAddon
       ///
       ///-----------------------------------------------------------------------
       /// @python_v18 New function added.
+      /// @python_v22 Deprecated. Use **InfoTagVideo.setAvailableFanart()** instead.
       ///
       /// **Example:**
       /// ~~~~~~~~~~~~~{.py}
@@ -1272,7 +1273,7 @@ private:
       MUSIC_INFO::CMusicInfoTag* GetMusicInfoTag();
       const MUSIC_INFO::CMusicInfoTag* GetMusicInfoTag() const;
 
-      void setTitleRaw(std::string title);
+      void setTitleRaw(const std::string& title);
       void setPathRaw(const std::string& path);
       void setCountRaw(int count);
       void setSizeRaw(int64_t size);

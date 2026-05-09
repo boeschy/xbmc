@@ -16,11 +16,12 @@
 #include "TextureManager.h"
 #include "WindowIDs.h"
 #include "filesystem/Directory.h"
+#include "jobs/JobManager.h"
 #include "utils/FileExtensionProvider.h"
-#include "utils/JobManager.h"
 #include "utils/Random.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+#include "windowing/WinSystem.h"
 
 #include <mutex>
 

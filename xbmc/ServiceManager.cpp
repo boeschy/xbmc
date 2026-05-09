@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -46,6 +46,7 @@
 #include "pictures/SlideShowDelegator.h"
 #include "storage/MediaManager.h"
 #include "utils/FileExtensionProvider.h"
+#include "utils/i18n/Bcp47Registry/SubTagRegistryManager.h"
 #include "utils/log.h"
 #include "weather/WeatherManager.h"
 
@@ -82,6 +83,9 @@ bool CServiceManager::InitForTesting()
   m_extsMimeSupportList = std::make_unique<ADDONS::CExtsMimeSupportList>(*m_addonMgr);
   m_fileExtensionProvider = std::make_unique<CFileExtensionProvider>(*m_addonMgr);
 
+  m_subTagRegistryManager = std::make_unique<KODI::UTILS::I18N::CSubTagRegistryManager>();
+  m_subTagRegistryManager->Initialize();
+
   init_level = 1;
   return true;
 }
@@ -89,6 +93,7 @@ bool CServiceManager::InitForTesting()
 void CServiceManager::DeinitTesting()
 {
   init_level = 0;
+  m_subTagRegistryManager.reset();
   m_fileExtensionProvider.reset();
   m_extsMimeSupportList.reset();
   m_binaryAddonManager.reset();
@@ -121,7 +126,15 @@ bool CServiceManager::InitStageOne()
 bool CServiceManager::InitStageTwo(const std::string& profilesUserDataFolder)
 {
   // Initialize the addon database (must be before the addon manager is init'd)
-  m_databaseManager = std::make_unique<CDatabaseManager>();
+  try
+  {
+    m_databaseManager = std::make_unique<CDatabaseManager>();
+  }
+  catch (...)
+  {
+    CLog::Log(LOGFATAL, "CServiceManager::{}: Unable to start CDatabaseManager", __FUNCTION__);
+    return false;
+  }
 
   m_binaryAddonManager = std::make_unique<
       ADDON::
@@ -168,7 +181,7 @@ bool CServiceManager::InitStageTwo(const std::string& profilesUserDataFolder)
   m_powerManager->Initialize();
   m_powerManager->SetDefaults();
 
-  m_weatherManager = std::make_unique<CWeatherManager>();
+  m_weatherManager = std::make_unique<CWeatherManager>(*m_addonMgr);
 
   m_mediaManager = std::make_unique<CMediaManager>();
   m_mediaManager->Initialize();
@@ -180,6 +193,9 @@ bool CServiceManager::InitStageTwo(const std::string& profilesUserDataFolder)
 #if defined(HAS_FILESYSTEM_SMB)
   m_WSDiscovery = WSDiscovery::IWSDiscovery::GetInstance();
 #endif
+
+  m_subTagRegistryManager = std::make_unique<KODI::UTILS::I18N::CSubTagRegistryManager>();
+  m_subTagRegistryManager->Initialize();
 
   if (!m_Platform->InitStageTwo())
     return false;
@@ -202,7 +218,8 @@ bool CServiceManager::InitStageThree(const std::shared_ptr<CProfileManager>& pro
 
   m_gameServices = std::make_unique<GAME::CGameServices>(
       *m_gameControllerManager, *m_gameRenderManager, *m_peripherals, *profileManager,
-      *m_inputManager, *m_addonMgr);
+      *m_inputManager, *m_addonMgr, *m_fileExtensionProvider);
+  m_gameServices->Initialize();
 
   m_contextMenuManager->Init();
 
@@ -221,6 +238,9 @@ bool CServiceManager::InitStageThree(const std::shared_ptr<CProfileManager>& pro
 
 void CServiceManager::DeinitStageThree()
 {
+  if (init_level < 3)
+    return;
+
   init_level = 2;
 #if !defined(TARGET_WINDOWS) && defined(HAS_OPTICAL_DRIVE)
   m_DetectDVDType->StopThread();
@@ -229,6 +249,7 @@ void CServiceManager::DeinitStageThree()
   m_playerCoreFactory.reset();
   m_PVRManager->Deinit();
   m_contextMenuManager->Deinit();
+  m_gameServices->Deinitialize();
   m_gameServices.reset();
   m_peripherals->Clear();
 
@@ -237,7 +258,12 @@ void CServiceManager::DeinitStageThree()
 
 void CServiceManager::DeinitStageTwo()
 {
+  if (init_level < 2)
+    return;
+
   init_level = 1;
+
+  m_subTagRegistryManager.reset();
 
 #if defined(HAS_FILESYSTEM_SMB)
   m_WSDiscovery.reset();
@@ -271,6 +297,9 @@ void CServiceManager::DeinitStageTwo()
 
 void CServiceManager::DeinitStageOne()
 {
+  if (init_level < 1)
+    return;
+
   init_level = 0;
 
   m_network.reset();
@@ -434,4 +463,9 @@ CMediaManager& CServiceManager::GetMediaManager()
 CSlideShowDelegator& CServiceManager::GetSlideShowDelegator()
 {
   return *m_slideShowDelegator;
+}
+
+KODI::UTILS::I18N::CSubTagRegistryManager& CServiceManager::GetSubTagRegistryManager()
+{
+  return *m_subTagRegistryManager;
 }

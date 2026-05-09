@@ -31,7 +31,8 @@ using namespace KODI;
 using namespace JOYSTICK;
 
 CRumbleGenerator::CRumbleGenerator()
-  : CThread("RumbleGenerator"), m_motors(GetMotors(ControllerID()))
+  : CThread("RumbleGenerator"),
+    m_motors(GetMotors(ControllerID()))
 {
 }
 
@@ -77,7 +78,7 @@ void CRumbleGenerator::Process(void)
     {
       std::vector<std::string> motors;
 
-      if (std::find(m_motors.begin(), m_motors.end(), WEAK_MOTOR_NAME) != m_motors.end())
+      if (std::ranges::find(m_motors, WEAK_MOTOR_NAME) != m_motors.end())
         motors.emplace_back(WEAK_MOTOR_NAME);
       else
         motors = m_motors; // Not using default profile? Just rumble all motors

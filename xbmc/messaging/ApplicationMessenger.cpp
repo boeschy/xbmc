@@ -8,11 +8,13 @@
 
 #include "ApplicationMessenger.h"
 
+#include "ServiceBroker.h"
 #include "guilib/GUIMessage.h"
 #include "messaging/IMessageTarget.h"
 #include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
+#include "windowing/WinSystem.h"
 
 #include <memory>
 #include <mutex>

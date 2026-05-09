@@ -67,7 +67,8 @@
 #include "bus/virtual/PeripheralBusCEC.h"
 #else
 #include "dialogs/GUIDialogKaiToast.h"
-#include "guilib/LocalizeStrings.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #endif
 
 using namespace KODI;
@@ -251,8 +252,8 @@ PeripheralBusPtr CPeripherals::GetBusWithDevice(const std::string& strLocation) 
 {
   std::unique_lock lock(m_critSectionBusses);
 
-  const auto& bus = std::ranges::find_if(m_busses, [&strLocation](const PeripheralBusPtr& bus)
-                                         { return bus->HasPeripheral(strLocation); });
+  const auto& bus = std::ranges::find_if(m_busses, [&strLocation](const PeripheralBusPtr& b)
+                                         { return b->HasPeripheral(strLocation); });
   if (bus != m_busses.cend())
     return *bus;
 
@@ -354,9 +355,10 @@ void CPeripherals::CreatePeripheral(CPeripheralBus& bus, const PeripheralScanRes
             LOGWARNING,
             "{} - libCEC support has not been compiled in, so the CEC adapter cannot be used.",
             __FUNCTION__);
-        CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Warning,
-                                              g_localizeStrings.Get(36000),
-                                              g_localizeStrings.Get(36017));
+        CGUIDialogKaiToast::QueueNotification(
+            CGUIDialogKaiToast::Warning,
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36000),
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36017));
       }
 #endif
       break;
@@ -408,7 +410,7 @@ void CPeripherals::OnDeviceAdded(const CPeripheralBus& bus, const CPeripheral& p
     bNotify = false;
 
   if (bNotify)
-    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, g_localizeStrings.Get(35005), peripheral.DeviceName());
+    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(35005), peripheral.DeviceName());
 #endif
 }
 
@@ -421,7 +423,7 @@ void CPeripherals::OnDeviceDeleted(const CPeripheralBus& bus, const CPeripheral&
   bool bNotify = true;
 
   if (bNotify)
-    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, g_localizeStrings.Get(35006), peripheral.DeviceName());
+    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(35006), peripheral.DeviceName());
 #endif
 }
 
@@ -824,28 +826,6 @@ bool CPeripherals::ToggleDeviceState(CecStateChange mode /*= STATE_SWITCH_TOGGLE
   }
 
   return ret;
-}
-
-bool CPeripherals::GetNextKeypress(float frameTime, CKey& key)
-{
-  PeripheralVector peripherals;
-  if (SupportsCEC() && GetPeripheralsWithFeature(peripherals, FEATURE_CEC))
-  {
-    for (auto& peripheral : peripherals)
-    {
-      std::shared_ptr<CPeripheralCecAdapter> cecDevice =
-          std::static_pointer_cast<CPeripheralCecAdapter>(peripheral);
-      if (cecDevice->GetButton())
-      {
-        CKey newKey(cecDevice->GetButton(), cecDevice->GetHoldTime());
-        cecDevice->ResetButton();
-        key = newKey;
-        return true;
-      }
-    }
-  }
-
-  return false;
 }
 
 EventPollHandlePtr CPeripherals::RegisterEventPoller()

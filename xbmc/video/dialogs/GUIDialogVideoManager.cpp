@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2023 Team Kodi
+ *  Copyright (C) 2023-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -20,9 +20,10 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIKeyboardFactory.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
@@ -117,9 +118,11 @@ void CGUIDialogVideoManager::OnInitWindow()
 
   CGUIDialog::OnInitWindow();
 
-  SET_CONTROL_LABEL(CONTROL_LABEL_TITLE,
-                    StringUtils::Format(g_localizeStrings.Get(GetHeadingId()),
-                                        m_videoAsset->GetVideoInfoTag()->GetTitle()));
+  SET_CONTROL_LABEL(
+      CONTROL_LABEL_TITLE,
+      StringUtils::Format(
+          CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(GetHeadingId()),
+          m_videoAsset->GetVideoInfoTag()->GetTitle()));
 
   CGUIMessage msg{GUI_MSG_LABEL_BIND, GetID(), CONTROL_LIST_ASSETS, 0, 0, m_videoAssetsList.get()};
   OnMessage(msg);
@@ -221,7 +224,6 @@ void CGUIDialogVideoManager::Refresh()
 
   for (auto& item : *m_videoAssetsList)
   {
-    item->SetProperty("noartfallbacktoowner", true);
     loader.LoadItem(item.get());
   }
 
@@ -288,13 +290,18 @@ void CGUIDialogVideoManager::Remove()
   // confirm the removal
   if (!CGUIDialogYesNo::ShowAndGetInput(
           titleMsgId,
-          StringUtils::Format(g_localizeStrings.Get(textMsgId),
-                              m_selectedVideoAsset->GetVideoInfoTag()->GetAssetInfo().GetTitle())))
+          StringUtils::Format(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(textMsgId),
+              m_selectedVideoAsset->GetVideoInfoTag()->GetAssetInfo().GetTitle())))
   {
     return;
   }
 
   m_database.DeleteVideoAsset(m_selectedVideoAsset->GetVideoInfoTag()->m_iDbId);
+
+  // If a version of a bluray then remove the idFile as well
+  if (URIUtils::IsBlurayPath(m_selectedVideoAsset->GetDynPath()))
+    m_database.DeleteFile(m_selectedVideoAsset->GetVideoInfoTag()->m_iFileId);
 
   // refresh data and controls
   Refresh();
@@ -407,8 +414,11 @@ int CGUIDialogVideoManager::ChooseVideoAsset(const std::shared_ptr<CFileItem>& i
     {
       // create a new asset
       assetTitle = defaultName;
-      if (CGUIKeyboardFactory::ShowAndGetInput(assetTitle,
-                                               g_localizeStrings.Get(dialogNewHeadingMsgId), false))
+      if (CGUIKeyboardFactory::ShowAndGetInput(
+              assetTitle,
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                  dialogNewHeadingMsgId),
+              false))
       {
         assetTitle = StringUtils::Trim(assetTitle);
         //! @todo db refactor: should not be version, but asset
@@ -434,12 +444,13 @@ int CGUIDialogVideoManager::ChooseVideoAsset(const std::shared_ptr<CFileItem>& i
     videodb.GetVideoVersions(itemType, dbId, assets, assetType);
 
     // the selected video asset already exists
-    if (std::any_of(assets.cbegin(), assets.cend(),
-                    [assetId](const std::shared_ptr<CFileItem>& asset)
-                    { return asset->GetVideoInfoTag()->m_iDbId == assetId; }))
+    if (std::ranges::any_of(assets, [assetId](const std::shared_ptr<CFileItem>& asset)
+                            { return asset->GetVideoInfoTag()->m_iDbId == assetId; }))
     {
-      CGUIDialogOK::ShowAndGetInput(CVariant{40005},
-                                    StringUtils::Format(g_localizeStrings.Get(40007), assetTitle));
+      CGUIDialogOK::ShowAndGetInput(
+          CVariant{40005},
+          StringUtils::Format(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(40007), assetTitle));
     }
     else
       break;
@@ -454,10 +465,10 @@ void CGUIDialogVideoManager::AppendItemFolderToFileBrowserSources(
   const std::string itemDir{URIUtils::GetParentPath(m_videoAsset->GetDynPath())};
   if (!itemDir.empty() && XFILE::CDirectory::Exists(itemDir))
   {
-    CMediaSource itemSource{};
-    itemSource.strName = g_localizeStrings.Get(36041); // * Item folder
+    CMediaSource& itemSource = sources.emplace_back();
+    itemSource.strName =
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(36041); // * Item folder
     itemSource.strPath = itemDir;
-    sources.emplace_back(itemSource);
   }
 }
 

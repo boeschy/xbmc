@@ -9,16 +9,22 @@
 #pragma once
 
 #include "InfoScanner.h"
-#include "MusicAlbumInfo.h"
-#include "MusicInfoScraper.h"
 #include "music/MusicDatabase.h"
 #include "threads/IRunnable.h"
 #include "threads/Thread.h"
-#include "utils/ScraperUrl.h"
+
+#include <string>
 
 class CAlbum;
 class CArtist;
+class CFileItemList;
 class CGUIDialogProgressBarHandle;
+class CScraperUrl;
+
+namespace MUSIC_GRABBER
+{
+class CMusicAlbumInfo;
+}
 
 namespace MUSIC_INFO
 {
@@ -52,8 +58,8 @@ public:
    \param albums [out] albums found within these songs.
    */
   static void FileItemsToAlbums(const CFileItemList& items,
-                                VECALBUMS& albums,
-                                MAPSONGS* songsMap = nullptr);
+                                std::vector<CAlbum>& albums,
+                                std::map<std::string, std::vector<CSong>>* songsMap = nullptr);
 
   /*! \brief Scrape additional album information and update the music database with it.
   Given an album, search for it using the given scraper.
@@ -103,7 +109,7 @@ protected:
    \param albums [in/out] list of albums to categorise - art field may be altered.
    \param path [in] path containing albums.
    */
-  static void FindArtForAlbums(VECALBUMS &albums, const std::string &path);
+  static void FindArtForAlbums(std::vector<CAlbum>& albums, const std::string& path);
 
   /*! \brief Scrape additional album information and update the database.
    Search for the given album using the given scraper.

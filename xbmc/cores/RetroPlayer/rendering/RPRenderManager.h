@@ -22,6 +22,7 @@ extern "C"
 #include <future>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
 #include <vector>
@@ -101,6 +102,7 @@ public:
                 float displayAspectRatio,
                 unsigned int orientationDegCW);
   void Flush();
+  void DestroyContext();
 
   // Hardware rendering functions
   //! @todo These are only examples pulled from the history of the OpenGL
@@ -243,6 +245,8 @@ private:
 
   // Render resources
   std::set<std::shared_ptr<CRPBaseRenderer>> m_renderers;
+  std::set<std::shared_ptr<CRPBaseRenderer>> m_oldRenderers;
+  mutable std::mutex m_oldRenderersMutex;
   std::vector<IRenderBuffer*> m_pendingBuffers; // Only access from game thread
   std::vector<IRenderBuffer*> m_renderBuffers;
   std::map<AVPixelFormat, std::map<AVPixelFormat, SwsContext*>> m_scalers; // From -> to -> context

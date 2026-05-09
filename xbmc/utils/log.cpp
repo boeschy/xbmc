@@ -11,7 +11,8 @@
 #include "CompileInfo.h"
 #include "ServiceBroker.h"
 #include "filesystem/File.h"
-#include "guilib/LocalizeStrings.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/SettingUtils.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -75,6 +76,9 @@ constexpr auto componentMap = make_map<int, ComponentInfo>({
   {LOGWSDISCOVERY,  {"wsdiscovery", 37050}},
 #endif
   {LOGADDONS,       {"addons",      39124}},
+#ifdef HAVE_LIBBLURAY
+  {LOGBLURAY,       {"bluray",      39126}},
+#endif
 });
 // clang-format on
 
@@ -249,7 +253,8 @@ void CLog::SettingOptionsLoggingComponentsFiller(const SettingConstPtr& setting,
   for (const auto& [id, names] : componentMap)
   {
     // localized component setting name, component id
-    list.emplace_back(g_localizeStrings.Get(names.stringId), id);
+    list.emplace_back(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(names.stringId), id);
   }
 }
 
@@ -312,10 +317,21 @@ void CLog::FormatAndLogInternal(spdlog::level::level_enum level,
     return;
 
   auto message = fmt::vformat(format, args);
-
-  // fixup newline alignment, number of spaces should equal prefix length
   FormatLineBreaks(message);
   GetLoggerById(component)->log(level, message);
+}
+
+void CLog::FormatAndLogInternal(const std::string& loggerName,
+                                spdlog::level::level_enum level,
+                                fmt::string_view format,
+                                fmt::format_args args)
+{
+  if (level < m_defaultLogger->level())
+    return;
+
+  auto message = fmt::vformat(format, args);
+  FormatLineBreaks(message);
+  GetLogger(loggerName)->log(level, message);
 }
 
 Logger CLog::CreateLogger(const std::string& loggerName)
@@ -343,5 +359,6 @@ void CLog::SetComponentLogLevel(const std::vector<CVariant>& components)
 
 void CLog::FormatLineBreaks(std::string& message) const
 {
+  // fixup newline alignment, number of spaces should equal prefix length
   StringUtils::Replace(message, "\n", "\n                                                   ");
 }

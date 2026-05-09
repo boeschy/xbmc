@@ -10,7 +10,6 @@
 
 #include "ServiceBroker.h"
 #include "XBDateTime.h"
-#include "guilib/LocalizeStrings.h"
 #include "pvr/PVRDatabase.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClient.h"
@@ -19,6 +18,8 @@
 #include "pvr/epg/EpgContainer.h"
 #include "pvr/epg/EpgInfoTag.h"
 #include "pvr/providers/PVRProviders.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
@@ -69,7 +70,9 @@ CPVRChannel::CPVRChannel(const PVR_CHANNEL& channel, unsigned int iClientId)
     m_iClientProviderUid(channel.iClientProviderUid)
 {
   if (m_strChannelName.empty())
-    m_strChannelName = StringUtils::Format("{} {}", g_localizeStrings.Get(19029), m_iUniqueId);
+    m_strChannelName = StringUtils::Format(
+        "{} {}", CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19029),
+        m_iUniqueId);
 
   UpdateEncryptionName();
 }
@@ -348,8 +351,9 @@ bool CPVRChannel::SetChannelName(const std::string& strChannelName, bool bIsUser
   std::string strName(strChannelName);
 
   if (strName.empty())
-    strName = StringUtils::Format(g_localizeStrings.Get(19085),
-                                  m_clientChannelNumber.FormattedChannelNumber());
+    strName =
+        StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19085),
+                            m_clientChannelNumber.FormattedChannelNumber());
 
   std::unique_lock lock(m_critSection);
   if (m_strChannelName != strName || m_bIsUserSetName != bIsUserSetName)
@@ -417,16 +421,18 @@ std::string CPVRChannel::GetEncryptionName(int iCaid)
 {
   // http://www.dvb.org/index.php?id=174
   // http://en.wikipedia.org/wiki/Conditional_access_system
-  std::string strName(g_localizeStrings.Get(13205)); /* Unknown */
+  std::string strName(
+      CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13205)); /* Unknown */
 
   if (iCaid == 0x0000)
-    strName = g_localizeStrings.Get(19013); /* Free To Air */
+    strName =
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19013); /* Free To Air */
   else if (iCaid >= 0x0001 && iCaid <= 0x009F)
-    strName = g_localizeStrings.Get(19014); /* Fixed */
+    strName = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19014); /* Fixed */
   else if (iCaid >= 0x00A0 && iCaid <= 0x00A1)
-    strName = g_localizeStrings.Get(338); /* Analog */
+    strName = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(338); /* Analog */
   else if (iCaid >= 0x00A2 && iCaid <= 0x00FF)
-    strName = g_localizeStrings.Get(19014); /* Fixed */
+    strName = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(19014); /* Fixed */
   else if (iCaid >= 0x0100 && iCaid <= 0x01FF)
     strName = "SECA Mediaguard";
   else if (iCaid == 0x0464)
@@ -644,18 +650,18 @@ bool CPVRChannel::SetEPGScraper(std::string_view strScraper)
 void CPVRChannel::ToSortable(SortItem& sortable, Field field) const
 {
   std::unique_lock lock(m_critSection);
-  if (field == FieldChannelName)
-    sortable[FieldChannelName] = m_strChannelName;
-  else if (field == FieldLastPlayed)
+  if (field == Field::CHANNEL_NAME)
+    sortable[Field::CHANNEL_NAME] = m_strChannelName;
+  else if (field == Field::LAST_PLAYED)
   {
     const CDateTime lastWatched(m_iLastWatched);
-    sortable[FieldLastPlayed] =
+    sortable[Field::LAST_PLAYED] =
         lastWatched.IsValid() ? lastWatched.GetAsDBDateTime() : StringUtils::Empty;
   }
-  else if (field == FieldDateAdded)
-    sortable[FieldDateAdded] = m_dateTimeAdded.GetAsDBDateTime();
-  else if (field == FieldProvider)
-    sortable[FieldProvider] = StringUtils::Format("{} {}", m_iClientId, m_iClientProviderUid);
+  else if (field == Field::DATE_ADDED)
+    sortable[Field::DATE_ADDED] = m_dateTimeAdded.GetAsDBDateTime();
+  else if (field == Field::PROVIDER)
+    sortable[Field::PROVIDER] = StringUtils::Format("{} {}", m_iClientId, m_iClientProviderUid);
 }
 
 int CPVRChannel::ChannelID() const

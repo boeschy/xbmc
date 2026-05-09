@@ -26,7 +26,7 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIKeyboardFactory.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
+#include "jobs/JobManager.h"
 #include "media/MediaType.h"
 #include "music/MusicDatabase.h"
 #include "music/MusicDbUrl.h"
@@ -37,12 +37,13 @@
 #include "playlists/PlayListFactory.h"
 #include "playlists/PlayListFileItemClassify.h"
 #include "profiles/ProfileManager.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "threads/IRunnable.h"
 #include "utils/Artwork.h"
 #include "utils/FileUtils.h"
-#include "utils/JobManager.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
@@ -298,13 +299,13 @@ bool FillArtTypesList(CFileItem& musicitem, CFileItemList& artlist)
     CFileItemPtr artitem(new CFileItem(type, false));
     // Localise the names of common types of art
     if (type == "banner")
-      artitem->SetLabel(g_localizeStrings.Get(20020));
+      artitem->SetLabel(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(20020));
     else if (type == "fanart")
-      artitem->SetLabel(g_localizeStrings.Get(20445));
+      artitem->SetLabel(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(20445));
     else if (type == "poster")
-      artitem->SetLabel(g_localizeStrings.Get(20021));
+      artitem->SetLabel(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(20021));
     else if (type == "thumb")
-      artitem->SetLabel(g_localizeStrings.Get(21371));
+      artitem->SetLabel(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(21371));
     else
       artitem->SetLabel(type);
     // Set art type as art item property
@@ -339,8 +340,10 @@ std::string ShowSelectArtTypeDialog(CFileItemList& artitems)
   {
     // Get the new art type name
     std::string strArtTypeName;
-    if (!CGUIKeyboardFactory::ShowAndGetInput(strArtTypeName,
-                                              CVariant{g_localizeStrings.Get(13516)}, false))
+    if (!CGUIKeyboardFactory::ShowAndGetInput(
+            strArtTypeName,
+            CVariant{CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13516)},
+            false))
       return "";
     // Add new type to the list of art types
     CFileItemPtr artitem(new CFileItem(strArtTypeName, false));
@@ -362,9 +365,10 @@ int ShowSelectRatingDialog(int iSelected)
   if (dialog)
   {
     dialog->SetHeading(CVariant{38023});
-    dialog->Add(g_localizeStrings.Get(38022));
+    dialog->Add(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(38022));
     for (int i = 1; i <= 10; i++)
-      dialog->Add(StringUtils::Format("{}: {}", g_localizeStrings.Get(563), i));
+      dialog->Add(StringUtils::Format(
+          "{}: {}", CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(563), i));
     dialog->SetSelected(iSelected);
     dialog->Open();
 
@@ -463,7 +467,7 @@ SortDescription GetSortDescription(const CGUIViewState& state, const CFileItemLi
   auto sortDescriptions = state.GetSortDescriptions();
   for (auto& sortDescription : sortDescriptions)
   {
-    if (sortDescription.sortBy == SortByTrackNumber)
+    if (sortDescription.sortBy == SortBy::TRACK_NUMBER)
     {
       // check whether at least one item has actually a track number set
       for (const auto& item : items)
@@ -472,12 +476,12 @@ SortDescription GetSortDescription(const CGUIViewState& state, const CFileItemLi
         {
           // First choice for folders containing a single album
           sortDescTrackNumber = sortDescription;
-          sortDescTrackNumber.sortOrder = SortOrderAscending;
+          sortDescTrackNumber.sortOrder = SortOrder::ASCENDING;
           break; // leave items loop. we can still find ByArtistThenYear. so, no return here.
         }
       }
     }
-    else if (sortDescription.sortBy == SortByArtistThenYear)
+    else if (sortDescription.sortBy == SortBy::ARTIST_THEN_YEAR)
     {
       // check whether songs from at least two different albums are in the list
       int lastAlbumId = -1;
@@ -489,7 +493,7 @@ SortDescription GetSortDescription(const CGUIViewState& state, const CFileItemLi
           if (lastAlbumId != -1 && tag->GetAlbumId() != lastAlbumId)
           {
             // First choice for folders containing multiple albums
-            sortDescription.sortOrder = SortOrderAscending;
+            sortDescription.sortOrder = SortOrder::ASCENDING;
             return sortDescription;
           }
           lastAlbumId = tag->GetAlbumId();
@@ -498,7 +502,7 @@ SortDescription GetSortDescription(const CGUIViewState& state, const CFileItemLi
     }
   }
 
-  if (sortDescTrackNumber.sortBy != SortByNone)
+  if (sortDescTrackNumber.sortBy != SortBy::NONE)
     return sortDescTrackNumber;
   else
     return state.GetSortMethod(); // last resort
@@ -571,7 +575,7 @@ void CAsyncGetItemsForPlaylist::GetItemsForPlaylist(const std::shared_ptr<CFileI
       else
         sortDesc = GetSortDescription(*state, items);
 
-      if (sortDesc.sortBy == SortByLabel)
+      if (sortDesc.sortBy == SortBy::LABEL)
         items.ClearSortState();
 
       items.Sort(sortDesc);
@@ -647,8 +651,9 @@ void ShowToastNotification(const CFileItem& item, int titleId)
   const std::string message =
       localizedMediaType.empty() ? title : localizedMediaType + ": " + title;
 
-  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, g_localizeStrings.Get(titleId),
-                                        message);
+  CGUIDialogKaiToast::QueueNotification(
+      CGUIDialogKaiToast::Info,
+      CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(titleId), message);
 }
 
 std::string GetMusicDbItemPath(const CFileItem& item)
@@ -732,7 +737,7 @@ void PlayItem(const std::shared_ptr<CFileItem>& itemIn,
   {
     AddItemToPlayListAndPlay(item, nullptr, player);
   }
-  else if (item->HasMusicInfoTag())
+  else if (MUSIC::IsAudio(*item))
   {
     if (mode == ContentUtils::PlayMode::PLAY_FROM_HERE ||
         (mode == ContentUtils::PlayMode::CHECK_AUTO_PLAY_NEXT_ITEM && IsAutoPlayNextItem(*item)))
@@ -769,6 +774,10 @@ void PlayItem(const std::shared_ptr<CFileItem>& itemIn,
       playlistPlayer.SetCurrentPlaylist(PLAYLIST::Id::TYPE_NONE);
       playlistPlayer.Play(item, player);
     }
+  }
+  else
+  {
+    CLog::LogF(LOGERROR, "Unable to play item {}", item->GetPath());
   }
 }
 

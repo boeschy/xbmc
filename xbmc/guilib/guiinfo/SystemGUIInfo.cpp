@@ -20,12 +20,14 @@
 #include "application/ApplicationPowerHandling.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/LocalizeStrings.h"
 #include "guilib/guiinfo/GUIInfo.h"
 #include "guilib/guiinfo/GUIInfoHelper.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "powermanagement/PowerManager.h"
 #include "profiles/ProfileManager.h"
+#include "rendering/RenderSystem.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/MediaSettings.h"
 #include "settings/SettingUtils.h"
@@ -48,7 +50,8 @@ using namespace KODI::GUILIB;
 using namespace KODI::GUILIB::GUIINFO;
 
 CSystemGUIInfo::CSystemGUIInfo()
-  : m_gpuInfo(CGPUInfo::GetGPUInfo()), m_lastSysHeatInfoTime(-SYSTEM_HEAT_UPDATE_INTERVAL)
+  : m_gpuInfo(CGPUInfo::GetGPUInfo()),
+    m_lastSysHeatInfoTime(-SYSTEM_HEAT_UPDATE_INTERVAL)
 {
 }
 
@@ -65,12 +68,16 @@ std::string CSystemGUIInfo::GetSystemHeatInfo(int info) const
   }
 
   std::string text;
-  switch(info)
+  switch (info)
   {
     case SYSTEM_CPU_TEMPERATURE:
-      return m_cpuTemp.IsValid() ? g_langInfo.GetTemperatureAsString(m_cpuTemp) : g_localizeStrings.Get(10005); // Not available
+      return m_cpuTemp.IsValid() ? g_langInfo.GetTemperatureAsString(m_cpuTemp)
+                                 : CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                                       10005); // Not available
     case SYSTEM_GPU_TEMPERATURE:
-      return m_gpuTemp.IsValid() ? g_langInfo.GetTemperatureAsString(m_gpuTemp) : g_localizeStrings.Get(10005);
+      return m_gpuTemp.IsValid()
+                 ? g_langInfo.GetTemperatureAsString(m_gpuTemp)
+                 : CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(10005);
     case SYSTEM_FAN_SPEED:
       text = StringUtils::Format("{}%", m_fanSpeed * 2);
       break;
@@ -82,7 +89,8 @@ std::string CSystemGUIInfo::GetSystemHeatInfo(int info) const
         text = CServiceBroker::GetCPUInfo()->GetCoresUsageString();
 #endif
       else
-        text = g_localizeStrings.Get(10005); // Not available
+        text = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+            10005); // Not available
       break;
     default:
       break;
@@ -105,12 +113,16 @@ void CSystemGUIInfo::UpdateFPS()
   }
 }
 
-bool CSystemGUIInfo::InitCurrentItem(CFileItem *item)
+bool CSystemGUIInfo::InitCurrentItem(CFileItem* item)
 {
   return false;
 }
 
-bool CSystemGUIInfo::GetLabel(std::string& value, const CFileItem *item, int contextWindow, const CGUIInfo &info, std::string *fallback) const
+bool CSystemGUIInfo::GetLabel(std::string& value,
+                              const CFileItem* item,
+                              int contextWindow,
+                              const CGUIInfo& info,
+                              std::string* fallback) const
 {
   switch (info.GetInfo())
   {
@@ -118,7 +130,8 @@ bool CSystemGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
     // SYSTEM_*
     ///////////////////////////////////////////////////////////////////////////////////////////////
     case SYSTEM_TIME:
-      value = CDateTime::GetCurrentDateTime().GetAsLocalizedTime(static_cast<TIME_FORMAT>(info.GetData1()));
+      value = CDateTime::GetCurrentDateTime().GetAsLocalizedTime(
+          static_cast<TIME_FORMAT>(info.GetData1()));
       return true;
     case SYSTEM_DATE:
       if (info.GetData3().empty())
@@ -166,12 +179,14 @@ bool CSystemGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
         const RESOLUTION_INFO& resInfo = winSystem->GetGfxContext().GetResInfo();
 
         if (winSystem->IsFullScreen())
-          value = StringUtils::Format("{}x{} @ {:.2f} Hz - {}", resInfo.iScreenWidth,
-                                      resInfo.iScreenHeight, resInfo.fRefreshRate,
-                                      g_localizeStrings.Get(244));
+          value = StringUtils::Format(
+              "{}x{} @ {:.2f} Hz - {}", resInfo.iScreenWidth, resInfo.iScreenHeight,
+              resInfo.fRefreshRate,
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(244));
         else
-          value = StringUtils::Format("{}x{} - {}", resInfo.iScreenWidth, resInfo.iScreenHeight,
-                                      g_localizeStrings.Get(242));
+          value = StringUtils::Format(
+              "{}x{} - {}", resInfo.iScreenWidth, resInfo.iScreenHeight,
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(242));
       }
       else
       {
@@ -202,7 +217,9 @@ bool CSystemGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
     {
       KODI::MEMORY::MemoryStatus stat;
       KODI::MEMORY::GetMemoryStatus(&stat);
-      int iMemPercentFree = 100 - static_cast<int>(100.0f * (stat.totalPhys - stat.availPhys) / stat.totalPhys + 0.5f);
+      int iMemPercentFree =
+          100 -
+          static_cast<int>(100.0f * (stat.totalPhys - stat.availPhys) / stat.totalPhys + 0.5f);
       int iMemPercentUsed = 100 - iMemPercentFree;
 
       if (info.GetInfo() == SYSTEM_FREE_MEMORY)
@@ -244,30 +261,42 @@ bool CSystemGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
       {
         double fTime = g_alarmClock.GetRemaining("shutdowntimer");
         if (fTime > 60.0)
-          value = StringUtils::Format(g_localizeStrings.Get(13213),
-                                      g_alarmClock.GetRemaining("shutdowntimer") / 60.0);
+          value = StringUtils::Format(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13213),
+              g_alarmClock.GetRemaining("shutdowntimer") / 60.0);
         else
-          value = StringUtils::Format(g_localizeStrings.Get(13214),
-                                      g_alarmClock.GetRemaining("shutdowntimer"));
+          value = StringUtils::Format(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(13214),
+              g_alarmClock.GetRemaining("shutdowntimer"));
       }
       return true;
     case SYSTEM_PROFILENAME:
-      value = CServiceBroker::GetSettingsComponent()->GetProfileManager()->GetCurrentProfile().getName();
+      value = CServiceBroker::GetSettingsComponent()
+                  ->GetProfileManager()
+                  ->GetCurrentProfile()
+                  .getName();
       return true;
     case SYSTEM_PROFILECOUNT:
-      value = StringUtils::Format("{0}", CServiceBroker::GetSettingsComponent()->GetProfileManager()->GetNumberOfProfiles());
+      value = StringUtils::Format(
+          "{0}",
+          CServiceBroker::GetSettingsComponent()->GetProfileManager()->GetNumberOfProfiles());
       return true;
     case SYSTEM_PROFILEAUTOLOGIN:
     {
-      const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
+      const std::shared_ptr<CProfileManager> profileManager =
+          CServiceBroker::GetSettingsComponent()->GetProfileManager();
       int iProfileId = profileManager->GetAutoLoginProfileId();
-      if ((iProfileId < 0) || !profileManager->GetProfileName(iProfileId, value))
-        value = g_localizeStrings.Get(37014); // Last used profile
+      if ((iProfileId < MASTER_PROFILE_ID) || !profileManager->GetProfileName(iProfileId, value))
+        value = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+            37014); // Last used profile
       return true;
     }
     case SYSTEM_PROFILETHUMB:
     {
-      const std::string& thumb = CServiceBroker::GetSettingsComponent()->GetProfileManager()->GetCurrentProfile().getThumb();
+      const std::string& thumb = CServiceBroker::GetSettingsComponent()
+                                     ->GetProfileManager()
+                                     ->GetCurrentProfile()
+                                     .getThumb();
       value = thumb.empty() ? "DefaultUser.png" : thumb;
       return true;
     }
@@ -282,7 +311,8 @@ bool CSystemGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
       return true;
     case SYSTEM_STEREOSCOPIC_MODE:
     {
-      int iStereoMode = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE);
+      int iStereoMode = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+          CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE);
       value = std::to_string(iStereoMode);
       return true;
     }
@@ -348,7 +378,10 @@ bool CSystemGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
   return false;
 }
 
-bool CSystemGUIInfo::GetInt(int& value, const CGUIListItem *gitem, int contextWindow, const CGUIInfo &info) const
+bool CSystemGUIInfo::GetInt(int& value,
+                            const CGUIListItem* gitem,
+                            int contextWindow,
+                            const CGUIInfo& info) const
 {
   switch (info.GetInfo())
   {
@@ -387,7 +420,10 @@ bool CSystemGUIInfo::GetInt(int& value, const CGUIListItem *gitem, int contextWi
   return false;
 }
 
-bool CSystemGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contextWindow, const CGUIInfo &info) const
+bool CSystemGUIInfo::GetBool(bool& value,
+                             const CGUIListItem* gitem,
+                             int contextWindow,
+                             const CGUIInfo& info) const
 {
   switch (info.GetInfo())
   {
@@ -475,10 +511,11 @@ bool CSystemGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int context
       if (CServiceBroker::GetMediaManager().IsDiscInDrive())
       {
         MEDIA_DETECT::CCdInfo* pCdInfo = CServiceBroker::GetMediaManager().GetCdInfo();
-        value = pCdInfo && (pCdInfo->IsAudio(1) || pCdInfo->IsCDExtra(1) || pCdInfo->IsMixedMode(1));
+        value =
+            pCdInfo && (pCdInfo->IsAudio(1) || pCdInfo->IsCDExtra(1) || pCdInfo->IsMixedMode(1));
       }
       else
-    #endif
+#endif
       {
         value = false;
       }
@@ -577,10 +614,12 @@ bool CSystemGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int context
       value = CServiceBroker::GetAppParams()->IsStandAlone();
       return true;
     case SYSTEM_HAS_SHUTDOWN:
-      value = (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_POWERMANAGEMENT_SHUTDOWNTIME) > 0);
+      value = (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+                   CSettings::SETTING_POWERMANAGEMENT_SHUTDOWNTIME) > 0);
       return true;
     case SYSTEM_LOGGEDON:
-      value = !(CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_LOGIN_SCREEN);
+      value =
+          !(CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_LOGIN_SCREEN);
       return true;
     case SYSTEM_SHOW_EXIT_BUTTON:
       value = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_showExitButton;
@@ -650,7 +689,8 @@ bool CSystemGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int context
         const CGUIMediaWindow* window{GUIINFO::GetMediaWindow(contextWindow)};
         if (window)
         {
-          value = CMediaSettings::GetInstance().GetWatchedMode(window->CurrentDirectory().GetContent()) == WatchedModeUnwatched;
+          value = CMediaSettings::GetInstance().GetWatchedMode(
+                      window->CurrentDirectory().GetContent()) == WatchedModeUnwatched;
           return true;
         }
       }

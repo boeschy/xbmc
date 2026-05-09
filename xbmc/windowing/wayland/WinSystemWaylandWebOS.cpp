@@ -12,23 +12,37 @@
 #include "OSScreenSaverWebOS.h"
 #include "Registry.h"
 #include "SeatWebOS.h"
+#include "ServiceBroker.h"
 #include "ShellSurfaceWebOSShell.h"
+#include "VideoRenderers/HwDecRender/RendererStarfish.h"
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
-#include "cores/AudioEngine/Sinks/AESinkStarfish.h"
-#include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecStarfish.h"
-#include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererStarfish.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "messaging/ApplicationMessenger.h"
+#include "settings/DisplaySettings.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/JSONVariantParser.h"
 #include "utils/log.h"
+
+#include "platform/linux/WebOSTVPlatformConfig.h"
 
 #include <CompileInfo.h>
 
 namespace
 {
 constexpr const char* LUNA_REGISTER_APP = "luna://com.webos.service.applicationmanager/registerApp";
+
+constexpr unsigned int WIDTH_1080P = 1920;
+constexpr unsigned int HEIGHT_1080P = 1080;
+constexpr unsigned int SCREEN_WIDTH_4K = 3840;
+constexpr unsigned int SCREEN_HEIGHT_4K = 2160;
+
+constexpr unsigned int WIDTH_720P = 1280;
+constexpr unsigned int HEIGHT_720P = 720;
+constexpr unsigned int SCREEN_WIDTH_1080P = 1080;
+constexpr unsigned int SCREEN_HEIGHT_1080P = 1920;
 } // namespace
 
 namespace KODI::WINDOWING::WAYLAND
@@ -39,9 +53,7 @@ bool CWinSystemWaylandWebOS::InitWindowSystem()
   if (!CWinSystemWayland::InitWindowSystem())
     return false;
 
-  CDVDVideoCodecStarfish::Register();
   CRendererStarfish::Register();
-  CAESinkStarfish::Register();
 
   m_webosRegistry = std::make_unique<CRegistry>(*GetConnection());
   m_webosRegistry->RequestSingleton(m_compositor, 1, 4);
@@ -194,6 +206,45 @@ bool CWinSystemWaylandWebOS::OnAppLifecycleEvent(LSHandle* sh, LSMessage* reply)
     shellSurface->SetFullScreen(nullptr, 60.0f);
 
   return true;
+}
+
+// The reported resolution is always 1080p even for 4K devices and 720p for HD devices
+// See: https://webostv.developer.lge.com/develop/specifications/app-resolution
+// So we need to adjust the reported resolution to match the actual screen resolution
+// Note: Should webOS ever change to support more resolutions we need to update this code
+void CWinSystemWaylandWebOS::UpdateResolutions()
+{
+  CWinSystemWayland::UpdateResolutions();
+
+  RESOLUTION_INFO& res = CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP);
+  if (res.iWidth == WIDTH_1080P && res.iHeight == HEIGHT_1080P)
+  {
+    // set supported video resolution to 4K for 1080p GUI resolution device
+    res.iScreenHeight = SCREEN_HEIGHT_4K;
+    res.iScreenWidth = SCREEN_WIDTH_4K;
+  }
+  else if (res.iWidth == WIDTH_720P && res.iHeight == HEIGHT_720P)
+  {
+    // set supported video resolution to 1080p for 720p GUI resolution device
+    res.iScreenHeight = SCREEN_HEIGHT_1080P;
+    res.iScreenWidth = SCREEN_WIDTH_1080P;
+  }
+  else
+    CLog::Log(LOGWARNING, "Cannot adjust resolution, due to unmapped w x h values: {} x {}",
+              res.iWidth, res.iHeight);
+}
+
+float CWinSystemWaylandWebOS::GetGuiSdrPeakLuminance() const
+{
+  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  const int guiSdrPeak = settings->GetInt(CSettings::SETTING_VIDEOSCREEN_GUISDRPEAKLUMINANCE);
+
+  return (0.7f * guiSdrPeak + 30.0f) / 100.0f;
+}
+
+bool CWinSystemWaylandWebOS::IsHDRDisplay()
+{
+  return WebOSTVPlatformConfig::SupportsHDR();
 }
 
 } // namespace KODI::WINDOWING::WAYLAND

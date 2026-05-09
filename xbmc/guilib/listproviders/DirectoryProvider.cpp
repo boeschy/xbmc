@@ -16,18 +16,19 @@
 #include "addons/RepositoryUpdater.h"
 #include "favourites/FavouritesService.h"
 #include "filesystem/Directory.h"
-#include "guilib/LocalizeStrings.h"
 #include "interfaces/AnnouncementManager.h"
 #include "interfaces/IAnnouncer.h"
+#include "jobs/JobManager.h"
 #include "music/MusicFileItemClassify.h"
 #include "music/MusicThumbLoader.h"
 #include "pictures/PictureThumbLoader.h"
 #include "pvr/PVRManager.h"
 #include "pvr/PVRThumbLoader.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/ExecString.h"
-#include "utils/JobManager.h"
 #include "utils/PlayerUtils.h"
 #include "utils/SortUtils.h"
 #include "utils/StringUtils.h"
@@ -236,7 +237,7 @@ public:
   ~CDirectoryJob() override = default;
 
   const char* GetType() const override { return "directory"; }
-  bool operator==(const CJob* job) const override
+  bool Equals(const CJob* job) const override
   {
     if (strcmp(job->GetType(), GetType()) == 0)
     {
@@ -253,7 +254,7 @@ public:
     if (CDirectory::GetDirectory(m_url, items, "", DIR_FLAG_DEFAULTS))
     {
       // sort the items if necessary
-      if (m_sort.sortBy != SortByNone)
+      if (m_sort.sortBy != SortBy::NONE)
         items.Sort(m_sort);
 
       // limit must not exceed the number of items
@@ -285,7 +286,8 @@ public:
         if (!m_target.empty())
         {
           CFileItem item(m_url, true);
-          item.SetLabel(g_localizeStrings.Get(22082)); // More...
+          item.SetLabel(
+              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(22082)); // More...
           item.SetArt("icon", "DefaultFolder.png");
           item.SetProperty("node.target", m_target);
           item.SetProperty("node.type", "target_folder"); // make item identifiable, e.g. by skins
@@ -361,7 +363,8 @@ private:
 } // unnamed namespace
 
 CDirectoryProvider::CDirectoryProvider(const TiXmlElement* element, int parentID)
-  : IListProvider(parentID), m_nextJobTimer(this)
+  : IListProvider(parentID),
+    m_nextJobTimer(this)
 {
   assert(element);
   if (!element->NoChildren())
@@ -511,8 +514,8 @@ void CDirectoryProvider::Reset()
     m_currentTarget.clear();
     m_currentUrl.clear();
     m_itemTypes.clear();
-    m_currentSort.sortBy = SortByNone;
-    m_currentSort.sortOrder = SortOrderAscending;
+    m_currentSort.sortBy = SortBy::NONE;
+    m_currentSort.sortOrder = SortOrder::ASCENDING;
     m_currentLimit = 0;
     m_currentBrowse = BrowseMode::AUTO;
     m_updateState = UpdateState::OK;
@@ -536,7 +539,21 @@ void CDirectoryProvider::OnJobComplete(unsigned int jobID, bool success, CJob* j
   std::unique_lock lock(m_section);
   if (success)
   {
-    m_items = static_cast<CDirectoryJob*>(job)->GetItems();
+    if (job->GetPendingCallbackCount() > 1)
+    {
+      // Deep copy items since other callbacks will also receive this job's results,
+      // and each container needs independent visibility state and layout
+      const auto& sourceItems = static_cast<CDirectoryJob*>(job)->GetItems();
+      m_items.clear();
+      m_items.reserve(sourceItems.size());
+      for (const auto& item : sourceItems)
+        m_items.emplace_back(std::make_shared<CGUIStaticItem>(*item));
+    }
+    else
+    {
+      m_items = static_cast<CDirectoryJob*>(job)->GetItems();
+    }
+
     m_currentTarget = static_cast<CDirectoryJob*>(job)->GetTarget();
     static_cast<CDirectoryJob*>(job)->GetItemTypes(m_itemTypes);
     if (m_updateState == UpdateState::OK)
@@ -588,9 +605,9 @@ bool CDirectoryProvider::OnEventPublished(Topic topic /*= Topic::UNSPECIFIED*/)
       break;
     case Topic::PLAYER:
       // We don't need to do anything if there is no matching sort method.
-      if (m_currentSort.sortBy != SortByNone && m_currentSort.sortBy != SortByLastPlayed &&
-          m_currentSort.sortBy != SortByDateAdded && m_currentSort.sortBy != SortByPlaycount &&
-          m_currentSort.sortBy != SortByLastUsed)
+      if (m_currentSort.sortBy != SortBy::NONE && m_currentSort.sortBy != SortBy::LAST_PLAYED &&
+          m_currentSort.sortBy != SortBy::DATE_ADDED && m_currentSort.sortBy != SortBy::PLAYCOUNT &&
+          m_currentSort.sortBy != SortBy::LAST_USED)
         return false;
       break;
     case Topic::VIDEO_LIBRARY:
@@ -774,8 +791,8 @@ bool CDirectoryProvider::UpdateSort()
   std::unique_lock lock(m_section);
   SortBy sortMethod(SortUtils::SortMethodFromString(m_sortMethod.GetLabel(GetParentId(), false)));
   SortOrder sortOrder(SortUtils::SortOrderFromString(m_sortOrder.GetLabel(GetParentId(), false)));
-  if (sortOrder == SortOrderNone)
-    sortOrder = SortOrderAscending;
+  if (sortOrder == SortOrder::NONE)
+    sortOrder = SortOrder::ASCENDING;
 
   if (sortMethod == m_currentSort.sortBy && sortOrder == m_currentSort.sortOrder)
     return false;

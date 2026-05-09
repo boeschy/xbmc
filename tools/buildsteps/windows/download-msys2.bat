@@ -16,7 +16,7 @@
 ::    GNU General Public License for more details.
 ::
 ::    You should have received a copy of the GNU General Public License
-::    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+::    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ::-------------------------------------------------------------------------------------
 
 @echo off
@@ -32,10 +32,23 @@ set msysver=20231026
 set msys2=msys64
 set arch=x86_64
 set instdir=%WORKSPACE%\project\BuildDependencies
-set msyspackages=diffutils gcc make patch perl tar yasm
+set msyspackages=diffutils gcc make nasm patch perl tar yasm
 set gaspreprocurl=https://github.com/FFmpeg/gas-preprocessor/archive/master.tar.gz
 set usemirror=yes
 set opt=mintty
+set hash_file=%instdir%\%msys2%\installed_hash.txt
+
+:: get current SHA256 hash of this script file (download-msys2.bat)
+for /f "delims=" %%a in ('PowerShell "Get-FileHash %~nx0 | Select-Object -ExpandProperty Hash"') do set hash=%%a
+
+:: remove MSYS2 install if the installed hash is unknown (installed_hash.txt not found)
+if not exist %hash_file% if exist "%instdir%\%msys2%" rmdir "%instdir%\%msys2%" /S /Q
+
+:: remove MSYS2 install if the installed hash is different from the current hash
+if exist %hash_file% (
+  set /p installed_hash=<%hash_file%
+  if not !installed_hash!==%hash% rmdir "%instdir%\%msys2%" /S /Q
+)
 
 :: if KODI_MIRROR is not set externally to this script, set it to the default mirror URL
 if "%KODI_MIRROR%"=="" set KODI_MIRROR=https://mirrors.kodi.tv
@@ -150,7 +163,7 @@ if not exist "%instdir%\%msys2%\home\%USERNAME%" mkdir "%instdir%\%msys2%\home\%
         )>>"%instdir%\%msys2%\home\%USERNAME%\.minttyrc"
 
 :updatemirrors
-if not "%usemirror%"=="yes" GOTO rebase
+if not "%usemirror%"=="yes" GOTO preparedirs
     echo.-------------------------------------------------------------------------------
     echo.update pacman mirrors
     echo.-------------------------------------------------------------------------------
@@ -173,14 +186,6 @@ if not "%usemirror%"=="yes" GOTO rebase
         )
     endlocal
 
-:rebase
-if %msys2%==msys32 (
-    echo.-------------------------------------------------------------------------------
-    echo.rebase msys32 system
-    echo.-------------------------------------------------------------------------------
-    call %instdir%\msys32\autorebase.bat
-    )
-
 :preparedirs
 if not exist %instdir%\build mkdir %instdir%\build
 if not exist %instdir%\downloads2 mkdir %instdir%\downloads2
@@ -189,41 +194,19 @@ if not exist %instdir%\locals\win32 mkdir %instdir%\locals\win32
 if not exist %instdir%\locals\x64 mkdir %instdir%\locals\x64
 if not exist %instdir%\locals\arm64 mkdir %instdir%\locals\arm64
 
-if not exist %instdir%\locals\win32\share (
-    echo.-------------------------------------------------------------------------------
-    echo.create local win32 folders
-    echo.-------------------------------------------------------------------------------
-    mkdir %instdir%\locals\win32\bin
-    mkdir %instdir%\locals\win32\etc
-    mkdir %instdir%\locals\win32\include
-    mkdir %instdir%\locals\win32\lib
-    mkdir %instdir%\locals\win32\lib\pkgconfig
-    mkdir %instdir%\locals\win32\share
-    )
-
-if not exist %instdir%\locals\x64\share (
-    echo.-------------------------------------------------------------------------------
-    echo.create local x64 folders
-    echo.-------------------------------------------------------------------------------
-    mkdir %instdir%\locals\x64\bin
-    mkdir %instdir%\locals\x64\etc
-    mkdir %instdir%\locals\x64\include
-    mkdir %instdir%\locals\x64\lib
-    mkdir %instdir%\locals\x64\lib\pkgconfig
-    mkdir %instdir%\locals\x64\share
-    )
-
-if not exist %instdir%\locals\arm64\share (
-    echo.-------------------------------------------------------------------------------
-    echo.create local arm64 folders
-    echo.-------------------------------------------------------------------------------
-    mkdir %instdir%\locals\arm64\bin
-    mkdir %instdir%\locals\arm64\etc
-    mkdir %instdir%\locals\arm64\include
-    mkdir %instdir%\locals\arm64\lib
-    mkdir %instdir%\locals\arm64\lib\pkgconfig
-    mkdir %instdir%\locals\arm64\share
-    )
+for %%x in (win32 x64 arm64) do (
+  if not exist %instdir%\locals\%%x\share (
+      echo.-------------------------------------------------------------------------------
+      echo.create local %%x folders
+      echo.-------------------------------------------------------------------------------
+      mkdir %instdir%\locals\%%x\bin
+      mkdir %instdir%\locals\%%x\etc
+      mkdir %instdir%\locals\%%x\include
+      mkdir %instdir%\locals\%%x\lib
+      mkdir %instdir%\locals\%%x\lib\pkgconfig
+      mkdir %instdir%\locals\%%x\share
+      )
+)
 
 if not exist %instdir%\%msys2%\etc\fstab. GOTO writeFstab
 
@@ -253,8 +236,6 @@ if "%cygdrive%"=="no" echo.none / cygdrive binary,posix=0,noacl,user 0 ^0>>%inst
     echo.%instdir%\downloads2\       /var/cache/pacman/pkg
     echo.%instdir%\win32\            /depends/win32
     echo.%instdir%\x64\              /depends/x64
-    echo.%instdir%\win10-arm\        /depends/win10-arm
-    echo.%instdir%\win10-win32\      /depends/win10-win32
     echo.%instdir%\win10-x64\        /depends/win10-x64
     echo.%instdir%\arm64\            /depends/arm64
     echo.%instdir%\..\..\            /xbmc
@@ -454,6 +435,8 @@ IF ERRORLEVEL == 1 (
     ECHO Something goes wrong...
     exit /B 1
   )
+
+echo %hash%>%hash_file%
 
 echo.-------------------------------------------------------------------------------
 echo.install msys2 system done

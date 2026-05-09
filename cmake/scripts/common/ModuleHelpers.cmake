@@ -369,7 +369,25 @@ macro(BUILD_DEP_TARGET)
   endif()
 
   if(BUILD_COMMAND)
-    set(BUILD_COMMAND BUILD_COMMAND ${BUILD_COMMAND})
+    # DEP_BUILDENV is potentially populated in a toolchain file. We dont want to use it
+    # for host tool builds, so make sure to check _LIB_TYPE
+    if(NOT CMAKE_ARGS AND
+      (DEP_BUILDENV AND NOT ${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}_LIB_TYPE STREQUAL "native"))
+      # DEP_BUILDENV only used for non cmake externalproject_add builds
+      # iterate through BUILD_COMMAND looking for multiple COMMAND, we need to
+      # add DEP_BUILDENV for each distinct COMMAND
+      set(tmp_build_command ${DEP_BUILDENV})
+      foreach(item ${BUILD_COMMAND})
+        list(APPEND tmp_build_command ${item})
+        if(item STREQUAL "COMMAND")
+          list(APPEND tmp_build_command ${DEP_BUILDENV})
+        endif()
+      endforeach()
+      set(BUILD_COMMAND BUILD_COMMAND ${tmp_build_command})
+      unset(tmp_build_command)
+    else()
+      set(BUILD_COMMAND BUILD_COMMAND ${BUILD_COMMAND})
+    endif()
   endif()
 
   if(INSTALL_COMMAND)
@@ -446,6 +464,8 @@ macro(BUILD_DEP_TARGET)
     endif()
     set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_RELEASE ${DEP_LOCATION}/${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LOCATION_PATH}/${_LIBNAME}.${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LOCATION_POSTFIX})
     set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_RELEASE})
+  elseif(DEFINED ${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_INTERFACE_LIB)
+    # Dont create LIBRARY variables for interface libs. We consider these header only for now
   else()
     set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_RELEASE ${DEP_LOCATION}/${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LOCATION_PATH}/${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_BYPRODUCT})
     set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_LIBRARY_RELEASE})
@@ -509,6 +529,14 @@ macro(BUILD_DEP_TARGET)
   set_target_properties(${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_BUILD_NAME} PROPERTIES FOLDER "External Projects")
 
   CLEAR_BUILD_VARS()
+
+  # Set both <UPPER>_FOUND and <lower>_FOUND as we have some legacy macros/functions that
+  # rely on <UPPER>_FOUND, but cmake has new policies that are heading towards <lower>_FOUND
+  set(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_FOUND 1)
+
+  string(TOUPPER "${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}" _search_upper)
+  set(${_search_upper}_FOUND ON CACHE BOOL "${_search_upper}_FOUND" FORCE)
+  unset(_search_upper)
 endmacro()
 
 # Macro to test format of line endings of a patch
@@ -655,11 +683,18 @@ endmacro()
 #
 macro(ADD_TARGET_COMPILE_DEFINITION)
   if(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_COMPILE_DEFINITIONS)
-    get_target_property(_ALIASTARGET ${APP_NAME_LC}::${CMAKE_FIND_PACKAGE_NAME} ALIASED_TARGET)
+
+    if("${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_TYPE}" STREQUAL "LIBRARY")
+      set(TARGET_NAMESPACE LIBRARY)
+    else()
+      set(TARGET_NAMESPACE ${APP_NAME_LC})
+    endif()
+
+    get_target_property(_ALIASTARGET ${TARGET_NAMESPACE}::${CMAKE_FIND_PACKAGE_NAME} ALIASED_TARGET)
     if(_ALIASTARGET)
       set(LIB_TARGET ${_ALIASTARGET})
     else()
-      set(LIB_TARGET ${APP_NAME_LC}::${CMAKE_FIND_PACKAGE_NAME})
+      set(LIB_TARGET ${TARGET_NAMESPACE}::${CMAKE_FIND_PACKAGE_NAME})
     endif()
 
     set_property(TARGET ${LIB_TARGET} APPEND PROPERTY
@@ -691,14 +726,20 @@ macro(SEARCH_EXISTING_PACKAGES)
   find_package(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME} ${CONFIG_${CMAKE_FIND_PACKAGE_NAME}_FIND_SPEC} CONFIG ${SEARCH_QUIET}
                                                          HINTS ${DEPENDS_PATH}/share/cmake
                                                                ${DEPENDS_PATH}/lib/cmake
-                                                         ${${CORE_PLATFORM_NAME_LC}_SEARCH_CONFIG})
+                                                         ${${CORE_SYSTEM_NAME}_SEARCH_CONFIG})
 
   # fallback to pkgconfig to cover all bases
   if(NOT ${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_FOUND)
     find_package(PkgConfig ${SEARCH_QUIET})
 
-    if(PKG_CONFIG_FOUND AND NOT (WIN32 OR WINDOWSSTORE))
-      pkg_check_modules(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME} ${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME_PC}${PC_${CMAKE_FIND_PACKAGE_NAME}_FIND_SPEC} ${SEARCH_QUIET} IMPORTED_TARGET)
+    if(PKG_CONFIG_FOUND)
+      foreach(_pc_search_name ${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME_PC})
+        pkg_check_modules(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME} ${_pc_search_name}${PC_${CMAKE_FIND_PACKAGE_NAME}_FIND_SPEC} ${SEARCH_QUIET} IMPORTED_TARGET)
+
+        if(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_FOUND)
+          break()
+        endif()
+      endforeach()
     endif()
   endif()
 endmacro()
@@ -709,3 +750,236 @@ endmacro()
 define_property(TARGET PROPERTY LIB_BUILD
                        BRIEF_DOCS "This target will be compiling the library"
                        FULL_DOCS "This target will be compiling the library")
+
+
+# Functions to generate meson cross files for a platform
+
+macro(generate_mesoncrossfile)
+
+  create_mesonbinaries()
+  file(WRITE ${DEPENDS_PATH}/share/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}-cross-file.meson "${meson_binaries_string}\n")
+
+  create_mesonhostmachine()
+  file(APPEND ${DEPENDS_PATH}/share/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}-cross-file.meson "${meson_host_machine_string}\n")
+
+  create_mesonproperties()
+  file(APPEND ${DEPENDS_PATH}/share/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}-cross-file.meson "${meson_properties_string}\n")
+
+  create_mesonbuiltin()
+  file(APPEND ${DEPENDS_PATH}/share/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}-cross-file.meson "${meson_builtin_string}\n")
+
+endmacro()
+
+# Creates the [binaries] block of a meson cross file
+# sets meson_binaries_string to PARENT_SCOPE
+# Format for binaries is <meson_app_name> <target_app_variable>
+# Additional module specific binaries can be supplied by setting
+# ${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}_BINARIES with suitable pairs
+function(create_mesonbinaries)
+
+  set(binariespairs "c" "CMAKE_C_COMPILER"
+                    "cpp" "CMAKE_CXX_COMPILER"
+                    "ar" "CMAKE_AR"
+                    "cmake" "CMAKE_COMMAND")
+
+  if(${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}_BINARIES)
+    list(APPEND binariespairs ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}_BINARIES})
+  endif()
+
+  if(NOT "${CMAKE_STRIP}" STREQUAL "")
+    list(APPEND binariespairs "strip" "CMAKE_STRIP")
+  endif()
+
+  if(PKG_CONFIG_EXECUTABLE)
+    list(APPEND binariespairs "pkg-config" "PKG_CONFIG_EXECUTABLE")
+  endif()
+
+  # Get/set loop limit (Size - 1) from size of binariespairs list
+  list(LENGTH binariespairs options_length)
+  math(EXPR options_length "${options_length} - 1")
+
+  foreach(option_arg RANGE 0 ${options_length} 2)
+    math(EXPR cmake_arg "${option_arg} + 1")
+    # meson option name
+    list(GET binariespairs ${option_arg} meson_label_name)
+    # cmake source variable name
+    list(GET binariespairs ${cmake_arg} cmake_binary_name)
+
+    set(input "${${cmake_binary_name}}")
+    string(STRIP "${input}" input)
+
+    string(PREPEND input "${meson_label_name} = '")
+    string(APPEND input "'")
+    string(APPEND output_string "${input}\n")
+  endforeach()
+
+  # Easiest to just prepend header at the end of the full string creation
+  string(PREPEND output_string "[binaries]\n")
+  set(meson_binaries_string ${output_string} PARENT_SCOPE)
+endfunction()
+
+# Creates the [host_machine] block of a meson cross file
+# sets meson_host_machine_string to PARENT_SCOPE
+function(create_mesonhostmachine)
+
+  # CMAKE_C_COMPILER_ARCHITECTURE_ID is only populated for MSVC prior to cmake 4.1
+  # cmake 4.1+ does populate for unix platforms
+  if(CMAKE_C_COMPILER_ARCHITECTURE_ID)
+    string(TOUPPER "${CMAKE_C_COMPILER_ARCHITECTURE_ID}" UPPER_C_ARCH)
+  else()
+    string(TOUPPER "${CPU}" UPPER_C_ARCH)
+  endif()
+
+  # Non-exhaustive list to map cmake CPU to meson cpu names
+  # https://mesonbuild.com/Reference-tables.html#cpu-families
+  if("${UPPER_C_ARCH}" MATCHES "ARM64" OR "${UPPER_C_ARCH}" MATCHES "AARCH64")
+    set(meson_cpu_family aarch64)
+  elseif("${UPPER_C_ARCH}" MATCHES "ARMV.")
+    set(meson_cpu_family arm)
+  elseif("${UPPER_C_ARCH}" STREQUAL "X64" OR "${UPPER_C_ARCH}" STREQUAL "X86_64")
+    set(meson_cpu_family x86_64)
+  elseif("${UPPER_C_ARCH}" STREQUAL "X86" OR "${UPPER_C_ARCH}" MATCHES "I.86")
+    set(meson_cpu_family x86)
+  elseif("${UPPER_C_ARCH}" MATCHES "WASM")
+    set(meson_cpu_family wasm32)
+  endif()
+
+  # Non-exhaustive list to map cmake to meson os names
+  # https://mesonbuild.com/Reference-tables.html#operating-system-names
+  if(CMAKE_SYSTEM_NAME MATCHES "Android")
+    set(meson_sys_name android)
+  elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    set(meson_sys_name darwin)
+  elseif(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+    set(meson_sys_name emscripten)
+  elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+    set(meson_sys_name freebsd)
+  elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
+    set(meson_sys_name linux)
+  elseif(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+    set(meson_sys_name netbsd)
+  elseif(CMAKE_SYSTEM_NAME MATCHES Windows)
+    set(meson_sys_name windows)
+  endif()
+
+  string(APPEND output_string "system = '${meson_sys_name}'\n")
+  string(APPEND output_string "cpu_family = '${meson_cpu_family}'\n")
+
+  # cpu is apparently unnecessary from a functional stand point, however the field
+  # is still required. We have no easy way to populate, so for now just use an empty value
+  string(APPEND output_string "cpu = ''\n")
+  string(APPEND output_string "endian = 'little'\n")
+
+  # Easiest to just prepend header at the end of the full string creation
+  string(PREPEND output_string "[host_machine]\n")
+  set(meson_host_machine_string ${output_string} PARENT_SCOPE)
+endfunction()
+
+# Creates the [properties] block of a meson cross file
+# sets meson_properties_string to PARENT_SCOPE
+function(create_mesonproperties)
+
+  string(APPEND output_string "pkg_config_libdir = '${DEPENDS_PATH}/lib/pkgconfig'\n")
+
+  # Easiest to just prepend header at the end of the full string creation
+  string(PREPEND output_string "[properties]\n")
+  set(meson_properties_string ${output_string} PARENT_SCOPE)
+endfunction()
+
+# Creates the [Built-in Options] block of a meson cross file
+# sets meson_builtin_string to PARENT_SCOPE
+function(create_mesonbuiltin)
+
+  # Pair is of the format: <meson field> <cmake_equivalent>
+  # The cmake field is based on the name of the variable, but removing the CMAKE_ prefix
+  # This allows us to also provide a module specific additional variable if additions are required
+  # eg. CMAKE_C_FLAGS dav1d_C_FLAGS
+  set(builtinpairs "c_args" "C_FLAGS"
+                   "c_link_args" "EXE_LINKER_FLAGS"
+                   "cpp_args" "CXX_FLAGS"
+                   "cpp_link_args" "EXE_LINKER_FLAGS")
+
+  # Get/set loop limit (Size - 1) from size of builtinpairs list
+  list(LENGTH builtinpairs options_length)
+  math(EXPR options_length "${options_length} - 1")
+
+  foreach(option_arg RANGE 0 ${options_length} 2)
+    math(EXPR cmake_flag_arg "${option_arg} + 1")
+    # meson option name
+    list(GET builtinpairs ${option_arg} meson_label_name)
+    # cmake source variable name
+    list(GET builtinpairs ${cmake_flag_arg} cmake_flag_name)
+
+    set(input "${CMAKE_${cmake_flag_name}} ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_${cmake_flag_name}}")
+    string(STRIP "${input}" input)
+    if(input STREQUAL "")
+      string(APPEND output_string "${meson_label_name} = []\n")
+    else()
+      # builtinpairs cmake source variables are specifically single strings, and not lists
+      string(REGEX REPLACE "[ ]+" "', '" tmp_string "${input}")
+      string(PREPEND tmp_string "${meson_label_name} = ['")
+      string(APPEND tmp_string "']")
+      string(APPEND output_string "${tmp_string}\n")
+    endif()
+  endforeach()
+
+  # allow a module to override the default_library type.
+  if(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_libType)
+    string(APPEND output_string "default_library = '${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_libType}'\n")
+  else()
+    string(APPEND output_string "default_library = 'static'\n")
+  endif()
+
+  string(APPEND output_string "prefix = '${DEPENDS_PATH}'\n")
+  string(APPEND output_string "libdir = 'lib'\n")
+  string(APPEND output_string "bindir = 'bin'\n")
+  string(APPEND output_string "includedir = 'include'\n")
+
+  # Easiest to just prepend header at the end of the full string creation
+  string(PREPEND output_string "[built-in options]\n")
+  set(meson_builtin_string ${output_string} PARENT_SCOPE)
+endfunction()
+
+# Creates a variable and sets in parent scope - ${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_dev_env
+# Variable is purposely set with an ending COMMAND to allow the variable to be placed
+# in an externalproject_add build or configure step.
+#
+# eg.     set(BUILD_COMMAND ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_dev_env}
+#                           Ninja::Ninja -C ./build)
+#
+function(create_module_dev_env)
+  if(WIN32 OR WINDOWS_STORE)
+    set(Vcvars_FIND_VCVARSALL TRUE)
+
+    if(NOT VERBOSE_FIND)
+      set(Vcvars_FIND_QUIETLY TRUE)
+    endif()
+
+    find_package(Vcvars REQUIRED)
+    if(WINDOWS_STORE)
+      set(vcstore store)
+    endif()
+
+    string(TOLOWER "${CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE}" _lower_hostarch)
+    string(TOLOWER "${CMAKE_GENERATOR_PLATFORM}" _lower_targetarch)
+
+    if("${_lower_hostarch}" STREQUAL "x64")
+      set(_lower_hostarch amd64)
+    endif()
+    if("${_lower_targetarch}" STREQUAL "x64")
+      set(_lower_targetarch amd64)
+    elseif("${_lower_targetarch}" STREQUAL "win32")
+      set(_lower_targetarch x86)
+    endif()
+
+    if("${_lower_hostarch}" STREQUAL "${_lower_targetarch}")
+      set(vcarch ${_lower_hostarch})
+    else()
+      set(vcarch ${_lower_hostarch}_${_lower_targetarch})
+    endif()
+
+    set(cmd_wrapper "${Vcvars_BATCH_FILE}" ${vcarch} ${vcstore} ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})
+    # trailing COMMAND sets externalproject_add commands up, and is required
+    set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_dev_env ${cmd_wrapper} COMMAND PARENT_SCOPE)
+  endif()
+endfunction()

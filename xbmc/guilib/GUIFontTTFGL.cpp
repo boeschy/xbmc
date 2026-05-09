@@ -14,6 +14,7 @@
 #include "Texture.h"
 #include "TextureManager.h"
 #include "gui3d.h"
+#include "rendering/GLExtensions.h"
 #include "rendering/MatrixGL.h"
 #include "rendering/gl/RenderSystemGL.h"
 #include "settings/AdvancedSettings.h"
@@ -21,6 +22,7 @@
 #include "utils/GLUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
+#include "windowing/WinSystem.h"
 
 #include <cassert>
 #include <memory>
@@ -102,7 +104,7 @@ bool CGUIFontTTFGL::FirstBegin()
                  pixformat, GL_UNSIGNED_BYTE, 0);
 
 #ifdef GL_TEXTURE_MAX_ANISOTROPY_EXT
-    if (CServiceBroker::GetRenderSystem()->IsExtSupported("GL_EXT_texture_filter_anisotropic"))
+    if (CGLExtensions::IsExtensionSupported(CGLExtensions::EXT_texture_filter_anisotropic))
     {
       int32_t aniso =
           CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_guiAnisotropicFiltering;
@@ -336,8 +338,7 @@ std::unique_ptr<CTexture> CGUIFontTTFGL::ReallocTexture(unsigned int& newHeight)
 
   if (!newTexture || !newTexture->GetPixels())
   {
-    CLog::Log(LOGERROR, "GUIFontTTFGL::{}: Error creating new cache texture for size {:f}",
-              __func__, m_height);
+    CLog::LogF(LOGERROR, "Error creating new cache texture for size {:f}", m_height);
     return nullptr;
   }
 
@@ -346,8 +347,8 @@ std::unique_ptr<CTexture> CGUIFontTTFGL::ReallocTexture(unsigned int& newHeight)
   m_textureWidth = newTexture->GetWidth();
   m_textureScaleX = 1.0f / m_textureWidth;
   if (m_textureHeight < newHeight)
-    CLog::Log(LOGWARNING, "GUIFontTTFGL::{}: allocated new texture with height of {}, requested {}",
-              __func__, m_textureHeight, newHeight);
+    CLog::LogF(LOGWARNING, "allocated new texture with height of {}, requested {}", m_textureHeight,
+               newHeight);
   m_staticCache.Flush();
   m_dynamicCache.Flush();
 

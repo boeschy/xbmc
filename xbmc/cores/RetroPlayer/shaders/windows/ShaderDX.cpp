@@ -31,12 +31,12 @@ CShaderDX::~CShaderDX()
     m_pInputBuffer->Release();
 }
 
-bool CShaderDX::Create(std::string shaderSource,
+bool CShaderDX::Create(unsigned int passIdx,
+                       std::string passAlias,
                        std::string shaderPath,
+                       std::string shaderSource,
                        ShaderParameterMap shaderParameters,
                        std::vector<std::shared_ptr<IShaderLut>> luts,
-                       float2 viewPortSize,
-                       unsigned int passIdx,
                        unsigned int frameCountMod)
 {
   if (shaderPath.empty())
@@ -45,12 +45,12 @@ bool CShaderDX::Create(std::string shaderSource,
     return false;
   }
 
-  m_shaderSource = std::move(shaderSource);
+  m_passIdx = passIdx;
+  m_passAlias = std::move(passAlias);
   m_shaderPath = std::move(shaderPath);
+  m_shaderSource = std::move(shaderSource);
   m_shaderParameters = std::move(shaderParameters);
   m_luts = std::move(luts);
-  m_viewportSize = viewPortSize;
-  m_passIdx = passIdx;
   m_frameCountMod = frameCountMod;
   //m_pSampler = reinterpret_cast<ID3D11SamplerState*>(sampler);
 
@@ -107,6 +107,7 @@ void CShaderDX::SetSizes(const float2& prevSize,
 
 void CShaderDX::PrepareParameters(
     const RETRO::ViewportCoordinates& dest,
+    const float2 fullDestSize,
     IShaderTexture& sourceTexture,
     const std::vector<std::unique_ptr<IShaderTexture>>& pShaderTextures,
     const std::vector<std::unique_ptr<IShader>>& pShaders,
@@ -149,7 +150,7 @@ void CShaderDX::PrepareParameters(
     v[3].y = dest[3].y - m_outputSize.y / 2;
 
     // Set destination rectangle size for the last pass
-    m_destSize = {dest[2].x - dest[0].x, dest[2].y - dest[0].y};
+    m_destSize = fullDestSize;
   }
 
   // top left
@@ -252,8 +253,8 @@ void CShaderDX::SetShaderParameters(const CD3DTexture& sourceTexture)
   //! @todo(optimization) Add frame_count to separate cbuffer
   m_effect.SetConstantBuffer("input", m_pInputBuffer);
 
-  for (const auto& paramIt : m_shaderParameters)
-    m_effect.SetFloatArray(paramIt.first.c_str(), &paramIt.second, 1);
+  for (const auto& [paramName, paramValue] : m_shaderParameters)
+    m_effect.SetFloatArray(paramName.c_str(), &paramValue, 1);
 
   for (const std::shared_ptr<IShaderLut>& lut : m_luts)
   {
