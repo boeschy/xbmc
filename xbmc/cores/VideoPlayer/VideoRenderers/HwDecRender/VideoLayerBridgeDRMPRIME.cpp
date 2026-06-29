@@ -39,13 +39,6 @@ void CVideoLayerBridgeDRMPRIME::Disable()
   // disable video plane
   m_DRM->AddProperty(plane, "FB_ID", 0);
   m_DRM->AddProperty(plane, "CRTC_ID", 0);
-
-  auto winSystem = CServiceBroker::GetWinSystem();
-  if (!winSystem)
-    return;
-
-  // disable HDR metadata
-  winSystem->SetHDR(nullptr);
 }
 
 void CVideoLayerBridgeDRMPRIME::Acquire(CVideoBufferDRMPRIME* buffer)
@@ -163,13 +156,7 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
   if (!plane)
     return;
 
-  auto winSystem = CServiceBroker::GetWinSystem();
-  if (!winSystem)
-    return;
-
   const VideoPicture& picture = buffer->GetPicture();
-
-  winSystem->SetHDR(&picture);
 
   std::optional<uint64_t> colorEncoding =
       plane->GetPropertyEnumValue("COLOR_ENCODING", GetColorEncoding(picture));

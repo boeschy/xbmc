@@ -29,6 +29,24 @@ using namespace KODI::WINDOWING::GBM;
 CRendererDRMPRIME::~CRendererDRMPRIME()
 {
   Flush(false);
+
+  auto* winSystem = static_cast<CWinSystemGbm*>(CServiceBroker::GetWinSystem());
+
+  // Clear the scanout colorspace and HDR metadata set during Configure so
+  // the GUI after playback falls back to Default / SDR.
+  winSystem->SetGuiCompositing(false);
+  winSystem->SetHDR(nullptr);
+  winSystem->SetColorimetry(nullptr);
+
+  //! @todo Restore single-plane state after D2P playback: null m_video_plane
+  //! via direct FindGuiPlane, mirroring Create's direct FindVideoAndGuiPlane.
+  //! D2P cannot share single-plane's teardown via winSystem->SetVideoOutput
+  //! (nullptr) because the renderer factory hands Create a CVideoBuffer*
+  //! (not a VideoPicture*) and start has no buffer-shaped winsystem entry.
+  //! Future: unified plane API for D2P and single-plane to share teardown.
+  auto drm = winSystem->GetDrm();
+  auto* gui = drm->GetGuiPlane();
+  drm->FindGuiPlane(gui->GetFormat(), gui->GetModifier());
 }
 
 CBaseRenderer* CRendererDRMPRIME::Create(CVideoBuffer* buffer)
@@ -107,6 +125,24 @@ bool CRendererDRMPRIME::Configure(const VideoPicture& picture, float fps, unsign
              GetFlagsColorMatrix(picture.color_space, picture.iWidth, picture.iHeight) |
              GetFlagsColorPrimaries(picture.color_primaries) |
              GetFlagsStereoMode(picture.stereoMode);
+
+  // Signal source colorimetry and HDR metadata on the scanout via the DRM
+  // Colorspace and HDR_OUTPUT_METADATA connector properties. The direct-to-
+  // plane scanout path bypasses GL video rendering entirely.
+  if (auto* winSystem = CServiceBroker::GetWinSystem())
+  {
+    winSystem->SetColorimetry(&picture);
+
+    const bool passthroughHDR = winSystem->SetHDR(&picture);
+    CLog::Log(LOGDEBUG, "CRendererDRMPRIME::Configure: HDR passthrough: {}",
+              passthroughHDR ? "on" : "off");
+
+    const bool hdrFboActive =
+        passthroughHDR && winSystem->SetGuiCompositing(picture.color_transfer);
+    if (passthroughHDR && !hdrFboActive)
+      CLog::Log(LOGWARNING, "CRendererDRMPRIME::Configure: HDR passthrough active but "
+                            "GUI compositing not supported by windowing system");
+  }
 
   // Calculate the input frame aspect ratio.
   CalculateFrameAspectRatio(picture.iDisplayWidth, picture.iDisplayHeight);

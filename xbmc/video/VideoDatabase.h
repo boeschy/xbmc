@@ -139,11 +139,14 @@ enum class DeleteMovieHashAction
 struct EpisodeInformation
 {
   int index{0};
+  int season{-1};
+  int episode{-1};
   unsigned int duration{0};
+  CBookmark bookmark{};
 };
 
 using EpisodeFileMap = std::multimap<std::string, EpisodeInformation, std::less<>>;
-using EpisodeFileMapEntry = std::pair<std::string, EpisodeInformation>;
+using EpisodeFileMapEntry = EpisodeFileMap::value_type;
 
 static constexpr const char* MULTIPLE_EPISODES{"multiple_episodes"};
 
@@ -308,6 +311,7 @@ public:
   void GetEpisodesByBlurayPath(const std::string& path, std::vector<CVideoInfoTag>& episodes);
   void GetEpisodesByFile(const std::string& strFilenameAndPath, std::vector<CVideoInfoTag>& episodes);
   void GetEpisodesByFileId(int idFile, std::vector<CVideoInfoTag>& episodes);
+  bool GetEpisodeMap(int idShow, EpisodeFileMap& fileMap, int idFile = -1) const;
   bool GetEpisodeMap(int idShow,
                      EpisodeFileMap& fileMap,
                      dbiplus::Dataset& pDS,
@@ -509,7 +513,8 @@ public:
   bool ClearBookMarksOfFile(const std::string& strFilenameAndPath,
                             CBookmark::EType type = CBookmark::STANDARD);
   bool ClearBookMarksOfFile(int idFile, CBookmark::EType type = CBookmark::STANDARD);
-  bool GetBookMarkForEpisode(const CVideoInfoTag& tag, CBookmark& bookmark);
+  bool GetBookMarkForEpisode(int dbId, CBookmark& bookmark) const;
+  bool GetBookMarkForEpisode(const CVideoInfoTag& tag, CBookmark& bookmark) const;
   void AddBookMarkForEpisode(const CVideoInfoTag& tag, const CBookmark& bookmark);
   void DeleteBookMarkForEpisode(const CVideoInfoTag& tag);
   bool GetResumePoint(CVideoInfoTag& tag);
@@ -934,12 +939,13 @@ public:
   /*!
    * \brief Remove a video from the library and transfer all of its assets to another video of the
    * same type.
-   * \param itemType Type of the video being converted
-   * \param dbIdSource id of the video being converted
-   * \param dbIdTarget id that the video will be attached to
-   * \param idVideoVersion new versiontype of the default version of the video
-   * \param assetType new asset type of the default version of the video
-   * \param cascadeAction action to take on the assets of the video being converted
+   * \param itemType[in] Type of the video being converted
+   * \param dbIdSource[in] id of the video being converted
+   * \param dbIdTarget[in] id that the video will be attached to
+   * \param idVideoVersion[in] new versiontype of the default version of the video
+   *                           special value -1: keep the current versiontype of the video.
+   * \param assetType[in] new asset type of the default version of the video.
+   * \param cascadeAction[in] action to take on the assets of the video being converted
    *        (used to preserve streamdetails for bluray playlists)
    * \return true for success, false otherwise
    */
@@ -988,8 +994,17 @@ public:
   bool DeleteVideoAsset(int idFile);
   bool IsDefaultVideoVersion(int idFile);
   bool GetVideoVersionTypes(VideoDbContentType idContent,
-                            VideoAssetType asset,
+                            VideoAssetType assetType,
                             CFileItemList& items);
+
+  /*!
+   * \brief Check the validity of the video asset type id.
+   * \param[in] typeId Id of the video asset type
+   * \param[in] idContent db item type
+   * \param[in] asset type of the video asset type
+   * \return true when the id exists and matches the provided content and asset type, false otherwise.
+   */
+  bool IsValidVideoAssetType(int typeId, VideoDbContentType idContent, VideoAssetType asset);
   bool SetVideoVersionDefaultArt(int dbId, int idFrom, const MediaType& mediaType);
   void UpdateVideoVersionTypeTable();
   bool GetVideoVersionsNav(const std::string& strBaseDir,

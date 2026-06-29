@@ -985,10 +985,17 @@
           <default>false</default>
           <control type="toggle" />
         </setting>
-        <setting id="videolibrary.ignorevideoversions" type="boolean" label="40202" help="40203">
+        <setting id="videolibrary.similarvideoaction" type="integer" label="40222" help="40203">
           <level>1</level>
-          <default>true</default>
-          <control type="toggle" />
+          <default>0</default>
+          <constraints>
+            <options>
+              <option label="13551">0</option> <!-- off -->
+              <option label="863">1</option> <!-- ask -->
+              <option label="16316">2</option> <!-- auto -->
+            </options>
+          </constraints>
+          <control type="list" format="string" />
         </setting>
         <setting id="videolibrary.ignorevideoextras" type="boolean" label="40204" help="40205">
           <level>1</level>
@@ -2885,6 +2892,7 @@
           <requirement>
             <or>
               <condition>HAS_GL</condition>
+              <condition>HAS_GLES</condition>
               <condition>HAS_DX</condition>
             </or>
           </requirement>
@@ -2896,20 +2904,28 @@
           <requirement>
             <or>
               <condition>HAS_GL</condition>
+              <condition>HAS_GLES</condition>
               <condition>HAS_DX</condition>
             </or>
           </requirement>
           <level>3</level>
-          <default>8</default>
+          <default>0</default>
           <constraints>
-            <minimum>2</minimum>
-            <step>1</step>
-            <maximum>8</maximum>
+            <options>
+              <option label="16316">0</option>
+              <option label="13477">2</option>
+              <option label="13478">3</option>
+              <option label="13479">4</option>
+              <option label="13480">5</option>
+              <option label="13481">6</option>
+              <option label="13482">7</option>
+              <option label="13483">8</option>
+            </options>
           </constraints>
           <dependencies>
             <dependency type="visible" setting="videoscreen.dither" operator="is">true</dependency>
           </dependencies>
-          <control type="spinner" format="integer" />
+          <control type="spinner" format="string" />
         </setting>
         <setting id="videoscreen.cmsenabled" type="boolean" label="36560" help="36561">
           <requirement>

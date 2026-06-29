@@ -5,7 +5,6 @@ DEPS = ../../Makefile.include Makefile PYTHON3-VERSION ../../download-files.incl
                                  static-compile.patch \
                                  10-android-modules.patch \
                                  11-android-ctypes.patch \
-                                 12-android-arm.patch \
                                  13-wasm-em-config-clang.patch \
                                  14-wasm-build-wasm-default.patch \
                                  15-wasm-static-hacl.patch
@@ -111,7 +110,6 @@ all: .installed-$(PLATFORM)
 ifeq ($(OS),android)
 	cd $(PLATFORM); patch -p1 -i ../10-android-modules.patch
 	cd $(PLATFORM); patch -p1 -i ../11-android-ctypes.patch
-	cd $(PLATFORM); patch -p1 -i ../12-android-arm.patch
 endif
 ifeq ($(OS),wasm)
 	cd $(PLATFORM); patch -p1 -i ../13-wasm-em-config-clang.patch

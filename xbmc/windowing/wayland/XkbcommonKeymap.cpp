@@ -62,6 +62,7 @@ static const std::vector<ModifierNameXBMCMapping> ModifierNameXBMCMappings = {
     {XKB_LED_NAME_NUM, XBMCKMOD_NUM},
     {XKB_LED_NAME_SCROLL, XBMCKMOD_MODE}};
 
+// clang-format off
 constexpr auto XkbKeycodeXBMCMappings = make_map<xkb_keycode_t, XBMCKey>({
     // Function keys before start of ASCII printable character range
     {XKB_KEY_BackSpace, XBMCK_BACKSPACE},
@@ -93,7 +94,7 @@ constexpr auto XkbKeycodeXBMCMappings = make_map<xkb_keycode_t, XBMCKey>({
     {XKB_KEY_XF86AudioStop, XBMCK_MEDIA_STOP},
     {XKB_KEY_XF86AudioPause, XBMCK_MEDIA_PLAY_PAUSE},
     {XKB_KEY_XF86Mail, XBMCK_LAUNCH_MAIL},
-    {XKB_KEY_XF86Select, XBMCK_LAUNCH_MEDIA_SELECT},
+    {XKB_KEY_XF86Select, XBMCK_SELECT},
     {XKB_KEY_XF86Launch0, XBMCK_LAUNCH_APP1},
     {XKB_KEY_XF86Launch1, XBMCK_LAUNCH_APP2},
     {XKB_KEY_XF86WWW, XBMCK_LAUNCH_FILE_BROWSER},
@@ -171,6 +172,8 @@ constexpr auto XkbKeycodeXBMCMappings = make_map<xkb_keycode_t, XBMCKey>({
     // Unmapped: XBMCK_SYSREQ
     {XKB_KEY_Break, XBMCK_BREAK},
     {XKB_KEY_Menu, XBMCK_MENU},
+    {XKB_KEY_XF86MenuKB, XBMCK_MENU},
+    {XKB_KEY_XF86MenuPB, XBMCK_MENU},
     {XKB_KEY_XF86PowerOff, XBMCK_POWER},
     {XKB_KEY_EcuSign, XBMCK_EURO},
     {XKB_KEY_Undo, XBMCK_UNDO},
@@ -217,6 +220,7 @@ constexpr auto XkbKeycodeXBMCMappings = make_map<xkb_keycode_t, XBMCKey>({
     {XKB_KEY_WEBOS_INVALID, XBMCK_LAST},
 #endif
 });
+// clang-format on
 
 constexpr auto XkbDeadKeyXBMCMapping = make_map<xkb_keycode_t, XBMCKey>({
     {XKB_KEY_dead_grave, XBMCK_GRAVE},

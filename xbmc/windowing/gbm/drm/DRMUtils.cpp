@@ -179,6 +179,7 @@ bool CDRMUtils::FindGuiPlane(uint32_t format, uint64_t modifier)
                DRMHELPERS::ModifierToString(modifier), m_crtc->GetId());
     m_gui_plane->SetFormat(format);
     m_gui_plane->SetModifier(modifier);
+    m_video_plane = nullptr;
     return true;
   }
 
@@ -297,11 +298,9 @@ bool CDRMUtils::FindVideoAndGuiPlane(uint32_t format,
   {
     if (output_format.drm != m_gui_plane->GetFormat())
       continue;
-    if (!output_format.alpha)
+    if (output_format.alpha < 8)
     {
-      CLog::LogF(LOGWARNING,
-                 "GUI plane format {} can not do alpha blending, "
-                 "falling back to single-plane EGL import (GUI composited over video)",
+      CLog::LogF(LOGWARNING, "GUI plane format {} cannot do alpha blending",
                  DRMHELPERS::FourCCToString(m_gui_plane->GetFormat()));
       m_video_plane = nullptr;
       return false;
@@ -359,11 +358,10 @@ bool CDRMUtils::FindVideoAndGuiPlane(uint32_t format,
   }
 
   CLog::LogF(LOGWARNING,
-             "Rendering will be done through EGL. "
-             "Can not find a Video Plane [{}x{}] format:{}, modifier:{} "
+             "Cannot find a Video Plane [{}x{}] format:{}, modifier:{} "
              "together with a Gui Plane [{}x{}] format:{}, modifier:{}.",
-             res.iWidth, res.iHeight, DRMHELPERS::FourCCToString(format),
-             DRMHELPERS::ModifierToString(modifier), width, height,
+             width, height, DRMHELPERS::FourCCToString(format),
+             DRMHELPERS::ModifierToString(modifier), res.iWidth, res.iHeight,
              DRMHELPERS::FourCCToString(m_gui_plane->GetFormat()),
              DRMHELPERS::ModifierToString(m_gui_plane->GetModifier()));
   return false;
@@ -770,8 +768,14 @@ RESOLUTION_INFO CDRMUtils::GetResolutionInfo(drmModeModeInfoPtr mode)
   res.iWidth = res.iScreenWidth;
   res.iHeight = res.iScreenHeight;
 
-  int limit = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
-      SETTING_VIDEOSCREEN_LIMITGUISIZE);
+  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+
+  // limitguisize should only apply if Direct-to-Plane is configured.
+  //! @todo we are forced to check settings to detect D2P status, but this is brittle.
+  const int limit = settings->GetBool(CSettings::SETTING_VIDEOPLAYER_USEPRIMEDECODER) &&
+                            settings->GetInt(CSettings::SETTING_VIDEOPLAYER_USEPRIMERENDERER) == 0
+                        ? settings->GetInt(SETTING_VIDEOSCREEN_LIMITGUISIZE)
+                        : 0;
   if (limit > 0 && res.iScreenWidth > 1920 && res.iScreenHeight > 1080)
   {
     switch (limit)
@@ -796,7 +800,19 @@ RESOLUTION_INFO CDRMUtils::GetResolutionInfo(drmModeModeInfoPtr mode)
   }
 
   if (mode->htotal > 0 && mode->vtotal > 0)
-    res.fRefreshRate = (mode->clock * 1000.0f) / (mode->htotal * mode->vtotal);
+  {
+    double numerator = mode->clock * 1000.0;
+    double denominator = static_cast<double>(mode->vtotal) * mode->htotal;
+
+    if (mode->flags & DRM_MODE_FLAG_INTERLACE)
+      denominator /= 2;
+    if (mode->flags & DRM_MODE_FLAG_DBLSCAN)
+      denominator *= 2;
+    if (mode->vscan > 1)
+      denominator *= mode->vscan;
+
+    res.fRefreshRate = numerator / denominator;
+  }
   else
     res.fRefreshRate = mode->vrefresh;
   res.iSubtitles = res.iHeight;

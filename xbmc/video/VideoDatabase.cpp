@@ -3463,6 +3463,50 @@ void CVideoDatabase::GetEpisodesByFileId(int idFile, std::vector<CVideoInfoTag>&
   }
 }
 
+bool CVideoDatabase::GetEpisodeMap(int idShow, EpisodeFileMap& fileMap, int idFile /* = -1 */) const
+{
+  if (!m_pDB)
+    return false;
+
+  std::unique_ptr<dbiplus::Dataset> ds{m_pDB->CreateDataset()};
+  if (!ds)
+    return false;
+
+  return GetEpisodeMap(idShow, fileMap, *ds, idFile);
+}
+
+namespace
+{
+struct BookmarkFieldNames
+{
+  const char* timeInSeconds;
+  const char* totalTimeInSeconds;
+  const char* thumbNailImage;
+  const char* player;
+  const char* playerState;
+  const char* type;
+};
+
+constexpr BookmarkFieldNames bookmarkFields{"timeInSeconds", "totalTimeInSeconds", "thumbNailImage",
+                                            "player",        "playerState",        "type"};
+
+constexpr BookmarkFieldNames episodeBookmarkFields{"epBookmarkTime",  "epBookmarkTotalTime",
+                                                   "epBookmarkThumb", "epBookmarkPlayer",
+                                                   "epBookmarkState", "epBookmarkType"};
+
+void ParseBookmarkFields(dbiplus::Dataset& ds,
+                         CBookmark& bookmark,
+                         const BookmarkFieldNames& fields)
+{
+  bookmark.timeInSeconds = ds.fv(fields.timeInSeconds).get_asDouble();
+  bookmark.totalTimeInSeconds = ds.fv(fields.totalTimeInSeconds).get_asDouble();
+  bookmark.thumbNailImage = ds.fv(fields.thumbNailImage).get_asString();
+  bookmark.player = ds.fv(fields.player).get_asString();
+  bookmark.playerState = ds.fv(fields.playerState).get_asString();
+  bookmark.type = static_cast<CBookmark::EType>(ds.fv(fields.type).get_asInt());
+}
+} // namespace
+
 bool CVideoDatabase::GetEpisodeMap(int idShow,
                                    EpisodeFileMap& fileMap,
                                    dbiplus::Dataset& pDS,
@@ -3471,12 +3515,21 @@ bool CVideoDatabase::GetEpisodeMap(int idShow,
   try
   {
     const std::string sql{PrepareSQL(
-        "select episode_view.*, streamdetails.iVideoDuration as duration from "
-        "episode_view left join streamdetails on episode_view.idFile = streamdetails.idFile "
+        "select episode_view.*, streamdetails.iVideoDuration as duration, "
+        "epBookmark.timeInSeconds as epBookmarkTime, "
+        "epBookmark.totalTimeInSeconds as epBookmarkTotalTime, "
+        "epBookmark.thumbNailImage as epBookmarkThumb, "
+        "epBookmark.player as epBookmarkPlayer, "
+        "epBookmark.playerState as epBookmarkState, "
+        "epBookmark.type as epBookmarkType "
+        "from episode_view "
+        "left join streamdetails on episode_view.idFile = streamdetails.idFile "
         "and streamdetails.iStreamType = %i "
+        "left join bookmark as epBookmark on epBookmark.idBookmark = episode_view.c%02d "
         "where episode_view.idShow = %i "
         "order by cast(episode_view.c%02d as integer), cast(episode_view.c%02d as integer)",
-        CStreamDetail::VIDEO, idShow, VIDEODB_ID_EPISODE_SEASON, VIDEODB_ID_EPISODE_EPISODE)};
+        CStreamDetail::VIDEO, VIDEODB_ID_EPISODE_BOOKMARK, idShow, VIDEODB_ID_EPISODE_SEASON,
+        VIDEODB_ID_EPISODE_EPISODE)};
     pDS.query(sql);
 
     // Generate map of episodes in each file (finding base file for bluray://) of show
@@ -3489,12 +3542,25 @@ bool CVideoDatabase::GetEpisodeMap(int idShow,
                                                        pDS.fv("strFileName").get_asString())};
       const std::string baseFile{URIUtils::IsBlurayPath(file) ? URIUtils::GetDiscFile(file) : file};
       // Different scrapers put duration in different places
+      // @todo: this has been fixed in latest tmdb scraper and this (+SQL) can be simplified after PR #27769 is merged
       const unsigned int streamDetailsDuration{pDS.fv("duration").get_asUInt()};
       const unsigned int episodeViewDuration{
           pDS.fv(StringUtils::Format("c{:02}", VIDEODB_ID_EPISODE_RUNTIME).c_str()).get_asUInt()};
       episodeInformation.duration =
           episodeViewDuration > 0 ? episodeViewDuration : streamDetailsDuration;
       episodeInformation.index = index;
+      episodeInformation.season =
+          pDS.fv(StringUtils::Format("c{:02}", VIDEODB_ID_EPISODE_SEASON).c_str()).get_asInt();
+      episodeInformation.episode =
+          pDS.fv(StringUtils::Format("c{:02}", VIDEODB_ID_EPISODE_EPISODE).c_str()).get_asInt();
+
+      // See if there is an episode bookmark for this episode
+      if (!pDS.fv("epBookmarkTime").get_isNull())
+      {
+        CBookmark bookmark;
+        ParseBookmarkFields(pDS, bookmark, episodeBookmarkFields);
+        episodeInformation.bookmark = bookmark;
+      }
 
       fileMap.insert({baseFile, episodeInformation});
       if (idFile > 0 && episodeFile.empty() && pDS.fv("idFile").get_asInt() == idFile)
@@ -3664,21 +3730,22 @@ bool CVideoDatabase::ClearBookMarksOfFile(int idFile,
   return true;
 }
 
+bool CVideoDatabase::GetBookMarkForEpisode(const CVideoInfoTag& tag, CBookmark& bookmark) const
+{
+  return GetBookMarkForEpisode(tag.m_iDbId, bookmark);
+}
 
-bool CVideoDatabase::GetBookMarkForEpisode(const CVideoInfoTag& tag, CBookmark& bookmark)
+bool CVideoDatabase::GetBookMarkForEpisode(int dbId, CBookmark& bookmark) const
 {
   try
   {
-    std::string strSQL = PrepareSQL("select bookmark.* from bookmark join episode on episode.c%02d=bookmark.idBookmark where episode.idEpisode=%i", VIDEODB_ID_EPISODE_BOOKMARK, tag.m_iDbId);
+    std::string strSQL = PrepareSQL("select bookmark.* from bookmark join episode on "
+                                    "episode.c%02d=bookmark.idBookmark where episode.idEpisode=%i",
+                                    VIDEODB_ID_EPISODE_BOOKMARK, dbId);
     m_pDS2->query( strSQL );
     if (!m_pDS2->eof())
     {
-      bookmark.timeInSeconds = m_pDS2->fv("timeInSeconds").get_asDouble();
-      bookmark.totalTimeInSeconds = m_pDS2->fv("totalTimeInSeconds").get_asDouble();
-      bookmark.thumbNailImage = m_pDS2->fv("thumbNailImage").get_asString();
-      bookmark.playerState = m_pDS2->fv("playerState").get_asString();
-      bookmark.player = m_pDS2->fv("player").get_asString();
-      bookmark.type = (CBookmark::EType)m_pDS2->fv("type").get_asInt();
+      ParseBookmarkFields(*m_pDS2, bookmark, bookmarkFields);
     }
     else
     {
@@ -4167,15 +4234,18 @@ void CVideoDatabase::GetSameVideoItems(const CFileItem& item,
 
         if (const int idPath{GetPathId(path)}; idPath > 0)
         {
-          sql = PrepareSQL("SELECT idMovie FROM movie "
-                           "JOIN files ON files.idFile = movie.idFile "
-                           "WHERE files.idPath = %i",
-                           idPath);
+          sql = PrepareSQL("SELECT DISTINCT vv.idMedia "
+                           "FROM videoversion vv "
+                           "  JOIN files ON files.idFile = vv.idFile "
+                           "WHERE files.idPath = %i "
+                           "AND vv.media_type = '%s' "
+                           "AND vv.itemType = %i ",
+                           idPath, mediaType.c_str(), VideoAssetType::VERSION);
 
           m_pDS->query(sql);
           while (!m_pDS->eof())
           {
-            itemIds.insert(m_pDS->fv("idMovie").get_asInt());
+            itemIds.insert(m_pDS->fv("idMedia").get_asInt());
             m_pDS->next();
           }
           m_pDS->close();
@@ -4187,12 +4257,14 @@ void CVideoDatabase::GetSameVideoItems(const CFileItem& item,
       if (matchingMask & Title)
       {
         if (item.GetVideoInfoTag()->HasYear())
-          sql = PrepareSQL("SELECT idMovie FROM movie WHERE c%02d = '%s' AND premiered LIKE '%i%%'",
-                           VIDEODB_ID_TITLE, item.GetVideoInfoTag()->GetTitle().c_str(),
-                           item.GetVideoInfoTag()->GetYear());
+          sql = PrepareSQL(
+              "SELECT DISTINCT idMovie FROM movie WHERE c%02d = '%s' AND premiered LIKE '%i%%'",
+              VIDEODB_ID_TITLE, item.GetVideoInfoTag()->GetTitle().c_str(),
+              item.GetVideoInfoTag()->GetYear());
         else
-          sql = PrepareSQL("SELECT idMovie FROM movie WHERE c%02d = '%s' AND LENGTH(premiered) < 4",
-                           VIDEODB_ID_TITLE, item.GetVideoInfoTag()->GetTitle().c_str());
+          sql = PrepareSQL(
+              "SELECT DISTINCT idMovie FROM movie WHERE c%02d = '%s' AND LENGTH(premiered) < 4",
+              VIDEODB_ID_TITLE, item.GetVideoInfoTag()->GetTitle().c_str());
 
         m_pDS->query(sql);
         while (!m_pDS->eof())
@@ -5034,6 +5106,7 @@ bool CVideoDatabase::GetVideoSettings(int idFile, CVideoSettings &settings)
       settings.m_Orientation = m_pDS->fv("Orientation").get_asInt();
       settings.m_CenterMixLevel = m_pDS->fv("CenterMixLevel").get_asInt();
       m_pDS->close();
+      settings.m_isDefaultVideoSettings = false;
       return true;
     }
     m_pDS->close();
@@ -8539,21 +8612,56 @@ std::string CVideoDatabase::GetContentForPath(const std::string& strPath)
   {
     if (scraper->Content() == ContentType::TVSHOWS)
     {
-      // check for episodes or seasons.  Assumptions are:
-      // 1. if episodes are in the path then we're in episodes.
-      // 2. if no episodes are found, and content was set directly on this path, then we're in shows.
-      // 3. if no episodes are found, and content was not set directly on this path, we're in seasons (assumes tvshows/seasons/episodes)
-      std::string sql = "SELECT COUNT(*) FROM episode_view ";
+      // For TV shows scraped with 'Single TV show in folder OFF' - pointing to folder /TV Shows/
+      // For TV shows scraped with 'Single TV show in folder ON' - pointing to folder /Show (2002)/
+      //
+      // Contents of:                                                   Return
+      // ------------                                                   ------
+      // /TV Shows/                                                     tvshows (NB first case only)
+      // /TV Shows/Show (2002)/                                         seasons - if folder does NOT contain any episodes (eg. Season subfolders only)
+      // /TV Shows/Show (2002)/                                         episodes - if folder DOES contain episode(s)
+      // /TV Shows/Show (2002)/Season 1/                                episodes - if folder DOES contain episode(s)
+      // /TV Shows/Show (2002)/Season 1/                                seasons - if folder does NOT contain episode(s)
+      //                                                                @todo - this currently returns episodes if there is a single archive containing multiple episodes
+      //                                                                @todo - (although of no functional consequence)
+      // /TV Shows/Show (2002)/Season 1/episode.rar                     episodes - if the archive(s) contains an episode (the .rar is expanded by the vfs automatically)
+      // /TV Shows/Show (2002)/Season 1/episodes.rar                    seasons - if the archive does NOT contain any episodes (ie. they are in a subfolder of the archive)
+      // /TV Shows/Show (2002)/episodes.rar/Season 1                    episodes - if the archive contains episode(s) (expanded by the vfs)
+      // /TV Shows/Show (2002)/Seasons 1 and 2/episodes.rar/Season 1    episodes - if the archive contains episode(s) (expanded by the vfs)
 
-      if (foundDirectly)
-        sql += PrepareSQL("WHERE strPath = '%s'", strPath.c_str());
-      else
-        sql += PrepareSQL("WHERE strPath LIKE '%s%%'", strPath.c_str());
+      std::string sql = PrepareSQL("SELECT 1 FROM episode_view "
+                                   "WHERE strPath = '%s' "
+                                   "LIMIT 1",
+                                   strPath.c_str());
 
-      m_pDS->query( sql );
-      if (m_pDS->num_rows() && m_pDS->fv(0).get_asInt() > 0)
+      m_pDS->query(sql);
+      if (m_pDS->num_rows())
         return "episodes";
-      return foundDirectly ? "tvshows" : "seasons";
+
+      // If the episodes are in individual archives
+      // then strPath may point to the directory containing the archive
+      // rather than the archive itself (eg. rar://).
+      // So see if there are any matches using the parentpathid.
+      sql = PrepareSQL("SELECT DISTINCT e.strPath FROM episode_view e "
+                       "JOIN path p ON e.c%02d = p.idPath "
+                       "JOIN files f ON e.idFile = f.idFile "
+                       "WHERE p.strPath = '%s' ",
+                       VIDEODB_ID_EPISODE_PARENTPATHID, strPath.c_str());
+      m_pDS->query(sql);
+      if (m_pDS->num_rows())
+      {
+        while (!m_pDS->eof())
+        {
+          const CURL url(m_pDS->fv(0).get_asString());
+          if (url.GetFileName().empty() && URIUtils::IsArchive(url))
+            return "episodes"; // Episodes in root of archive
+          m_pDS->next();
+        }
+      }
+
+      // If the scraper was set directly on this path, it is a tvshows root
+      // unless the scraper is set for a single tv show in this folder
+      return foundDirectly && !settings.parent_name ? "tvshows" : "seasons";
     }
     return TranslateContent(scraper->Content());
   }
@@ -11076,6 +11184,7 @@ void CVideoDatabase::ImportFromXML(const std::string &path)
     movie = root->FirstChildElement();
     std::string lastTitle;
     int lastMovieId{-1};
+    KODI::REGEXP::RegExpCache regexpCache;
     while (movie)
     {
       std::string currentTitle{};
@@ -11176,8 +11285,9 @@ void CVideoDatabase::ImportFromXML(const std::string &path)
         // season artwork
         KODI::ART::SeasonsArtwork seasonArt;
         artItem.GetVideoInfoTag()->m_strPath = artPath;
-        CVideoInfoScanner::GetSeasonThumbs(*artItem.GetVideoInfoTag(), seasonArt,
-                                           CVideoThumbLoader::GetArtTypes(MediaTypeSeason), true);
+        CVideoInfoScanner::GetSeasonThumbs(
+            *artItem.GetVideoInfoTag(), seasonArt, CVideoThumbLoader::GetArtTypes(MediaTypeSeason),
+            true, CVideoInfoScanner::UseRemoteArtWithLocalScraper::YES, &regexpCache);
         for (const auto& [seasonNumber, art] : seasonArt)
         {
           const int seasonID = AddSeason(showID, seasonNumber);
@@ -11448,6 +11558,14 @@ bool CVideoDatabase::GetItemsForPath(const std::string &content, const std::stri
       GetItemsForPath(content, p, items);
 
     return !items.IsEmpty();
+  }
+
+  if (URIUtils::IsArchive(CURL(path)))
+  {
+    std::string parent = URIUtils::GetParentPath(path);
+    if (!parent.empty() && parent != path)
+      return GetItemsForPath(content, parent, items);
+    return false;
   }
 
   int pathID = GetPathId(path);
@@ -12224,9 +12342,13 @@ bool CVideoDatabase::ConvertVideoToVersion(VideoDbContentType itemType,
       DeleteMovie(dbIdSource, cascadeAction, DeleteMovieHashAction::HASH_PRESERVE);
   }
 
-  // Rename the default version
-  ExecuteQuery(PrepareSQL("UPDATE videoversion SET idType = %i, itemType = %i WHERE idFile = %i",
-                          idVideoVersion, assetType, idFile));
+  // Rename the default version when provided
+  if (idVideoVersion < 0)
+    ExecuteQuery(
+        PrepareSQL("UPDATE videoversion SET itemType = %i WHERE idFile = %i", assetType, idFile));
+  else
+    ExecuteQuery(PrepareSQL("UPDATE videoversion SET idType = %i, itemType = %i WHERE idFile = %i",
+                            idVideoVersion, assetType, idFile));
 
   CommitTransaction();
 
@@ -12621,6 +12743,30 @@ bool CVideoDatabase::GetVideoVersionTypes(VideoDbContentType idContent,
     CLog::LogF(LOGERROR, "failed");
   }
   return false;
+}
+
+bool CVideoDatabase::IsValidVideoAssetType(int typeId,
+                                           VideoDbContentType idContent,
+                                           VideoAssetType assetType)
+{
+  if (!m_pDB)
+    return false;
+
+  MediaType mediaType;
+
+  if (idContent == VideoDbContentType::MOVIES)
+    mediaType = MediaTypeMovie;
+  else
+    return false;
+
+  const std::string query =
+      PrepareSQL("SELECT 1 FROM videoversiontype "
+                 "WHERE id = %i "
+                 "AND name != '' "
+                 "AND itemType = %i "
+                 "AND owner IN (%i, %i)",
+                 typeId, assetType, VideoAssetTypeOwner::SYSTEM, VideoAssetTypeOwner::USER);
+  return GetSingleValueInt(query) == 1;
 }
 
 std::string CVideoDatabase::GetVideoVersionById(int id)

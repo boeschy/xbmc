@@ -281,13 +281,13 @@ else()
   # have latest version to properly track rebuiling.
   if(KODI_DEPENDSBUILD OR (WIN32 OR WINDOWS_STORE))
     # required ffmpeg library versions - tools/depends/target/ffmpeg versions
-    set(REQUIRED_FFMPEG_VERSION 8.1.0)
-    set(_avutil_ver "=60.26.100")
-    set(_avcodec_ver "=62.28.100")
-    set(_avformat_ver "=62.12.100")
-    set(_avfilter_ver "=11.14.100")
-    set(_swscale_ver "=9.5.100")
-    set(_swresample_ver "=6.3.100")
+    set(REQUIRED_FFMPEG_VERSION 8.1.2)
+    set(_avutil_ver "=60.26.102")
+    set(_avcodec_ver "=62.28.102")
+    set(_avformat_ver "=62.12.102")
+    set(_avfilter_ver "=11.14.102")
+    set(_swscale_ver "=9.5.102")
+    set(_swresample_ver "=6.3.102")
     set(_postproc_ver "=59.1.100")
   else()
     # required ffmpeg library versions - minimum supported API compat versions
@@ -457,14 +457,14 @@ else()
                                                    IMPORTED_LOCATION "${FFMPEG_${libname_UPPER}}"
                                                    INTERFACE_LINK_LIBRARIES "${${libname}_LDFLAGS}")
         endif()
-      endif()
 
-      if(FFMPEG_${libname_UPPER}_INCLUDE_DIRS)
-        set_target_properties(ffmpeg::${libname} PROPERTIES
-                                                 INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_${libname_UPPER}_INCLUDE_DIRS}")
-      else()
-        set_target_properties(ffmpeg::${libname} PROPERTIES
-                                                 INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INCLUDE_DIRS}")
+        if(FFMPEG_${libname_UPPER}_INCLUDE_DIRS)
+          set_target_properties(ffmpeg::${libname} PROPERTIES
+                                                   INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_${libname_UPPER}_INCLUDE_DIRS}")
+        else()
+          set_target_properties(ffmpeg::${libname} PROPERTIES
+                                                   INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INCLUDE_DIRS}")
+        endif()
       endif()
     endmacro()
 

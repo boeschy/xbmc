@@ -389,6 +389,7 @@ void COverlayGlyphGLES::Render(SRenderState& state)
   glUniform1f(depthLoc, -1.0f);
 
   glDrawArrays(GL_TRIANGLES, 0, vecVertices.size());
+  CRenderSystemBase::m_GUIElementCount++;
 
   glDisableVertexAttribArray(posLoc);
   glDisableVertexAttribArray(colLoc);
@@ -450,6 +451,15 @@ void COverlayTextureGLES::Render(SRenderState& state)
   GLint tex0Loc = renderSystem->GUIShaderGetCoord0();
   GLint depthLoc = renderSystem->GUIShaderGetDepth();
 
+  // Tell the shader this texture is premultiplied so its limited-range
+  // conversion scales the +16/255 offset by alpha; without this, transparent
+  // PMA texels (alpha=0, rgb=0) would emit (0.063, 0.063, 0.063, 0) which the
+  // PMA blend would write straight into dst, leaking a constant brightening
+  // across the bitmap quad. CGLESShader::OnEnabled resets this to 0.0 every
+  // time a shader is bound, so non-PMA consumers stay on straight-alpha math.
+  if (m_pma)
+    glUniform1f(renderSystem->GUIShaderGetPma(), 1.0f);
+
   GLfloat ver[4][2];
   GLfloat tex[4][2];
   GLubyte idx[4] = {0, 1, 3, 2}; //determines order of triangle strip
@@ -473,6 +483,7 @@ void COverlayTextureGLES::Render(SRenderState& state)
   tex[2][1] = tex[3][1] = m_v;
 
   glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, idx);
+  CRenderSystemBase::m_GUIElementCount++;
 
   glDisableVertexAttribArray(posLoc);
   glDisableVertexAttribArray(tex0Loc);
