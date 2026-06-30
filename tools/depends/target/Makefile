@@ -18,6 +18,7 @@ DEPENDS = \
   gnutls \
   gtest \
   harfbuzz \
+  java-jre \
   libffi \
   libgcrypt \
   libgpg-error \
@@ -162,6 +163,7 @@ freetype2: bzip2 harfbuzz $(ZLIB)
 gettext: $(ICONV)
 gnutls: nettle $(ZLIB)
 harfbuzz: freetype2-noharfbuzz $(ICONV)
+java-jre: freetype2 cups
 libaacs: libgcrypt libgpg-error
 libass: fontconfig fribidi harfbuzz freetype2 $(ICONV)
 libbdplus: libaacs libgcrypt libgpg-error

@@ -1,0 +1,305 @@
+From ce70629f4394184ba517fb99c92ac9374ec8f37a Mon Sep 17 00:00:00 2001
+From: Johan Vos <jvos@openjdk.org>
+Date: Sun, 15 Dec 2024 12:18:54 +0000
+Subject: [PATCH] 8346233: [mobile] enable static-libs-image for iOS
+
+Reviewed-by: ihse
+---
+ make/autoconf/flags-cflags.m4                  |  2 +-
+ make/autoconf/platform.m4                      |  3 +++
+ src/hotspot/os/bsd/memMapPrinter_macosx.cpp    |  4 ++--
+ src/hotspot/os/bsd/os_bsd.cpp                  | 18 ++++++++++++++++++
+ src/hotspot/os/bsd/os_perf_bsd.cpp             |  2 ++
+ src/hotspot/os/posix/signals_posix.cpp         |  2 +-
+ src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp    |  2 ++
+ src/hotspot/share/nmt/memMapPrinter.cpp        |  2 +-
+ src/hotspot/share/nmt/memMapPrinter.hpp        |  2 +-
+ src/hotspot/share/runtime/os.cpp               |  4 ++++
+ src/hotspot/share/runtime/os.hpp               |  2 --
+ .../share/services/diagnosticCommand.cpp       |  4 ++--
+ .../share/services/diagnosticCommand.hpp       |  2 +-
+ src/hotspot/share/utilities/elfFile.hpp        |  2 +-
+ .../unix/native/libjava/java_props_md.c        |  5 +++++
+ 15 files changed, 44 insertions(+), 12 deletions(-)
+
+diff --git a/make/autoconf/flags-cflags.m4 b/make/autoconf/flags-cflags.m4
+index fc94902924c..95ee8765f90 100644
+--- a/make/autoconf/flags-cflags.m4
++++ b/make/autoconf/flags-cflags.m4
+@@ -465,7 +465,7 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
+     CFLAGS_OS_DEF_JVM="-target aarch64-linux-android -DLINUX -D_ALLBSD_SOURCE -DANDROID"
+     CFLAGS_OS_DEF_JDK="-target aarch64-linux-android -DLINUX -D__USE_BSD"
+   elif test "x$OPENJDK_TARGET_OS" = xios; then
+-    CFLAGS_OS_DEF_JVM="-DLINUX -D__IOS__ "
++    CFLAGS_OS_DEF_JVM="-D_ALLBSD_SOURCE -D__IOS__ -D_XOPEN_SOURCE"
+     CFLAGS_OS_DEF_JDK="-D_ALLBSD_SOURCE -D__IOS__"
+   fi
+ 
+diff --git a/make/autoconf/platform.m4 b/make/autoconf/platform.m4
+index add81caff2b..eb37a53bd95 100644
+--- a/make/autoconf/platform.m4
++++ b/make/autoconf/platform.m4
+@@ -536,6 +536,9 @@ AC_DEFUN([PLATFORM_SETUP_LEGACY_VARS_HELPER],
+   if test "x$OPENJDK_$1_OS" = xmacosx; then
+     HOTSPOT_$1_OS=bsd
+   fi
++  if test "x$OPENJDK_$1_OS" = xios; then
++    HOTSPOT_$1_OS=bsd
++  fi
+   AC_SUBST(HOTSPOT_$1_OS)
+ 
+   HOTSPOT_$1_OS_TYPE=${OPENJDK_$1_OS_TYPE}
+diff --git a/src/hotspot/os/bsd/memMapPrinter_macosx.cpp b/src/hotspot/os/bsd/memMapPrinter_macosx.cpp
+index 33c30ab6f70..01b3d7d8c40 100644
+--- a/src/hotspot/os/bsd/memMapPrinter_macosx.cpp
++++ b/src/hotspot/os/bsd/memMapPrinter_macosx.cpp
+@@ -23,7 +23,7 @@
+  *
+  */
+ 
+-#if defined(__APPLE__)
++#if (defined(__APPLE__) && !defined(__IOS__))
+ 
+ #include "precompiled.hpp"
+ 
+@@ -380,4 +380,4 @@ void MemMapPrinter::pd_print_all_mappings(const MappingPrintSession& session) {
+   summary.print_on(session);
+   st->cr();
+ }
+-#endif // __APPLE__
+\ No newline at end of file
++#endif // __APPLE__
+diff --git a/src/hotspot/os/bsd/os_bsd.cpp b/src/hotspot/os/bsd/os_bsd.cpp
+index 5db846275d4..039d2d9ac35 100644
+--- a/src/hotspot/os/bsd/os_bsd.cpp
++++ b/src/hotspot/os/bsd/os_bsd.cpp
+@@ -467,16 +467,19 @@ void os::init_system_properties_values() {
+     // Found the full path to libjvm.so.
+     // Now cut the path to <java_home>/jre if we can.
+     *(strrchr(buf, '/')) = '\0'; // Get rid of /libjvm.so.
++#ifndef __IOS__
+     pslash = strrchr(buf, '/');
+     if (pslash != nullptr) {
+       *pslash = '\0';            // Get rid of /{client|server|hotspot}.
+     }
++#endif
+     if (is_vm_statically_linked()) {
+       strcat(buf, "/lib");
+     }
+ 
+     Arguments::set_dll_dir(buf);
+ 
++#ifndef __IOS__
+     if (pslash != nullptr) {
+       pslash = strrchr(buf, '/');
+       if (pslash != nullptr) {
+@@ -484,6 +487,12 @@ void os::init_system_properties_values() {
+       }
+     }
+     Arguments::set_java_home(buf);
++#else
++    size_t nlen = strlen(user_home_dir) + 11;
++    char *iosuser_home = NEW_C_HEAP_ARRAY(char, nlen, mtInternal);
++    snprintf(iosuser_home, nlen, "%s/Documents", user_home_dir);
++    Arguments::set_java_home(iosuser_home);
++#endif
+     if (!set_boot_path('/', ':')) {
+         vm_exit_during_initialization("Failed setting boot class path.", nullptr);
+     }
+@@ -1500,6 +1509,11 @@ void os::jvm_path(char *buf, jint buflen) {
+                                          CAST_FROM_FN_PTR(address, os::jvm_path),
+                                          dli_fname, sizeof(dli_fname), nullptr);
+   assert(ret, "cannot locate libjvm");
++#ifdef __IOS__
++    const char *homeDir = getenv("HOME");
++    snprintf(buf, buflen, "%s/Documents/", homeDir);
++    return;
++#endif
+   char *rp = nullptr;
+   if (ret && dli_fname[0] != '\0') {
+     rp = os::realpath(dli_fname, buf, buflen);
+@@ -1790,7 +1804,11 @@ bool os::remove_stack_guard_pages(char* addr, size_t size) {
+ static char* anon_mmap(char* requested_addr, size_t bytes, bool exec) {
+   // MAP_FIXED is intentionally left out, to leave existing mappings intact.
+   const int flags = MAP_PRIVATE | MAP_NORESERVE | MAP_ANONYMOUS
++#ifdef __IOS__
++      ;
++#else
+       MACOS_ONLY(| (exec ? MAP_JIT : 0));
++#endif
+ 
+   // Map reserved/uncommitted pages PROT_NONE so we fail early if we
+   // touch an uncommitted page. Otherwise, the read/write might
+diff --git a/src/hotspot/os/bsd/os_perf_bsd.cpp b/src/hotspot/os/bsd/os_perf_bsd.cpp
+index 631d2135b64..042b7770b20 100644
+--- a/src/hotspot/os/bsd/os_perf_bsd.cpp
++++ b/src/hotspot/os/bsd/os_perf_bsd.cpp
+@@ -21,6 +21,7 @@
+  * questions.
+  *
+  */
++#ifndef __IOS__
+ #include "precompiled.hpp"
+ #include "memory/allocation.inline.hpp"
+ #include "memory/resourceArea.hpp"
+@@ -483,3 +484,4 @@ bool NetworkPerformanceInterface::initialize() {
+ int NetworkPerformanceInterface::network_utilization(NetworkInterface** network_interfaces) const {
+   return _impl->network_utilization(network_interfaces);
+ }
++#endif // IOS
+diff --git a/src/hotspot/os/posix/signals_posix.cpp b/src/hotspot/os/posix/signals_posix.cpp
+index 96f3584e74f..ddc7a05c2ff 100644
+--- a/src/hotspot/os/posix/signals_posix.cpp
++++ b/src/hotspot/os/posix/signals_posix.cpp
+@@ -160,7 +160,7 @@ typedef struct sigaction *(*get_signal_t)(int);
+ static get_signal_t get_signal_action = nullptr;
+ 
+ // suspend/resume support
+-#if defined(__APPLE__) && !defined(__IOS__)
++#if defined(__APPLE__)
+   static OSXSemaphore sr_semaphore;
+ #else
+   static PosixSemaphore sr_semaphore;
+diff --git a/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp b/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp
+index fa64c857eee..b47966e5af3 100644
+--- a/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp
++++ b/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp
+@@ -318,7 +318,9 @@ int os::extra_bang_size_in_bytes() {
+ 
+ #if defined(AARCH64) && defined(__APPLE__)
+ void os::current_thread_enable_wx(WXMode mode) {
++#ifndef __IOS__
+   pthread_jit_write_protect_np(mode == WXExec);
++#endif
+ }
+ #endif
+ 
+diff --git a/src/hotspot/share/nmt/memMapPrinter.cpp b/src/hotspot/share/nmt/memMapPrinter.cpp
+index 5c164e19b57..7b1877ba4a2 100644
+--- a/src/hotspot/share/nmt/memMapPrinter.cpp
++++ b/src/hotspot/share/nmt/memMapPrinter.cpp
+@@ -25,7 +25,7 @@
+ 
+ #include "precompiled.hpp"
+ 
+-#if defined(LINUX) || defined(_WIN64) || defined(__APPLE__)
++#if defined(LINUX) || defined(_WIN64) || (defined(__APPLE__) && !defined(__IOS__))
+ 
+ #include "gc/shared/collectedHeap.hpp"
+ #include "logging/logAsyncWriter.hpp"
+diff --git a/src/hotspot/share/nmt/memMapPrinter.hpp b/src/hotspot/share/nmt/memMapPrinter.hpp
+index 34897a0c75c..65bd0760568 100644
+--- a/src/hotspot/share/nmt/memMapPrinter.hpp
++++ b/src/hotspot/share/nmt/memMapPrinter.hpp
+@@ -30,7 +30,7 @@
+ #include "nmt/memTag.hpp"
+ #include "utilities/globalDefinitions.hpp"
+ 
+-#if defined(LINUX) || defined(_WIN64) || defined(__APPLE__)
++#if defined(LINUX) || defined(_WIN64) || (defined(__APPLE__) && !defined(__IOS__))
+ 
+ class outputStream;
+ class CachedNMTInformation;
+diff --git a/src/hotspot/share/runtime/os.cpp b/src/hotspot/share/runtime/os.cpp
+index f631556858f..76c6cf9f9ce 100644
+--- a/src/hotspot/share/runtime/os.cpp
++++ b/src/hotspot/share/runtime/os.cpp
+@@ -1481,7 +1481,11 @@ bool os::set_boot_path(char fileSep, char pathSep) {
+   struct stat st;
+ 
+   // modular image if "modules" jimage exists
++#ifndef __IOS__
+   char* jimage = format_boot_path("%/lib/" MODULES_IMAGE_NAME, home, home_len, fileSep, pathSep);
++#else
++  char* jimage = format_boot_path("%/Documents/lib/" MODULES_IMAGE_NAME, home, home_len, fileSep, pathSep);
++#endif
+   if (jimage == nullptr) return false;
+   bool has_jimage = (os::stat(jimage, &st) == 0);
+   if (has_jimage) {
+diff --git a/src/hotspot/share/runtime/os.hpp b/src/hotspot/share/runtime/os.hpp
+index 5d12e318bf8..8bfda7db653 100644
+--- a/src/hotspot/share/runtime/os.hpp
++++ b/src/hotspot/share/runtime/os.hpp
+@@ -1021,8 +1021,6 @@ class os: AllStatic {
+   // like ::LinuxUtils
+ #if defined(AIX)
+   class Aix;
+-#elif defined(__IOS__)
+-  class Linux;
+ #elif defined(BSD)
+   class Bsd;
+ #elif defined(LINUX)
+diff --git a/src/hotspot/share/services/diagnosticCommand.cpp b/src/hotspot/share/services/diagnosticCommand.cpp
+index 3b52f0edc72..4b49ef216b1 100644
+--- a/src/hotspot/share/services/diagnosticCommand.cpp
++++ b/src/hotspot/share/services/diagnosticCommand.cpp
+@@ -140,7 +140,7 @@ void DCmd::register_dcmds(){
+   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<TrimCLibcHeapDCmd>(full_export, true, false));
+   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<MallocInfoDcmd>(full_export, true, false));
+ #endif // LINUX
+-#if defined(LINUX) || defined(_WIN64) || defined(__APPLE__)
++#if defined(LINUX) || defined(_WIN64) || (defined(__APPLE__) && !defined(__IOS__))
+   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<SystemMapDCmd>(full_export, true,false));
+   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<SystemDumpMapDCmd>(full_export, true,false));
+ #endif // LINUX or WINDOWS or MacOS
+@@ -1158,7 +1158,7 @@ void CompilationMemoryStatisticDCmd::execute(DCmdSource source, TRAPS) {
+   CompilationMemoryStatistic::print_all_by_size(output(), human_readable, minsize);
+ }
+ 
+-#if defined(LINUX) || defined(_WIN64) || defined(__APPLE__)
++#if defined(LINUX) || defined(_WIN64) || (defined(__APPLE__) && !defined(__IOS__))
+ 
+ SystemMapDCmd::SystemMapDCmd(outputStream* output, bool heap) : DCmd(output, heap) {}
+ 
+diff --git a/src/hotspot/share/services/diagnosticCommand.hpp b/src/hotspot/share/services/diagnosticCommand.hpp
+index 212a8996d0a..3a18ed16b14 100644
+--- a/src/hotspot/share/services/diagnosticCommand.hpp
++++ b/src/hotspot/share/services/diagnosticCommand.hpp
+@@ -822,7 +822,7 @@ class CompilationMemoryStatisticDCmd: public DCmdWithParser {
+   virtual void execute(DCmdSource source, TRAPS);
+ };
+ 
+-#if defined(LINUX) || defined(_WIN64) || defined(__APPLE__)
++#if defined(LINUX) || defined(_WIN64) || (defined(__APPLE__) && !defined(__IOS__))
+ 
+ class SystemMapDCmd : public DCmd {
+ public:
+diff --git a/src/hotspot/share/utilities/elfFile.hpp b/src/hotspot/share/utilities/elfFile.hpp
+index ad2f3c7b336..0caafc7645e 100644
+--- a/src/hotspot/share/utilities/elfFile.hpp
++++ b/src/hotspot/share/utilities/elfFile.hpp
+@@ -25,7 +25,7 @@
+ #ifndef SHARE_UTILITIES_ELFFILE_HPP
+ #define SHARE_UTILITIES_ELFFILE_HPP
+ 
+-#if !defined(_WINDOWS) && (!defined(__APPLE__) || defined(__IOS__)) && !defined(_AIX)
++#if !defined(_WINDOWS) && !defined(__APPLE__) && !defined(_AIX)
+ 
+ #if defined(__OpenBSD__)
+ #include <sys/exec_elf.h>
+diff --git a/src/java.base/unix/native/libjava/java_props_md.c b/src/java.base/unix/native/libjava/java_props_md.c
+index 4a6d0f7f5a4..765e62c35a0 100644
+--- a/src/java.base/unix/native/libjava/java_props_md.c
++++ b/src/java.base/unix/native/libjava/java_props_md.c
+@@ -519,6 +519,10 @@ GetJavaProperties(JNIEnv *env)
+ 
+     /* Current directory */
+     {
++#ifdef __IOS__
++    const char *homeDir = getenv("HOME");
++    sprops.user_dir = strdup(homeDir);
++#else
+         char buf[MAXPATHLEN];
+         errno = 0;
+         if (getcwd(buf, sizeof(buf)) == NULL) {
+@@ -529,6 +533,7 @@ GetJavaProperties(JNIEnv *env)
+         else {
+             sprops.user_dir = strdup(buf);
+         }
++#endif
+     }
+ 
+     sprops.file_separator = "/";
+-- 
+2.50.1 (Apple Git-155)
+

@@ -1,0 +1,59 @@
+From 7e8729ef9298b86f90ceb5fb67dcd8008b047820 Mon Sep 17 00:00:00 2001
+From: Johan Vos <jvos@openjdk.org>
+Date: Mon, 16 Mar 2026 07:36:05 +0000
+Subject: [PATCH] 8380088: IOS: jit_write_protect_np not allowed
+
+Reviewed-by: ihse
+---
+ src/hotspot/os_cpu/bsd_aarch64/os_bsd_aarch64.cpp        | 2 ++
+ src/hotspot/share/runtime/thread.inline.hpp              | 2 ++
+ src/hotspot/share/utilities/permitForbiddenFunctions.hpp | 2 ++
+ 3 files changed, 6 insertions(+)
+
+diff --git a/src/hotspot/os_cpu/bsd_aarch64/os_bsd_aarch64.cpp b/src/hotspot/os_cpu/bsd_aarch64/os_bsd_aarch64.cpp
+index 36599594842..af25f94e1d8 100644
+--- a/src/hotspot/os_cpu/bsd_aarch64/os_bsd_aarch64.cpp
++++ b/src/hotspot/os_cpu/bsd_aarch64/os_bsd_aarch64.cpp
+@@ -567,7 +567,9 @@ THREAD_LOCAL bool os::_jit_exec_enabled;
+ void os::current_thread_enable_wx(WXMode mode) {
+   bool exec_enabled = mode != WXWrite;
+   if (exec_enabled != _jit_exec_enabled NOT_PRODUCT( || DefaultWXWriteMode == WXWrite)) {
++#ifndef __IOS__
+     permit_forbidden_function::pthread_jit_write_protect_np(exec_enabled);
++#endif
+     _jit_exec_enabled = exec_enabled;
+   }
+ }
+diff --git a/src/hotspot/share/runtime/thread.inline.hpp b/src/hotspot/share/runtime/thread.inline.hpp
+index b4cf3ec589a..ded5e166f3a 100644
+--- a/src/hotspot/share/runtime/thread.inline.hpp
++++ b/src/hotspot/share/runtime/thread.inline.hpp
+@@ -68,7 +68,9 @@ inline void Thread::init_wx() {
+   assert(this == Thread::current(), "should only be called for current thread");
+   assert(!_wx_init, "second init");
+   _wx_state = WXWrite;
++#ifndef __IOS__
+   permit_forbidden_function::pthread_jit_write_protect_np(false);
++#endif
+   os::current_thread_enable_wx(_wx_state);
+   // Side effect: preload base address of libjvm
+   guarantee(os::address_is_in_vm(CAST_FROM_FN_PTR(address, &dummy)), "must be");
+diff --git a/src/hotspot/share/utilities/permitForbiddenFunctions.hpp b/src/hotspot/share/utilities/permitForbiddenFunctions.hpp
+index 5dec5062b0c..b204ed870c8 100644
+--- a/src/hotspot/share/utilities/permitForbiddenFunctions.hpp
++++ b/src/hotspot/share/utilities/permitForbiddenFunctions.hpp
+@@ -70,9 +70,11 @@ inline void* realloc(void* ptr, size_t size) { return ::realloc(ptr, size); }
+ 
+ inline char* strdup(const char* s) { return ::strdup(s); }
+ 
++#ifndef __IOS__
+ MACOS_AARCH64_ONLY( \
+   inline void pthread_jit_write_protect_np(int enabled) { return ::pthread_jit_write_protect_np(enabled); } \
+ )
++#endif
+ 
+ END_ALLOW_FORBIDDEN_FUNCTIONS
+ } // namespace permit_forbidden_function
+-- 
+2.50.1 (Apple Git-155)
+

@@ -1,0 +1,513 @@
+From 308cad4a7bb0c632857ee4cb06b8c84cf7589547 Mon Sep 17 00:00:00 2001
+From: Johan Vos <jvos@openjdk.org>
+Date: Fri, 15 May 2020 13:01:32 +0000
+Subject: [PATCH] 8244947: fix ios/android build for static libs
+
+Reviewed-by: bobv
+---
+ make/CompileJavaModules.gmk                   |  4 +-
+ make/autoconf/build-aux/config.sub            | 11 ++++-
+ make/autoconf/flags-cflags.m4                 |  7 +++
+ make/autoconf/flags.m4                        |  6 ++-
+ make/autoconf/lib-freetype.m4                 |  4 +-
+ make/autoconf/libraries.m4                    |  8 ++--
+ make/autoconf/platform.m4                     |  8 ++++
+ make/autoconf/toolchain.m4                    | 16 ++++---
+ make/common/JdkNativeCompilation.gmk          | 12 ++++++
+ make/common/Modules.gmk                       |  8 ++++
+ make/common/modules/LauncherCommon.gmk        |  5 +++
+ make/modules/java.base/lib/CoreLibraries.gmk  |  5 ++-
+ make/modules/jdk.net/Lib.gmk                  |  2 +-
+ .../macosx/native/libjava/java_props_macosx.c | 43 +++++++++++++++++++
+ .../macosx/native/libjli/java_md_macosx.m     | 20 +++++++++
+ .../unix/native/libnet/NetworkInterface.c     |  2 +
+ .../unix/native/libnet/net_util_md.h          |  3 ++
+ 17 files changed, 145 insertions(+), 19 deletions(-)
+
+diff --git a/make/CompileJavaModules.gmk b/make/CompileJavaModules.gmk
+index 85c2232ec7f..8a4c6852390 100644
+--- a/make/CompileJavaModules.gmk
++++ b/make/CompileJavaModules.gmk
+@@ -124,8 +124,8 @@ java.desktop_EXCLUDE_FILES += \
+     .template \
+     #
+ 
+-ifeq ($(call isTargetOs, macosx), true)
+-  # exclude all X11 on Mac.
++ifeq ($(call isTargetOs, macosx ios), true)
++  # exclude all X11 on Mac and iOS.
+   java.desktop_EXCLUDES += \
+       sun/awt/X11 \
+       sun/java2d/x11 \
+diff --git a/make/autoconf/build-aux/config.sub b/make/autoconf/build-aux/config.sub
+index a36e6690728..425c9c90309 100644
+--- a/make/autoconf/build-aux/config.sub
++++ b/make/autoconf/build-aux/config.sub
+@@ -36,7 +36,8 @@ if echo $* | grep x86_64-pc-wsl >/dev/null ; then
+ fi
+ 
+ # Filter out everything that doesn't begin with "aarch64-"
+-if ! echo $* | grep '^aarch64-' >/dev/null ; then
++# or that ends with "-ios" or "-android"
++if ! echo $* | egrep "^aarch64-|-ios|-android" >/dev/null ; then
+     . $DIR/autoconf-config.sub "$@"
+     # autoconf-config.sub exits, so we never reach here, but just in
+     # case we do:
+@@ -47,6 +48,14 @@ while test $# -gt 0 ; do
+     case $1 in 
+         -- )   # Stop option processing
+             shift; break ;;
++        *-ios* )
++            echo $1
++            exit
++            ;;
++        *-android* )
++            echo $1
++            exit
++            ;;
+         aarch64-* )
+             config=`echo $1 | sed 's/^aarch64-/arm-/'`
+             sub_args="$sub_args $config"
+diff --git a/make/autoconf/flags-cflags.m4 b/make/autoconf/flags-cflags.m4
+index 99e51891d82..bd08f5bb615 100644
+--- a/make/autoconf/flags-cflags.m4
++++ b/make/autoconf/flags-cflags.m4
+@@ -437,6 +437,10 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
+   elif test "x$OPENJDK_TARGET_OS" = xmacosx; then
+     CFLAGS_OS_DEF_JVM="-D_ALLBSD_SOURCE -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE"
+     CFLAGS_OS_DEF_JDK="-D_ALLBSD_SOURCE -D_DARWIN_UNLIMITED_SELECT"
++  elif test "x$OPENJDK_TARGET_OS" = xios; then
++    CFLAGS_OS_DEF_JDK="-DMACOSX -D_ALLBSD_SOURCE -DTARGET_IOS -D_DARWIN_UNLIMITED_SELECT"
++  elif test "x$OPENJDK_TARGET_OS" = xandroid; then
++    CFLAGS_OS_DEF_JDK="-target aarch64-linux-android -D__USE_BSD"
+   elif test "x$OPENJDK_TARGET_OS" = xaix; then
+     CFLAGS_OS_DEF_JVM="-DAIX"
+   elif test "x$OPENJDK_TARGET_OS" = xbsd; then
+@@ -463,6 +467,9 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
+       -I${TOPDIR}/src/hotspot/share/include \
+       -I${TOPDIR}/src/hotspot/os/${HOTSPOT_TARGET_OS_TYPE}/include"
+ 
++  if test "x$OPENJDK_TARGET_OS" = xios; then
++    ALWAYS_CFLAGS_JDK="$ALWAYS_CFLAGS_JDK -I${TOPDIR}/src/java.base/macosx/native/libjava"
++  fi
+   ###############################################################################
+ 
+   # Adjust flags according to debug level.
+diff --git a/make/autoconf/flags.m4 b/make/autoconf/flags.m4
+index 582cd65d0df..5fe1260a32c 100644
+--- a/make/autoconf/flags.m4
++++ b/make/autoconf/flags.m4
+@@ -278,7 +278,11 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
+   GLOBAL_CXXFLAGS="$MACHINE_FLAG $SYSROOT_CFLAGS $USER_CXXFLAGS"
+   GLOBAL_LDFLAGS="$MACHINE_FLAG $SYSROOT_LDFLAGS $USER_LDFLAGS"
+   # FIXME: Don't really know how to do with this, but this was the old behavior
+-  GLOBAL_CPPFLAGS="$SYSROOT_CFLAGS"
++  if test "x$OPENJDK_TARGET_OS" = xios; then
++    GLOBAL_CPPFLAGS="$MACHINE_FLAG $USER_CFLAGS $SYSROOT_CFLAGS"
++  else
++    GLOBAL_CPPFLAGS="$SYSROOT_CFLAGS"
++  fi
+   AC_SUBST(GLOBAL_CFLAGS)
+   AC_SUBST(GLOBAL_CXXFLAGS)
+   AC_SUBST(GLOBAL_LDFLAGS)
+diff --git a/make/autoconf/lib-freetype.m4 b/make/autoconf/lib-freetype.m4
+index a870a89fba3..f9fecdeed5f 100644
+--- a/make/autoconf/lib-freetype.m4
++++ b/make/autoconf/lib-freetype.m4
+@@ -110,7 +110,9 @@ AC_DEFUN_ONCE([LIB_SETUP_FREETYPE],
+   FREETYPE_TO_USE=bundled
+   if test "x$OPENJDK_TARGET_OS" != "xwindows" && \
+       test "x$OPENJDK_TARGET_OS" != "xmacosx" && \
+-      test "x$OPENJDK_TARGET_OS" != "xaix"; then
++      test "x$OPENJDK_TARGET_OS" != "xaix" && \
++      test "x$OPENJDK_TARGET_OS" != "xandroid" && \
++      test "x$OPENJDK_TARGET_OS" != "xios"; then
+     FREETYPE_TO_USE=system
+   fi
+   if test "x$with_freetype" != "x" ; then
+diff --git a/make/autoconf/libraries.m4 b/make/autoconf/libraries.m4
+index 8618077d1bb..925862c636f 100644
+--- a/make/autoconf/libraries.m4
++++ b/make/autoconf/libraries.m4
+@@ -40,8 +40,8 @@ m4_include([lib-tests.m4])
+ AC_DEFUN_ONCE([LIB_DETERMINE_DEPENDENCIES],
+ [
+   # Check if X11 is needed
+-  if test "x$OPENJDK_TARGET_OS" = xwindows || test "x$OPENJDK_TARGET_OS" = xmacosx; then
+-    # No X11 support on windows or macosx
++  if test "x$OPENJDK_TARGET_OS" = xwindows || test "x$OPENJDK_TARGET_OS" = xmacosx || test "x$OPENJDK_TARGET_OS" = xios || test "x$OPENJDK_TARGET_OS" = xandroid; then
++    # No X11 support on windows, macosx, ios or android
+     NEEDS_LIB_X11=false
+   else
+     # All other instances need X11, even if building headless only, libawt still
+@@ -50,8 +50,8 @@ AC_DEFUN_ONCE([LIB_DETERMINE_DEPENDENCIES],
+   fi
+ 
+   # Check if fontconfig is needed
+-  if test "x$OPENJDK_TARGET_OS" = xwindows || test "x$OPENJDK_TARGET_OS" = xmacosx; then
+-    # No fontconfig support on windows or macosx
++  if test "x$OPENJDK_TARGET_OS" = xwindows || test "x$OPENJDK_TARGET_OS" = xmacosx || test "x$OPENJDK_TARGET_OS" = xios || test "x$OPENJDK_TARGET_OS" = xandroid; then
++    # No fontconfig support on windows, macosx, ios or android
+     NEEDS_LIB_FONTCONFIG=false
+   else
+     # All other instances need fontconfig, even if building headless only,
+diff --git a/make/autoconf/platform.m4 b/make/autoconf/platform.m4
+index ee5c75e7f36..7b9fcdd4ad5 100644
+--- a/make/autoconf/platform.m4
++++ b/make/autoconf/platform.m4
+@@ -178,6 +178,10 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_OS],
+       VAR_OS=linux
+       VAR_OS_TYPE=unix
+       ;;
++    *android*)
++      VAR_OS=android
++      VAR_OS_TYPE=unix
++      ;;
+     *solaris*)
+       VAR_OS=solaris
+       VAR_OS_TYPE=unix
+@@ -186,6 +190,10 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_OS],
+       VAR_OS=macosx
+       VAR_OS_TYPE=unix
+       ;;
++    *ios*)
++      VAR_OS=ios
++      VAR_OS_TYPE=unix
++      ;;
+     *bsd*)
+       VAR_OS=bsd
+       VAR_OS_TYPE=unix
+diff --git a/make/autoconf/toolchain.m4 b/make/autoconf/toolchain.m4
+index 086b362ac00..2a1f0ad5a98 100644
+--- a/make/autoconf/toolchain.m4
++++ b/make/autoconf/toolchain.m4
+@@ -189,7 +189,7 @@ AC_DEFUN([TOOLCHAIN_SETUP_FILENAME_PATTERNS],
+     SHARED_LIBRARY='lib[$]1.so'
+     STATIC_LIBRARY='lib[$]1.a'
+     OBJ_SUFFIX='.o'
+-    if test "x$OPENJDK_TARGET_OS" = xmacosx; then
++    if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
+       # For full static builds, we're overloading the SHARED_LIBRARY
+       # variables in order to limit the amount of changes required.
+       # It would be better to remove SHARED and just use LIBRARY and
+@@ -225,7 +225,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
+   toolchain_var_name=VALID_TOOLCHAINS_$OPENJDK_BUILD_OS
+   VALID_TOOLCHAINS=${!toolchain_var_name}
+ 
+-  if test "x$OPENJDK_TARGET_OS" = xmacosx; then
++  if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
+     if test -n "$XCODEBUILD"; then
+       # On Mac OS X, default toolchain to clang after Xcode 5
+       XCODE_VERSION_OUTPUT=`"$XCODEBUILD" -version 2>&1 | $HEAD -n 1`
+@@ -1013,11 +1013,13 @@ AC_DEFUN_ONCE([TOOLCHAIN_SETUP_BUILD_COMPILERS],
+ 
+     PATH="$OLDPATH"
+ 
+-    TOOLCHAIN_EXTRACT_COMPILER_VERSION(BUILD_CC, [BuildC])
+-    TOOLCHAIN_EXTRACT_COMPILER_VERSION(BUILD_CXX, [BuildC++])
+-    TOOLCHAIN_PREPARE_FOR_VERSION_COMPARISONS([BUILD_], [OPENJDK_BUILD_], [build ])
+-    TOOLCHAIN_EXTRACT_LD_VERSION(BUILD_LD, [build linker])
+-    TOOLCHAIN_PREPARE_FOR_LD_VERSION_COMPARISONS([BUILD_], [OPENJDK_BUILD_])
++    if test "x$OPENJDK_TARGET_OS" != "xandroid"; then
++      TOOLCHAIN_EXTRACT_COMPILER_VERSION(BUILD_CC, [BuildC])
++      TOOLCHAIN_EXTRACT_COMPILER_VERSION(BUILD_CXX, [BuildC++])
++      TOOLCHAIN_PREPARE_FOR_VERSION_COMPARISONS([BUILD_], [OPENJDK_BUILD_], [build ])
++      TOOLCHAIN_EXTRACT_LD_VERSION(BUILD_LD, [build linker])
++      TOOLCHAIN_PREPARE_FOR_LD_VERSION_COMPARISONS([BUILD_], [OPENJDK_BUILD_])
++    fi
+   else
+     # If we are not cross compiling, use the normal target compilers for
+     # building the build platform executables.
+diff --git a/make/common/JdkNativeCompilation.gmk b/make/common/JdkNativeCompilation.gmk
+index 6bb2a32a5c0..127049aa5a0 100644
+--- a/make/common/JdkNativeCompilation.gmk
++++ b/make/common/JdkNativeCompilation.gmk
+@@ -41,6 +41,18 @@ FindSrcDirsForLib += \
+       $(TOPDIR)/src/$(strip $1)/$(OPENJDK_TARGET_OS_TYPE)/native/lib$(strip $2) \
+       $(TOPDIR)/src/$(strip $1)/share/native/lib$(strip $2)))
+ 
++ifeq ($(OPENJDK_TARGET_OS), ios)
++  FindSrcDirsForLib += \
++    $(call uniq, $(wildcard \
++        $(TOPDIR)/src/$(strip $1)/macosx/native/lib$(strip $2)))
++endif
++
++ifeq ($(OPENJDK_TARGET_OS), android)
++  FindSrcDirsForLib += \
++    $(call uniq, $(wildcard \
++        $(TOPDIR)/src/$(strip $1)/linux/native/lib$(strip $2)))
++endif
++
+ FindSrcDirsForComponent += \
+   $(call uniq, $(wildcard \
+       $(TOPDIR)/src/$(strip $1)/$(OPENJDK_TARGET_OS)/native/$(strip $2) \
+diff --git a/make/common/Modules.gmk b/make/common/Modules.gmk
+index 838573cab5d..d6ec51dd5e0 100644
+--- a/make/common/Modules.gmk
++++ b/make/common/Modules.gmk
+@@ -260,6 +260,14 @@ GENERATED_SRC_DIRS += \
+ TOP_SRC_DIRS += \
+     $(TOPDIR)/src \
+     #
++ifeq ($(OPENJDK_TARGET_OS), ios)
++  SRC_SUBDIRS += macosx/classes
++endif
++
++ifeq ($(OPENJDK_TARGET_OS), android)
++  SRC_SUBDIRS += linux/classes
++endif
++
+ 
+ SRC_SUBDIRS += $(OPENJDK_TARGET_OS)/classes
+ ifneq ($(OPENJDK_TARGET_OS), $(OPENJDK_TARGET_OS_TYPE))
+diff --git a/make/common/modules/LauncherCommon.gmk b/make/common/modules/LauncherCommon.gmk
+index 788f9f1783b..74b753c5692 100644
+--- a/make/common/modules/LauncherCommon.gmk
++++ b/make/common/modules/LauncherCommon.gmk
+@@ -50,6 +50,11 @@ LAUNCHER_CFLAGS += -I$(TOPDIR)/src/java.base/share/native/launcher \
+     -I$(TOPDIR)/src/java.base/$(OPENJDK_TARGET_OS_TYPE)/native/libjli \
+     -I$(TOPDIR)/src/java.base/$(OPENJDK_TARGET_OS)/native/libjli \
+     #
++
++ifeq ($(call isTargetOs, ios), true)
++  LAUNCHER_CFLAGS += -I$(TOPDIR)/src/java.base/macosx/native/libjli
++fi
++
+ GLOBAL_VERSION_INFO_RESOURCE := $(TOPDIR)/src/java.base/windows/native/common/version.rc
+ MACOSX_PLIST_DIR := $(TOPDIR)/src/java.base/macosx/native/launcher
+ JAVA_MANIFEST := $(TOPDIR)/src/java.base/windows/native/launcher/java.manifest
+diff --git a/make/modules/java.base/lib/CoreLibraries.gmk b/make/modules/java.base/lib/CoreLibraries.gmk
+index ab8a75cf454..6877d4a3eba 100644
+--- a/make/modules/java.base/lib/CoreLibraries.gmk
++++ b/make/modules/java.base/lib/CoreLibraries.gmk
+@@ -84,7 +84,7 @@ TARGETS += $(BUILD_LIBVERIFY)
+ 
+ LIBJAVA_CFLAGS := -DARCHPROPNAME='"$(OPENJDK_TARGET_CPU_OSARCH)"'
+ 
+-ifeq ($(call isTargetOs, macosx), true)
++ifeq ($(call isTargetOs, macosx ios), true)
+   BUILD_LIBJAVA_java_props_md.c_CFLAGS := -x objective-c
+   BUILD_LIBJAVA_java_props_macosx.c_CFLAGS := -x objective-c
+ endif
+@@ -173,7 +173,7 @@ TARGETS += $(BUILD_LIBJIMAGE)
+ 
+ ##########################################################################################
+ 
+-ifeq ($(call isTargetOs, macosx), true)
++ifeq ($(call isTargetOs, macosx ios), true)
+   LIBJLI_EXCLUDE_FILES += java_md_solinux.c
+ endif
+ 
+@@ -209,6 +209,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJLI, \
+     EXTRA_FILES := $(LIBJLI_EXTRA_FILES), \
+     OPTIMIZATION := HIGH, \
+     CFLAGS := $(CFLAGS_JDKLIB) $(LIBJLI_CFLAGS), \
++    CFLAGS_ios := -I$(TOPDIR)/src/java.base/macosx/native/libjli, \
+     DISABLED_WARNINGS_gcc := unused-function implicit-fallthrough, \
+     DISABLED_WARNINGS_clang := sometimes-uninitialized format-nonliteral, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+diff --git a/make/modules/jdk.net/Lib.gmk b/make/modules/jdk.net/Lib.gmk
+index 8e11c451510..c067ad9de6e 100644
+--- a/make/modules/jdk.net/Lib.gmk
++++ b/make/modules/jdk.net/Lib.gmk
+@@ -27,7 +27,7 @@ include LibCommon.gmk
+ 
+ ################################################################################
+ 
+-ifeq ($(call isTargetOs, solaris linux macosx), true)
++ifeq ($(call isTargetOs, solaris linux macosx ios android), true)
+ 
+   $(eval $(call SetupJdkLibrary, BUILD_LIBEXTNET, \
+       NAME := extnet, \
+diff --git a/src/java.base/macosx/native/libjava/java_props_macosx.c b/src/java.base/macosx/native/libjava/java_props_macosx.c
+index df997e07417..e67b20e8e81 100644
+--- a/src/java.base/macosx/native/libjava/java_props_macosx.c
++++ b/src/java.base/macosx/native/libjava/java_props_macosx.c
+@@ -23,6 +23,7 @@
+  * questions.
+  */
+ 
++#ifndef TARGET_IOS
+ #include <sys/socket.h>
+ #include <netinet/in.h>
+ #include <arpa/inet.h>
+@@ -32,8 +33,22 @@
+ #include <SystemConfiguration/SystemConfiguration.h>
+ #include <Foundation/Foundation.h>
+ 
++#else
++#include <stdlib.h>
++#include <string.h>
++#include <sys/param.h>
++#include <objc/runtime.h>
++#include <objc/objc.h>
++#include <objc/message.h>
++#include <CoreFoundation/CoreFoundation.h>
++#include <CoreFoundation/CFlocale.h>
++
++#endif
++
+ #include "java_props_macosx.h"
+ 
++#ifndef TARGET_IOS
++
+ char *getPosixLocale(int cat) {
+     char *lc = setlocale(cat, NULL);
+     if ((lc == NULL) || (strcmp(lc, "C") == 0)) {
+@@ -473,3 +488,31 @@ void setProxyProperties(java_props_t *sProps) {
+ 
+     CFRelease(dict);
+ }
++#else
++#define LOCALEIDLENGTH  128
++char *getPosixLocale(int cat) {
++    char *lc = setlocale(cat, NULL);
++    if ((lc == NULL) || (strcmp(lc, "C") == 0)) {
++        lc = getenv("LANG");
++    }
++    if (lc == NULL) return NULL;
++    return strdup(lc);
++  }
++
++char *getMacOSXLocale(int cat) {
++    char localeString[LOCALEIDLENGTH];
++    // Get current user locale.
++    CFLocaleRef loc = CFLocaleCopyCurrent();
++    char *localstr;
++    if (CFStringGetCString(CFLocaleGetIdentifier(loc),
++                           localeString, LOCALEIDLENGTH,
++                           kCFStringEncodingUTF8))
++      localstr = strdup(localeString);
++    else
++      localstr =  NULL;
++
++    CFRelease(loc);
++    return (localstr);
++}
++
++#endif
+diff --git a/src/java.base/macosx/native/libjli/java_md_macosx.m b/src/java.base/macosx/native/libjli/java_md_macosx.m
+index 38911ccaabb..dd6aa47882a 100644
+--- a/src/java.base/macosx/native/libjli/java_md_macosx.m
++++ b/src/java.base/macosx/native/libjli/java_md_macosx.m
+@@ -39,10 +39,12 @@
+ 
+ #include "manifest_info.h"
+ 
++#ifndef TARGET_IOS
+ /* Support Cocoa event loop on the main thread */
+ #include <Cocoa/Cocoa.h>
+ #include <objc/objc-runtime.h>
+ #include <objc/objc-auto.h>
++#endif
+ 
+ #include <errno.h>
+ #include <spawn.h>
+@@ -210,6 +212,8 @@
+         preferredJVM = "client";
+ #elif defined(__x86_64__)
+         preferredJVM = "server";
++#elif defined(__arm64__)
++        preferredJVM = "zero";
+ #else
+ #error "Unknown architecture - needs definition"
+ #endif
+@@ -270,7 +274,11 @@
+     sPreferredJVMType = strdup(prefJVM);
+ }
+ 
++#ifdef TARGET_IOS
++static jboolean awtLoaded = 0;
++#else
+ static BOOL awtLoaded = NO;
++#endif
+ static pthread_mutex_t awtLoaded_mutex = PTHREAD_MUTEX_INITIALIZER;
+ static pthread_cond_t  awtLoaded_cv = PTHREAD_COND_INITIALIZER;
+ 
+@@ -278,7 +286,11 @@
+ JLI_NotifyAWTLoaded()
+ {
+     pthread_mutex_lock(&awtLoaded_mutex);
++#ifdef TARGET_IOS
++    awtLoaded = 1;
++#else
+     awtLoaded = YES;
++#endif
+     pthread_cond_signal(&awtLoaded_cv);
+     pthread_mutex_unlock(&awtLoaded_mutex);
+ }
+@@ -307,6 +319,7 @@
+     exit(main_fptr(args->argc, args->argv));
+ }
+ 
++#ifndef TARGET_IOS
+ static void dummyTimer(CFRunLoopTimerRef timer, void *info) {}
+ 
+ static void ParkEventLoop() {
+@@ -321,6 +334,7 @@ static void ParkEventLoop() {
+         result = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0e20, false);
+     } while (result != kCFRunLoopRunFinished);
+ }
++#endif
+ 
+ /*
+  * Mac OS X mandates that the GUI event loop run on very first thread of
+@@ -351,7 +365,9 @@ static void MacOSXStartup(int argc, char *argv[]) {
+         exit(1);
+     }
+ 
++#ifndef TARGET_IOS
+     ParkEventLoop();
++#endif
+ }
+ 
+ void
+@@ -897,6 +913,7 @@ static void MacOSXStartup(int argc, char *argv[]) {
+ JVMInit(InvocationFunctions* ifn, jlong threadStackSize,
+                  int argc, char **argv,
+                  int mode, char *what, int ret) {
++#ifndef TARGET_IOS
+     if (sameThread) {
+         JLI_TraceLauncher("In same thread\n");
+         // need to block this thread against the main thread
+@@ -927,6 +944,9 @@ static void MacOSXStartup(int argc, char *argv[]) {
+     } else {
+         return ContinueInNewThread(ifn, threadStackSize, argc, argv, mode, what, ret);
+     }
++#else
++    return ContinueInNewThread(ifn, threadStackSize, argc, argv, mode, what, ret);
++#endif
+ }
+ 
+ /*
+diff --git a/src/java.base/unix/native/libnet/NetworkInterface.c b/src/java.base/unix/native/libnet/NetworkInterface.c
+index 7cb2695b036..2094d0a687e 100644
+--- a/src/java.base/unix/native/libnet/NetworkInterface.c
++++ b/src/java.base/unix/native/libnet/NetworkInterface.c
+@@ -25,7 +25,9 @@
+ #include <arpa/inet.h>
+ #include <errno.h>
+ #include <net/if.h>
++#ifndef TARGET_IOS
+ #include <net/if_arp.h>
++#endif
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/ioctl.h>
+diff --git a/src/java.base/unix/native/libnet/net_util_md.h b/src/java.base/unix/native/libnet/net_util_md.h
+index abac9adbceb..91390c05252 100644
+--- a/src/java.base/unix/native/libnet/net_util_md.h
++++ b/src/java.base/unix/native/libnet/net_util_md.h
+@@ -26,6 +26,9 @@
+ #ifndef NET_UTILS_MD_H
+ #define NET_UTILS_MD_H
+ 
++#ifdef ANDROID
++#include <netinet/in.h>
++#endif
+ #include <netdb.h>
+ #include <poll.h>
+ #include <sys/socket.h>
+-- 
+2.50.1 (Apple Git-155)
+
