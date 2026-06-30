@@ -7,6 +7,7 @@ endif
 # Keep in alphabetical order
 DEPENDS = \
   bzip2 \
+  cups \
   expat \
   fontconfig \
   freetype2 \
