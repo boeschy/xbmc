@@ -1,0 +1,6 @@
+LIBNAME=cups
+VERSION=2.4.19
+ARCHIVE=cups-$(VERSION)-source.tar.gz
+SHA512=3d7f7bd448afc54011e98cc3f6a6cfe704bdae58a1e0cdde19f95ed0b4956b518c6e0a64277c99daa38b26d3ddf23033a4135cc21c3e5d7602731789024fa287
+
+FULL_URL=https://github.com/OpenPrinting/cups/releases/download/v2.4.19/cups-2.4.19-source.tar.gz

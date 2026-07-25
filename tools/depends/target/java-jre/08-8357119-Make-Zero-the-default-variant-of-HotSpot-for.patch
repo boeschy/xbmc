@@ -1,0 +1,92 @@
+From a41ae11b149ed9173c288cfaa518387c5b2280b6 Mon Sep 17 00:00:00 2001
+From: Julian Waters <jwaters@openjdk.org>
+Date: Mon, 26 May 2025 09:33:19 +0000
+Subject: [PATCH] 8357119: Make Zero the default variant of HotSpot for iOS
+
+Reviewed-by: ihse, jvos
+---
+ README.md                | 31 +++++++++++++++++++------------
+ make/autoconf/hotspot.m4 |  6 +++++-
+ 2 files changed, 24 insertions(+), 13 deletions(-)
+
+diff --git a/README.md b/README.md
+index bc28ebf0641..da96a650495 100644
+--- a/README.md
++++ b/README.md
+@@ -19,8 +19,8 @@ ## Build static image for iOS
+ 
+ ### Pre-requisites
+ Following are the prerequisites to build JDK on Mac targeting iOS:
+-1. Download and unzip pre-built JDK24 to be used as boot JDK
+-2. Download the [support zip](https://download2.gluonhq.com/mobile/mobile-support-20250106.zip) which contains an ios build for libffi and cups. Unzip it in the root directory of the project.
++1. Download and install JDK24 for macOS. You can use the JDK you just built targeting macOS in the above note instead.
++2. Download the [support zip](https://download2.gluonhq.com/mobile/mobile-support-20250106.zip) which contains an ios build for libffi and cups. Unzip it in an easy to use location.
+ 3. Install `autoconf` on mac via homebrew: `brew install autoconf`
+ 
+ ### Clone the mobile repository
+@@ -31,27 +31,34 @@ ### Clone the mobile repository
+ ```
+ 
+ ### Configure
+-Modify the configure script below so that it has the correct paths to your JDK24 directory,
+-the unzipped 'support' directory, and the correct location of the iPhoneOS.platform.
++Modify the configure script below so that it has the correct paths to the unzipped 'support'
++directory, and the correct location of the iPhoneOS.platform.
+ 
+ ```
+ sh configure \
+---with-conf-name=zero-ios-aarch64 \
+ --disable-warnings-as-errors \
+ --openjdk-target=aarch64-macos-ios \
+---with-boot-jdk=/Users/abhinay/.sdkman/candidates/java/24.ea.29-open \
+---with-jvm-variants=zero \
+---with-libffi-include=<support-dir-absolute-path>/libffi/include \
+---with-libffi-lib=<support-dir-absolute-path>/libffi/libs \
+---with-cups-include=<support-dir-absolute-path>/cups-2.3.6
++--with-libffi-include=<support-dir-path>/libffi/include \
++--with-libffi-lib=<support-dir-path>/libffi/libs \
++--with-cups-include=<support-dir-path>/cups-2.3.6
+ --with-sysroot=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk \
+ ```
+ 
++If you need to tell configure the path of your boot JDK, or if configure fails with an error saying
++it can't find a boot JDK, for instance if you downloaded a JDK in compressed archive form rather
++than with an installer, you can pass `--with-boot-jdk=<java-directory-path>` to configure.
++
++For iOS the default JVM used is Zero, since iOS has no writeable and executable sections. However, if
++you plan to run the JDK on the simulator for testing purposes, you can use the other JVM variants such
++as Server. To do this, pass `--with-jvm-variants=server` to configure (Or any other valid option, which
++are, in no particular order: server, client, minimal, core, zero, custom). Do note that passing zero to
++this option is redundant since Zero is already the default for iOS.
++
+ ### Build static image
+ Execute the `make` command:
+ 
+ ```
+-make CONF=zero-ios-aarch64 static-libs-image
++make CONF=ios-aarch64-zero-release static-libs-image
+ ```
+ 
+-Once the build is successful, it should have created a directory in `build/zero-ios-aarch64/images/static-libs/lib/zero` with a file `libjvm.a`.
+\ No newline at end of file
++Once the build is successful, it should have created a directory in `build/ios-aarch64-zero-release/images/static-libs/lib/zero` with a file `libjvm.a`.
+diff --git a/make/autoconf/hotspot.m4 b/make/autoconf/hotspot.m4
+index 6dc46d17aa3..248eed8041a 100644
+--- a/make/autoconf/hotspot.m4
++++ b/make/autoconf/hotspot.m4
+@@ -54,7 +54,11 @@ AC_DEFUN_ONCE([HOTSPOT_SETUP_JVM_VARIANTS],
+       zero custom) @<:@server@:>@])])
+ 
+   if test "x$with_jvm_variants" = x; then
+-    with_jvm_variants="server"
++    if test "x$OPENJDK_TARGET_OS" = xios; then
++      with_jvm_variants="zero"
++    else
++      with_jvm_variants="server"
++    fi
+   fi
+   JVM_VARIANTS_OPT="$with_jvm_variants"
+ 
+-- 
+2.50.1 (Apple Git-155)
+

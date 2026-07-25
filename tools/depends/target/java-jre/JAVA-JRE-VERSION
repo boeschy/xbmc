@@ -1,0 +1,7 @@
+LIBNAME=jdk
+VERSION=21.0.12-7
+ARCHIVE=jdk-$(VERSION).tar.gz
+SHA512=58b30b86ab269525acd001cb34aebb684b5cab052a6962a7616d9c82baf51d5ab87231060eeb18a2b2926c088762d42600feea3274fb1c3a4f04c1c46f19b9b3
+BYPRODUCT=libjvm.a
+
+FULL_URL=https://github.com/openjdk/jdk21u/archive/refs/tags/jdk-21.0.12+7.tar.gz
