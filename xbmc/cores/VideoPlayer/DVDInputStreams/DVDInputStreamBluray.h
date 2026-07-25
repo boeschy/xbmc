@@ -129,6 +129,30 @@ public:
 
   void GetStreamInfo(int pid, std::string &language);
 
+  /*!
+   * \brief Notify libbluray of the audio stream selected in Kodi so that
+   *        on-disc menus (HDMV/BD-J) stay in sync with the player GUI, as
+   *        required by the libbluray API. Without this, switching to a
+   *        different audio stream while navigating the disc with its
+   *        native menu system enabled has no effect, since the elementary
+   *        stream that libbluray multiplexes into the output (in
+   *        particular for streams carried in a sub-path) is controlled by
+   *        its own internal player status register rather than by which
+   *        PID Kodi's demuxer happens to be reading.
+   * \param pid the PID of the audio stream to activate
+   * \return true if a stream with the given PID was found and selected
+   */
+  bool SetActiveAudioStream(int pid);
+
+  /*!
+   * \brief Notify libbluray of the subtitle (PG/TextST) stream selected in
+   *        Kodi. See SetActiveAudioStream() for details on why this is
+   *        necessary.
+   * \param pid the PID of the subtitle stream to activate
+   * \return true if a stream with the given PID was found and selected
+   */
+  bool SetActiveSubtitleStream(int pid);
+
   void OverlayCallback(const BD_OVERLAY * const);
 #ifdef HAVE_LIBBLURAY_BDJ
   void OverlayCallbackARGB(const struct bd_argb_overlay_s * const);

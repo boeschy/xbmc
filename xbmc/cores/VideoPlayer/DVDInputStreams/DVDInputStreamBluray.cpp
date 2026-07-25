@@ -1068,6 +1068,57 @@ void CDVDInputStreamBluray::GetStreamInfo(int pid, std::string &language)
     CLog::Log(LOGDEBUG, "CDVDInputStreamBluray::GetStreamInfo - unhandled pid {}", pid);
 }
 
+// Returns the 1-based STN stream number of the entry matching pid, or -1 if not found.
+static int find_stream_number(int pid, BLURAY_STREAM_INFO* info, int count)
+{
+  for (int i = 0; i < count; i++, info++)
+  {
+    if (info->pid == static_cast<uint16_t>(pid))
+      return i + 1;
+  }
+  return -1;
+}
+
+bool CDVDInputStreamBluray::SetActiveAudioStream(int pid)
+{
+  if (!m_bd || !m_navmode || !m_clip)
+    return false;
+
+  int streamNumber = find_stream_number(pid, m_clip->audio_streams, m_clip->audio_stream_count);
+  if (streamNumber < 0)
+  {
+    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray::SetActiveAudioStream - pid {} not found", pid);
+    return false;
+  }
+
+  // Keep libbluray's on-disc menu system (HDMV/BD-J) in sync with the audio
+  // stream selected through Kodi's UI/hotkeys, as documented for
+  // bd_select_stream(). Without this, the elementary stream libbluray
+  // multiplexes into the output - in particular for sub-path audio - is not
+  // updated, and the previously selected track keeps playing.
+  bd_select_stream(m_bd, BLURAY_AUDIO_STREAM, static_cast<uint32_t>(streamNumber), 1);
+  return true;
+}
+
+bool CDVDInputStreamBluray::SetActiveSubtitleStream(int pid)
+{
+  if (!m_bd || !m_navmode || !m_clip)
+    return false;
+
+  int streamNumber = find_stream_number(pid, m_clip->pg_streams, m_clip->pg_stream_count);
+  if (streamNumber < 0)
+  {
+    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray::SetActiveSubtitleStream - pid {} not found", pid);
+    return false;
+  }
+
+  // See SetActiveAudioStream() - the same applies to PG/TextST subtitle
+  // streams, which for many discs are carried in a sub-path and therefore
+  // only get spliced into the output once libbluray is told to select them.
+  bd_select_stream(m_bd, BLURAY_PG_TEXTST_STREAM, static_cast<uint32_t>(streamNumber), 1);
+  return true;
+}
+
 CDVDInputStream::ENextStream CDVDInputStreamBluray::NextStream()
 {
   if(!m_navmode || m_hold == HOLD_EXIT || m_hold == HOLD_ERROR)

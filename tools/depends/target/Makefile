@@ -17,7 +17,6 @@ DEPENDS = \
   gettext \
   gmp \
   gnutls \
-  gtest \
   harfbuzz \
   java-jre \
   libffi \
@@ -46,7 +45,7 @@ else
 endif
 
 ifeq ($(OS),darwin_embedded)
-  EXCLUDED_DEPENDS = libusb gtest libcdio libcdio-gplv3
+  EXCLUDED_DEPENDS = libusb libcdio libcdio-gplv3
   ifeq ($(TARGET_PLATFORM),appletvos)
     EXCLUDED_DEPENDS += libshairplay libplist
   endif
@@ -62,7 +61,7 @@ ifeq ($(OS),osx)
 endif
 
 ifeq ($(OS),android)
-  EXCLUDED_DEPENDS = libusb gtest libcdio libcdio-gplv3
+  EXCLUDED_DEPENDS = libusb libcdio libcdio-gplv3
   DEPENDS += dummy-libxbmc libdovi libuuid
   PYMODULE_DEPS = dummy-libxbmc
   LIBUUID = libuuid

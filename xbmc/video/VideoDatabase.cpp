@@ -2297,20 +2297,17 @@ int CVideoDatabase::SetDetailsForMovie(CVideoInfoTag& details,
     if (details.m_set.HasTitle())
     {
       idSet = AddSet(details.m_set.GetTitle(), details.m_set.GetOverview(),
-                     details.m_set.GetOriginalTitle(), details.GetUpdateSetOverview());
+                     details.m_set.GetOriginalTitle(), details.m_set.GetUpdateSetOverview());
       details.m_set.SetID(idSet);
-      // add art if not available
-      if (!HasArtForItem(idSet, MediaTypeVideoCollection))
+      for (const auto& [type, url] : artwork)
       {
-        for (const auto& [type, url] : artwork)
+        if (!StringUtils::StartsWith(type, "set."))
+          continue;
+        if (!SetArtForItem(idSet, MediaTypeVideoCollection, type.substr(4), url))
         {
-          if (StringUtils::StartsWith(type, "set.") &&
-              !SetArtForItem(idSet, MediaTypeVideoCollection, type.substr(4), url))
-          {
-            if (!inTransaction)
-              RollbackTransaction();
-            return -1;
-          }
+          if (!inTransaction)
+            RollbackTransaction();
+          return -1;
         }
       }
     }
@@ -3426,6 +3423,60 @@ void CVideoDatabase::GetEpisodesByBlurayPath(const std::string& path,
   }
 }
 
+void CVideoDatabase::GetEpisodesByBasePath(const std::string& path,
+                                           std::vector<CVideoInfoTag>& episodes,
+                                           int idShow /* = -1 */)
+{
+  try
+  {
+    if (idShow == -1)
+      // Will only find first idShow for a given base path
+      // Note the wiki says all TV shows should be in their own folder
+      idShow = GetSingleValueInt(PrepareSQL("SELECT idShow FROM episode WHERE c%02d='%s'",
+                                            VIDEODB_ID_EPISODE_BASEPATH, path.c_str()),
+                                 *m_pDS);
+
+    // Generate map of episodes in each file (finding base file for bluray://) of show
+    EpisodeFileMap fileMap;
+    if (!GetEpisodeMap(idShow, fileMap, *m_pDS))
+    {
+      m_pDS->close();
+      return;
+    }
+
+    // Get episode details
+    auto filteredEpisodes{fileMap |
+                          std::views::filter(
+                              [&path](const EpisodeFileMapEntry& episode)
+                              {
+                                // Base path is either the file (ISO/MKV) or path containing the BDMV/VIDEO_TS folder
+                                const std::string basePath{
+                                    URIUtils::IsBDFile(episode.first) ||
+                                            URIUtils::IsDVDFile(episode.first)
+                                        ? URIUtils::GetDiscBase(episode.first)
+                                        : episode.first};
+                                return basePath == path;
+                              }) |
+                          std::views::values};
+    for (const auto& episode : filteredEpisodes)
+    {
+      m_pDS->goto_rec(episode.index);
+      CVideoInfoTag tag{GetDetailsForEpisode(*m_pDS)};
+      tag.m_duration = episode.duration;
+      episodes.push_back(std::move(tag));
+    }
+    m_pDS->close();
+  }
+  catch (const std::exception& e)
+  {
+    CLog::LogF(LOGERROR, "Failed for base path {} - error {}", path, e.what());
+  }
+  catch (...)
+  {
+    CLog::LogF(LOGERROR, "Failed for base path {}", path);
+  }
+}
+
 void CVideoDatabase::GetEpisodesByFile(const std::string& strFilenameAndPath,
                                        std::vector<CVideoInfoTag>& episodes)
 {
@@ -4377,8 +4428,7 @@ void CVideoDatabase::GetDetailsFromDB(const dbiplus::sql_record* const record,
     switch (offsets[i].type)
     {
       case VIDEODB_TYPE_STRING:
-        *reinterpret_cast<std::string*>((reinterpret_cast<char*>(&details)) + offsets[i].offset) =
-            record->at(i + idxOffset).get_asString();
+        details.*(offsets[i].member) = record->at(i + idxOffset).get_asString();
         break;
       case VIDEODB_TYPE_UNUSED: // Skip the unused field to avoid populating unused data
         continue;
@@ -4691,7 +4741,7 @@ CSetInfoTag CVideoDatabase::GetDetailsForSet(const dbiplus::sql_record* const re
 
   GetDetailsFromDB(record, VIDEODB_ID_SET_MIN, VIDEODB_ID_SET_MAX, DbSetOffsets, details, 1);
 
-  details.m_id = idSet;
+  details.SetID(idSet);
 
   return details;
 }
@@ -8612,21 +8662,55 @@ std::string CVideoDatabase::GetContentForPath(const std::string& strPath)
   {
     if (scraper->Content() == ContentType::TVSHOWS)
     {
-      // check for episodes or seasons.  Assumptions are:
-      // 1. if episodes are in the path then we're in episodes.
-      // 2. if no episodes are found, and content was set directly on this path, then we're in shows.
-      // 3. if no episodes are found, and content was not set directly on this path, we're in seasons (assumes tvshows/seasons/episodes)
-      std::string sql = "SELECT COUNT(*) FROM episode_view ";
+      // For TV shows scraped with 'Single TV show in folder OFF' - pointing to folder /TV Shows/
+      // For TV shows scraped with 'Single TV show in folder ON' - pointing to folder /Show (2002)/
+      //
+      // Contents of:                                                   Return
+      // ------------                                                   ------
+      // /TV Shows/                                                     tvshows (NB first case only)
+      // /TV Shows/Show (2002)/                                         seasons - if folder does NOT contain any episodes (eg. Season subfolders only)
+      // /TV Shows/Show (2002)/                                         episodes - if folder DOES contain episode(s)
+      // /TV Shows/Show (2002)/Season 1/                                episodes - if folder DOES contain episode(s)
+      // /TV Shows/Show (2002)/Season 1/                                seasons - if folder does NOT contain episode(s)
+      //                                                                @todo - this currently returns episodes if there is a single archive containing multiple episodes
+      //                                                                @todo - (although of no functional consequence)
+      // /TV Shows/Show (2002)/Season 1/episode.rar                     episodes - if the archive(s) contains an episode (the .rar is expanded by the vfs automatically)
+      // /TV Shows/Show (2002)/Season 1/episodes.rar                    seasons - if the archive does NOT contain any episodes (ie. they are in a subfolder of the archive)
+      // /TV Shows/Show (2002)/episodes.rar/Season 1                    episodes - if the archive contains episode(s) (expanded by the vfs)
+      // /TV Shows/Show (2002)/Seasons 1 and 2/episodes.rar/Season 1    episodes - if the archive contains episode(s) (expanded by the vfs)
 
-      if (foundDirectly)
-        sql += PrepareSQL("WHERE strPath = '%s'", strPath.c_str());
-      else
-        sql += PrepareSQL("WHERE strPath LIKE '%s%%'", strPath.c_str());
+      std::string sql = PrepareSQL("SELECT 1 FROM episode_view "
+                                   "WHERE strPath = '%s' "
+                                   "LIMIT 1",
+                                   strPath.c_str());
 
-      m_pDS->query( sql );
-      if (m_pDS->num_rows() && m_pDS->fv(0).get_asInt() > 0)
+      m_pDS->query(sql);
+      if (m_pDS->num_rows())
         return "episodes";
-      return foundDirectly ? "tvshows" : "seasons";
+
+      // If the episodes are in individual archives
+      // then strPath may point to the directory containing the archive
+      // rather than the archive itself (eg. rar://).
+      // So see if there are any matches using the parentpathid.
+      sql = PrepareSQL("SELECT DISTINCT e.strPath FROM episode_view e "
+                       "JOIN path p ON e.c%02d = p.idPath "
+                       "WHERE p.strPath = '%s' ",
+                       VIDEODB_ID_EPISODE_PARENTPATHID, strPath.c_str());
+      m_pDS->query(sql);
+      if (m_pDS->num_rows())
+      {
+        while (!m_pDS->eof())
+        {
+          const CURL url(m_pDS->fv(0).get_asString());
+          if ((url.GetFileName().empty() && URIUtils::IsArchive(url)) || url.IsBlurayPath())
+            return "episodes"; // Episodes in root of archive
+          m_pDS->next();
+        }
+      }
+
+      // If the scraper was set directly on this path, it is a tvshows root
+      // unless the scraper is set for a single tv show in this folder
+      return foundDirectly && !settings.parent_name ? "tvshows" : "seasons";
     }
     return TranslateContent(scraper->Content());
   }
@@ -9430,6 +9514,34 @@ void CVideoDatabase::GetMusicVideosByName(const std::string& strSearch, CFileIte
   {
     CLog::LogF(LOGERROR, "({}) failed", strSQL);
   }
+}
+
+std::string CVideoDatabase::GetPlotByShowId(int idShow)
+{
+  std::string strSQL;
+
+  try
+  {
+    if (nullptr == m_pDB)
+      return "";
+    if (nullptr == m_pDS)
+      return "";
+
+    strSQL = PrepareSQL("SELECT c%02d FROM tvshow WHERE idShow = %i", VIDEODB_ID_TV_PLOT, idShow);
+    m_pDS->query(strSQL);
+
+    std::string plot{};
+    if (!m_pDS->eof())
+      plot = m_pDS->fv(0).get_asString();
+
+    m_pDS->close();
+    return plot;
+  }
+  catch (...)
+  {
+    CLog::LogF(LOGERROR, "({}) failed", strSQL);
+  }
+  return {};
 }
 
 void CVideoDatabase::GetEpisodesByPlot(const std::string& strSearch, CFileItemList& items)
@@ -10567,7 +10679,7 @@ void CVideoDatabase::ExportToXML(const std::string &path, bool singleFile /* = t
           // get set information and generate .nfo
           CSetInfoTag set{GetDetailsForSet(*m_pDS)};
           KODI::ART::Artwork artwork;
-          if (GetArtForItem(set.m_id, MediaTypeVideoCollection, artwork) && !artwork.empty())
+          if (GetArtForItem(set.GetID(), MediaTypeVideoCollection, artwork) && !artwork.empty())
           {
             // Remove local urls as files saved in the set folder
             std::erase_if(artwork, [](const auto& art) { return !URIUtils::IsRemote(art.second); });
@@ -11523,6 +11635,14 @@ bool CVideoDatabase::GetItemsForPath(const std::string &content, const std::stri
       GetItemsForPath(content, p, items);
 
     return !items.IsEmpty();
+  }
+
+  if (URIUtils::IsArchive(CURL(path)))
+  {
+    std::string parent = URIUtils::GetParentPath(path);
+    if (!parent.empty() && parent != path)
+      return GetItemsForPath(content, parent, items);
+    return false;
   }
 
   int pathID = GetPathId(path);

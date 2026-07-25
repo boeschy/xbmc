@@ -264,7 +264,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
                     CURL::GetRedacted(directory), m_bClean ? " and clean" : "");
           m_pathsToScan.erase(m_pathsToScan.begin());
         }
-        else if (!DoScan(directory))
+        else if ([[maybe_unused]] const auto [scanComplete, foundContent] = DoScan(directory);
+                 scanComplete == ScanComplete::Stopped)
           bCancelled = true;
       }
 
@@ -348,7 +349,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
     m_bStop = true;
   }
 
-  bool CVideoInfoScanner::DoScan(const std::string& strDirectory)
+  std::pair<CInfoScanner::ScanComplete, CInfoScanner::ContentFound> CVideoInfoScanner::DoScan(
+      const std::string& strDirectory)
   {
     if (m_handle)
     {
@@ -380,14 +382,14 @@ CVideoInfoScanner::~CVideoInfoScanner()
                                         : m_advancedSettings->m_moviesExcludeFromScanRegExps;
 
     if (CUtil::ExcludeFileOrFolder(strDirectory, regexps, &m_regexpCache))
-      return true;
+      return std::make_pair(ScanComplete::Completed, ContentFound::None);
 
     if (HasNoMedia(strDirectory))
-      return true;
+      return std::make_pair(ScanComplete::Completed, ContentFound::None);
 
     bool ignoreFolder = !m_scanAll && settings.noupdate;
     if (content == ContentType::NONE || ignoreFolder)
-      return true;
+      return std::make_pair(ScanComplete::Completed, ContentFound::None);
 
     if (URIUtils::IsPlugin(strDirectory) && !CPluginDirectory::IsMediaLibraryScanningAllowed(TranslateContent(content), strDirectory))
     {
@@ -395,7 +397,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
           LOGINFO,
           "VideoInfoScanner: Plugin '{}' does not support media library scanning for '{}' content",
           CURL::GetRedacted(strDirectory), content);
-      return true;
+      return std::make_pair(ScanComplete::Completed, ContentFound::None);
     }
 
     std::string hash, dbHash;
@@ -421,9 +423,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
         CDirectory::GetDirectory(strDirectory, items, CServiceBroker::GetFileExtensionProvider().GetVideoExtensions(),
                                  DIR_FLAG_DEFAULTS);
         // do not consider inner folders with .nomedia
-        items.erase(std::remove_if(items.begin(), items.end(), [](const CFileItemPtr& item)
-                                   { return item->IsFolder() && HasNoMedia(item->GetPath()); }),
-                    items.end());
+        erase_if(items, [](const std::shared_ptr<CFileItem>& item)
+                 { return item->IsFolder() && HasNoMedia(item->GetPath()); });
         items.Stack();
 
         // force sorting consistency to avoid hash mismatch between platforms
@@ -504,7 +505,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
       {
         if (!m_bStop && (content == ContentType::MOVIES || content == ContentType::MUSICVIDEOS))
         {
-          m_database.SetPathHash(strDirectory, hash);
+          if (!URIUtils::IsArchive(CURL(strDirectory)))
+            m_database.SetPathHash(strDirectory, hash);
           if (m_bClean)
             m_pathsToClean.insert(m_database.GetPathId(strDirectory));
           CLog::Log(LOGDEBUG, "VideoInfoScanner: Finished adding information from dir {}",
@@ -521,13 +523,16 @@ CVideoInfoScanner::~CVideoInfoScanner()
     }
     else if (!StringUtils::EqualsNoCase(hash, dbHash) &&
              (content == ContentType::MOVIES || content == ContentType::MUSICVIDEOS))
-    { // update the hash either way - we may have changed the hash to a fast version
-      m_database.SetPathHash(strDirectory, hash);
+    {
+      // update the hash either way - we may have changed the hash to a fast version
+      if (!URIUtils::IsArchive(CURL(strDirectory)))
+        m_database.SetPathHash(strDirectory, hash);
     }
 
     if (m_handle)
       OnDirectoryScanned(strDirectory);
 
+    bool foundSomethingInArchive = false;
     for (int i = 0; i < items.Size(); ++i)
     {
       CFileItemPtr pItem = items[i];
@@ -554,13 +559,39 @@ CVideoInfoScanner::~CVideoInfoScanner()
       if (content != ContentType::TVSHOWS && settings.recurse > 0 && pItem->IsFolder() &&
           !pItem->IsParentFolder() && !PLAYLIST::IsPlayList(*pItem))
       {
-        if (!DoScan(pItem->GetPath()))
+        if (const auto [scanComplete, foundContentOnRecursion] = DoScan(pItem->GetPath());
+            scanComplete == ScanComplete::Stopped)
         {
           m_bStop = true;
         }
+        // If this subdirectory is an archive and content was found inside it,
+        // store the hash for the physical parent directory instead of the archive (eg. rar://) path.
+        // This ensures change detection works correctly on the real filesystem path.
+        else if (!foundSomething && !m_bStop &&
+                 foundContentOnRecursion == ContentFound::NewContentFound &&
+                 (content == ContentType::MOVIES || content == ContentType::MUSICVIDEOS) &&
+                 URIUtils::IsArchive(CURL(pItem->GetPath())))
+        {
+          foundSomethingInArchive = true;
+        }
       }
     }
-    return !m_bStop;
+
+    // If the direct scan found nothing but an archive subfolder scan did,
+    // store the hash for the physical directory so it is used for change detection
+    // rather than the archive (eg. rar://) virtual path.
+    if (!bSkip && !m_bStop && foundSomethingInArchive && !URIUtils::IsArchive(CURL(strDirectory)))
+    {
+      m_database.SetPathHash(strDirectory, hash);
+      CLog::LogF(LOGDEBUG,
+                 "Stored hash for physical dir '{}' after finding content in "
+                 "archive subfolder",
+                 CURL::GetRedacted(strDirectory));
+    }
+
+    return std::make_pair(m_bStop ? ScanComplete::Stopped : ScanComplete::Completed,
+                          foundSomething || foundSomethingInArchive ? ContentFound::NewContentFound
+                                                                    : ContentFound::None);
   }
 
   bool CVideoInfoScanner::UpdateSetInTag(CVideoInfoTag& tag)
@@ -589,10 +620,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
           if (!setTag.GetTitle().empty())
             tag.m_set.SetTitle(setTag.GetTitle());
           if (!setTag.GetOverview().empty())
-          {
             tag.m_set.SetOverview(setTag.GetOverview());
-            tag.SetUpdateSetOverview(true);
-          }
           if (setTag.HasArt())
             tag.m_set.SetArt(setTag.GetArt());
           setUpdated = true;
@@ -620,7 +648,10 @@ CVideoInfoScanner::~CVideoInfoScanner()
           movieSetArt.try_emplace(url.m_aspect.substr(4), url.m_url);
     }
     if (!movieSetArt.empty())
+    {
       tag.m_set.SetArt(movieSetArt);
+      setUpdated = true;
+    }
 
     return setUpdated;
   }
@@ -793,13 +824,22 @@ CVideoInfoScanner::~CVideoInfoScanner()
         idSeason = m_database.GetSeasonId(idTvShow, pItem->GetVideoInfoTag()->m_iSeason);
     }
 
+    // If we only want to refresh show details (and not the episodes), the
+    // episode-folder hash comparison below is irrelevant: it exists purely to decide
+    // whether episodes need to be re-scanned.
+    const bool refreshShowInfoOnly =
+        idTvShow > -1 && pItem->IsFolder() && !isSeason && !fetchEpisodes;
+
     // Enumerate episodes here as this compares hashes of folders containing episodes from this show
     //  and we want to do this before processing nfo files
     EPISODELIST files;
-    if (!EnumerateSeriesFolder(pItem, files))
-      return InfoRet::HAVE_ALREADY;
-    if (files.empty()) // no update or no files
-      return InfoRet::NOT_NEEDED;
+    if (!refreshShowInfoOnly)
+    {
+      if (!EnumerateSeriesFolder(pItem, files))
+        return InfoRet::HAVE_ALREADY;
+      if (files.empty()) // no update or no files
+        return InfoRet::NOT_NEEDED;
+    }
 
     if (ProgressCancelled(pDlgProgress, pItem->IsFolder() ? 20353 : 20361,
                           pItem->IsFolder() ? pItem->GetVideoInfoTag()->m_strShowTitle
@@ -816,7 +856,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
     if (useLocal)
       std::tie(result, loader) = ReadInfoTag(*pItem, info2, bDirNames, true);
 
-    if (result == InfoType::FULL && idTvShow < 0)
+    if (result == InfoType::FULL && (idTvShow < 0 || refreshShowInfoOnly))
     {
 
       long lResult = AddVideo(pItem, info2, bDirNames, useLocal);
@@ -995,7 +1035,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
           return InfoRet::INFO_ERROR;
 
         // Deal with set
-        if (UpdateSetInTag(*pItem->GetVideoInfoTag()) && !AddSet(pItem->GetVideoInfoTag()->m_set))
+        if (UpdateSetInTag(*item.GetVideoInfoTag()) && !AddSet(item.GetVideoInfoTag()->m_set))
           return InfoRet::INFO_ERROR;
       }
 
@@ -1392,22 +1432,20 @@ CVideoInfoScanner::~CVideoInfoScanner()
     }
 
     // Remove folders
-    items.erase(
-        std::remove_if(items.begin(), items.end(),
-                       [&](const CFileItemPtr& i)
-                       {
-                         const std::string fileAndPath(StringUtils::ToUpper(i->GetPath()));
-                         std::string file;
-                         std::string path;
-                         URIUtils::Split(fileAndPath, path, file);
-                         return (std::count_if(foldersToRemove.begin(), foldersToRemove.end(),
-                                               [&](const std::string& removePath)
-                                               { return path.rfind(removePath, 0) == 0; }) > 0) &&
-                                file != "VIDEO_TS.IFO" &&
-                                (file != "INDEX.BDMV" ||
-                                 fileAndPath.find("BACKUP/INDEX.BDMV") != std::string::npos);
-                       }),
-        items.end());
+    erase_if(items,
+             [&](const std::shared_ptr<CFileItem>& i)
+             {
+               const std::string fileAndPath(StringUtils::ToUpper(i->GetPath()));
+               std::string file;
+               std::string path;
+               URIUtils::Split(fileAndPath, path, file);
+               return (std::count_if(foldersToRemove.begin(), foldersToRemove.end(),
+                                     [&](const std::string& removePath)
+                                     { return path.rfind(removePath, 0) == 0; }) > 0) &&
+                      file != "VIDEO_TS.IFO" &&
+                      (file != "INDEX.BDMV" ||
+                       fileAndPath.find("BACKUP/INDEX.BDMV") != std::string::npos);
+             });
 
     // enumerate
     for (int i=0;i<items.Size();++i)
@@ -1647,11 +1685,22 @@ CVideoInfoScanner::~CVideoInfoScanner()
       // Remove remote set art (if need)
       if (useRemoteArt == UseRemoteArtWithLocalScraper::NO)
         std::erase_if(art,
-                      [](const std::pair<std::string, std::string>& artItem)
+                      [](const auto& artItem)
                       {
                         const auto& [type, url] = artItem;
                         return StringUtils::StartsWith(type, "set.") && URIUtils::IsRemote(url);
                       });
+
+      // Art in SetInfoTag trumps set.* art in VideoInfoTag
+      std::erase_if(art,
+                    [&pItem](const auto& artItem)
+                    {
+                      const auto& [type, url] = artItem;
+                      if (StringUtils::StartsWith(type, "set."))
+                        // Remove set art from VideoInfoTag if same type art in SetInfoTag
+                        return pItem->GetVideoInfoTag()->m_set.GetArt().contains(type.substr(4));
+                      return false;
+                    });
 
       // Deal with 'Disc n' subdirectories
       // Unless dealing with a full nfo in which case details are taken from there already
@@ -2390,7 +2439,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
 
     for (int i = 0; i < items.Size(); ++i)
     {
-      if (items[i]->IsFolder() &&
+      // For the purposes of fast hashing archives are not considered folders
+      if (items[i]->IsFolder() && !URIUtils::IsArchive(CURL(items[i]->GetPath())) &&
           !CUtil::ExcludeFileOrFolder(items[i]->GetPath(), excludes, &m_regexpCache))
         return false;
     }

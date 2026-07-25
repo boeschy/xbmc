@@ -34,9 +34,26 @@ bool CPlatformAndroid::InitStageOne()
 {
   if (!CPlatformPosix::InitStageOne())
     return false;
+
   setenv("SSL_CERT_FILE", CSpecialProtocol::TranslatePath("special://xbmc/system/certs/cacert.pem").c_str(), 1);
 
   setenv("OS", "Linux", true); // for python scripts that check the OS
+
+  setenv("JAVA_HOME", CSpecialProtocol::TranslatePath("special://xbmcbin/../../../cache/lib/j2re-image/").c_str(), 1);
+
+  setenv("JDK_HOME", CSpecialProtocol::TranslatePath("special://xbmcbin/../../../cache/lib/j2re-image/").c_str(), 1);
+
+  setenv("LIBBLURAY_CP", CSpecialProtocol::TranslatePath("special://xbmcbin/../../../cache/lib/j2re-image/").c_str(), 1);
+
+  std::string cache_path = "-Djava.io.tmpdir=" ;
+  
+  std::string kodi_path = cache_path + CSpecialProtocol::TranslatePath("special://xbmcbin/../../../cache/lib/j2re-image/");
+
+  setenv("_JAVA_OPTIONS", kodi_path.c_str(), 1);
+
+  setenv("LIBBLURAY_CACHE_ROOT", CSpecialProtocol::TranslatePath("special://userdata/cache/bluray/cache/").c_str(), 1);
+
+  setenv("LIBBLURAY_PERSISTENT_ROOT", CSpecialProtocol::TranslatePath("special://userdata/cache/bluray/cache/").c_str(), 1);
 
   CWinSystemAndroidGLESContext::Register();
 

@@ -470,6 +470,19 @@ bool CSelectionStreams::Get(StreamType type, StreamFlags flag, SelectionStream& 
   return false;
 }
 
+bool CSelectionStreams::Contains(StreamType type, int source, int64_t demuxerId, int id) const
+{
+  if (id < 0)
+    return false;
+
+  return std::any_of(m_Streams.cbegin(), m_Streams.cend(),
+                     [type, source, demuxerId, id](const SelectionStream& stream)
+                     {
+                       return stream.type == type && stream.source == source &&
+                              stream.demuxerId == demuxerId && stream.id == id;
+                     });
+}
+
 int CSelectionStreams::TypeIndexOf(StreamType type, int source, int64_t demuxerId, int id) const
 {
   if (id < 0)
@@ -3132,6 +3145,18 @@ void CVideoPlayer::HandleMessages()
         }
         else
         {
+#if defined(HAVE_LIBBLURAY)
+          if (m_pInputStream && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) && m_pDemuxer)
+          {
+            CDemuxStream* demuxStream = m_pDemuxer->GetStream(st.demuxerId, st.id);
+            if (demuxStream)
+            {
+              std::static_pointer_cast<CDVDInputStreamBluray>(m_pInputStream)
+                  ->SetActiveAudioStream(demuxStream->dvdNavId);
+            }
+          }
+#endif
+
           CloseStream(m_CurrentAudio, false);
           OpenStream(m_CurrentAudio, st.demuxerId, st.id, st.source);
           AdaptForcedSubtitles();
@@ -3201,6 +3226,18 @@ void CVideoPlayer::HandleMessages()
         }
         else
         {
+#if defined(HAVE_LIBBLURAY)
+          if (m_pInputStream && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) && m_pDemuxer)
+          {
+            CDemuxStream* demuxStream = m_pDemuxer->GetStream(st.demuxerId, st.id);
+            if (demuxStream)
+            {
+              std::static_pointer_cast<CDVDInputStreamBluray>(m_pInputStream)
+                  ->SetActiveSubtitleStream(demuxStream->dvdNavId);
+            }
+          }
+#endif
+
           CloseStream(m_CurrentSubtitle, false);
           OpenStream(m_CurrentSubtitle, st.demuxerId, st.id, st.source);
 
@@ -3799,8 +3836,16 @@ void CVideoPlayer::SetSubtitleVisible(bool bVisible)
 
 void CVideoPlayer::SetEnableStream(CCurrentStream& current, bool isEnabled)
 {
-  if (m_pDemuxer && STREAM_SOURCE_MASK(current.source) == STREAM_SOURCE_DEMUX)
+  // Guard against stale stream IDs reaching the demuxer after a stream
+  // change. CloseStream() calls this method with stream identification coming
+  // from m_Current* members that may belong to a previous demuxer session.
+  // m_SelectionStreams mirrors the current demuxer's state, so a stale stream
+  // from a prior session won't be found and EnableStream() won't be called.
+  if (m_pDemuxer && STREAM_SOURCE_MASK(current.source) == STREAM_SOURCE_DEMUX &&
+      m_SelectionStreams.Contains(current.type, current.source, current.demuxerId, current.id))
+  {
     m_pDemuxer->EnableStream(current.demuxerId, current.id, isEnabled);
+  }
 }
 
 void CVideoPlayer::SetSubtitleVisibleInternal(bool bVisible)
@@ -4381,6 +4426,10 @@ bool CVideoPlayer::CloseStream(CCurrentStream& current, bool bWaitForBuffers)
   if(bWaitForBuffers)
     SetCaching(CACHESTATE_DONE);
 
+  //! @todo: CloseStream() primarily closes a stream player. SetEnableStream()
+  //! call below should be moved away from this method to the places where
+  //! stream enable/disable is actually intended, avoiding stale stream
+  //! identification from reaching the demuxer.
   SetEnableStream(current, false);
 
   IDVDStreamPlayer* player = GetStreamPlayer(current.player);
@@ -4456,6 +4505,10 @@ void CVideoPlayer::FlushBuffers(double pts, bool accurate, bool sync)
   m_VideoPlayerTeletext->Flush();
   m_VideoPlayerRadioRDS->Flush();
   m_VideoPlayerAudioID3->Flush();
+
+  // drop queued pre-seek frames to avoid starving RenderManager's buffer pool so post-seek overlays/subtitles do not get dropped
+  if (sync)
+    m_renderManager.DiscardBuffer();
 
   if (m_playSpeed == DVD_PLAYSPEED_NORMAL || m_playSpeed == DVD_PLAYSPEED_PAUSE ||
       m_processInfo->IsTempoAllowed(static_cast<float>(m_playSpeed) / DVD_PLAYSPEED_NORMAL))
@@ -5390,7 +5443,12 @@ void CVideoPlayer::UpdatePlayState(double timeout)
         m_pDemuxer->GetChapterName(p.first, i + 1);
       }
     }
-    state.time = m_clock.GetClock(false) * 1000 / DVD_TIME_BASE;
+    state.time = DVD_TIME_TO_MSEC(m_clock.GetClock());
+    // Let the clock catch up after seek
+    if (m_CurrentVideo.startpts != DVD_NOPTS_VALUE &&
+        state.time < DVD_TIME_TO_MSEC(m_CurrentVideo.startpts))
+      state.time = DVD_TIME_TO_MSEC(m_CurrentVideo.startpts);
+
     state.timeMax = m_pDemuxer->GetStreamLength();
   }
 
@@ -5433,7 +5491,7 @@ void CVideoPlayer::UpdatePlayState(double timeout)
     if (pTimes && pTimes->GetTimes(times))
     {
       state.startTime = times.startTime;
-      state.time = (m_clock.GetClock(false) - times.ptsStart) * 1000 / DVD_TIME_BASE;
+      state.time = (m_clock.GetClock() - times.ptsStart) * 1000 / DVD_TIME_BASE;
       state.timeMax = (times.ptsEnd - times.ptsStart) * 1000 / DVD_TIME_BASE;
       state.timeMin = (times.ptsBegin - times.ptsStart) * 1000 / DVD_TIME_BASE;
       state.time_offset = -times.ptsStart;
@@ -5501,7 +5559,7 @@ void CVideoPlayer::UpdatePlayState(double timeout)
   // The current chapter provided by the demuxer/inputstream is ahead by a cache duration most of the time.
   if (chapterNbEnabled)
   {
-    const std::chrono::milliseconds currentTime{llrint(m_State.time)};
+    const std::chrono::milliseconds currentTime{llrint(state.time)};
     const int playPosChapter = CalculateCurrentChapter(currentTime, state.chapters);
 
     // Successfully calculated a current chapter from the play position?

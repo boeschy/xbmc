@@ -4,4 +4,5 @@ SOURCE=$(LIBNAME)-$(VERSION)
 ARCHIVE=$(VERSION).tar.gz
 SHA512=60f3fc67dbd6103433dd25f6d20bdce4d893f0ebb3d4c18a662d45ec205a5eddf2f320bcf6a3313e1b7276b363c7a49c36e0cc1010480bc1700e53ab1090bc6c
 BYPRODUCT=libbluray.a
+BASE_URL=https://github.com/boeschy/libbluray/archive
 BYPRODUCT_WIN=bluray.lib
