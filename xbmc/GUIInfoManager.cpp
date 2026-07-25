@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2026 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -74,7 +74,6 @@ struct InfoMap
 /// @todo [docs] Use links instead of bold values for infolabels/bools
 /// so we can use a link to point users when providing help
 ///
-
 
 /// \page modules__infolabels_boolean_conditions
 /// \section modules_list_infolabels_booleans List of Infolabels and Boolean conditions
@@ -777,7 +776,7 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///                  \anchor Player_Editlist
 ///                  _string_,
 ///     @return The editlist of the currently playing item as csv in the format start1\,end1\,start2\,end2\,...
-///     Tokens must have values in the range from 0.0 to 100.0. end token must be less or equal than start token.
+///     Tokens have values in the range from 0.0 to 100.0. end token is greater or equal to the  start token.
 ///     @note This infolabel does not contain EDL cuts. Edits start and end times are adjusted according to cuts
 ///     defined for the media item.
 ///     <p><hr>
@@ -788,7 +787,7 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///                  \anchor Player_Cuts
 ///                  _string_,
 ///     @return The EDL cut markers of the currently playing item as csv in the format start1\,end1\,start2\,end2\,...
-///     Tokens must have values in the range from 0.0 to 100.0. end token must be less or equal than start token.
+///     Tokens have values in the range from 0.0 to 100.0. end token is greater or equal to the  start token.
 ///     <p><hr>
 ///     @skinning_v20 **[New Infolabel]** \link Player_Cuts `Player.Cuts`\endlink
 ///     <p>
@@ -797,7 +796,7 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///                  \anchor Player_SceneMarkers
 ///                  _string_,
 ///     @return The EDL scene markers of the currently playing item as csv in the format start1\,end1\,start2\,end2\,...
-///     Tokens must have values in the range from 0.0 to 100.0. end token must be less or equal than start token.
+///     Tokens have values in the range from 0.0 to 100.0. end token is greater or equal to the  start token.
 ///     <p><hr>
 ///     @skinning_v20 **[New Infolabel]** \link Player_SceneMarkers `Player.SceneMarkers`\endlink
 ///     <p>
@@ -814,9 +813,26 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///                  \anchor Player_Chapters
 ///                  _string_,
 ///     @return The chapters of the currently playing item as csv in the format start1\,end1\,start2\,end2\,...
-///     Tokens must have values in the range from 0.0 to 100.0. end token must be less or equal than start token.
+///     Tokens have values in the range from 0.0 to 100.0. end token is greater or equal to the  start token.
 ///     <p><hr>
 ///     @skinning_v19 **[New Infolabel]** \link Player_Chapters `Player.Chapters`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.Bookmarks`</b>,
+///                  \anchor Player_Bookmarks
+///                  _string_,
+///     @return The bookmarks of the currently playing item as csv in the format start1\,end1\,start2\,end2\,...
+///     Tokens have values in the range from 0.0 to 100.0. end token is greater or equal to the  start token.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Bookmarks `Player.Bookmarks`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.HasBookmarks`</b>,
+///                  \anchor Player_HasBookmarks
+///                  _boolean_,
+///     @return **True** if the item being played has bookmarks\, **False** otherwise
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_HasBookmarks `Player.HasBookmarks`\endlink
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`Player.IsExternal`</b>,
@@ -844,7 +860,7 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///     <p>
 ///   }
 // clang-format off
-constexpr std::array<InfoMap, 58> player_labels = {{
+constexpr std::array<InfoMap, 60> player_labels = {{
     {"hasmedia",              PLAYER_HAS_MEDIA},
     {"hasaudio",              PLAYER_HAS_AUDIO},
     {"hasvideo",              PLAYER_HAS_VIDEO},
@@ -903,6 +919,8 @@ constexpr std::array<InfoMap, 58> player_labels = {{
     {"scenemarkers",          PLAYER_SCENE_MARKERS},
     {"hasscenemarkers",       PLAYER_HAS_SCENE_MARKERS},
     {"chapters",              PLAYER_CHAPTERS},
+    {"bookmarks",             PLAYER_BOOKMARKS},
+    {"hasbookmarks",          PLAYER_HAS_BOOKMARKS},
 }};
 // clang-format on
 
@@ -1120,7 +1138,7 @@ constexpr std::array<InfoMap, 10> player_times = {{
 ///   \table_row3{   <b>`Player.Process(audiochannels)`</b>,
 ///                  \anchor Player_Process_audiochannels
 ///                  _string_,
-///     @return The audiodecoder name of the currently playing item.
+///     @return The audiochannels string of the currently playing item.
 ///     <p><hr>
 ///     @skinning_v17 **[New Infolabel]** \link Player_Process_audiochannels `Player.Process(audiochannels)`\endlink
 ///     <p>
@@ -1141,11 +1159,68 @@ constexpr std::array<InfoMap, 10> player_times = {{
 ///     @skinning_v17 **[New Infolabel]** \link Player_Process_audiobitspersample `Player.Process(audiobitspersample)`\endlink
 ///     <p>
 ///   }
+///   \table_row3{   <b>`Player.Process(audiolivebitrate)`</b>,
+///                  \anchor Player_Process_audiolivebitrate
+///                  _string_,
+///     @return The live audio bitrate of the currently playing item\, including the localized speed unit of measure (ex. Kb/s)
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Process_audiolivebitrate `Player.Process(audiolivebitrate)`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.Process(audioqueuelevel)`</b>,
+///                  \anchor Player_Process_audioqueuelevel
+///                  _string_,
+///     @return The audio queue level of the currently playing item as a percentage.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Process_audioqueuelevel `Player.Process(audioqueuelevel)`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.Process(audioqueuedatalevel)`</b>,
+///                  \anchor Player_Process_audioqueuedatalevel
+///                  _string_,
+///     @return The audio queue data level of the currently playing item as a percentage.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Process_audioqueuedatalevel `Player.Process(audioqueuedatalevel)`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.Process(videolivebitrate)`</b>,
+///                  \anchor Player_Process_videolivebitrate
+///                  _string_,
+///     @return The live video bitrate of the currently playing item\, including the localized speed unit of measure (ex. Mb/s)
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Process_videolivebitrate `Player.Process(videolivebitrate)`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.Process(videoqueuelevel)`</b>,
+///                  \anchor Player_Process_videoqueuelevel
+///                  _string_,
+///     @return The video queue level of the currently playing item as a percentage.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Process_videoqueuelevel `Player.Process(videoqueuelevel)`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.Process(videoqueuedatalevel)`</b>,
+///                  \anchor Player_Process_videoqueuedatalevel
+///                  _string_,
+///     @return The video queue data level of the currently playing item as a percentage.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Process_videoqueuedatalevel `Player.Process(videoqueuedatalevel)`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.Process(subtitledecoder)`</b>,
+///                  \anchor Player_Process_subtitledecoder
+///                  _string_,
+///     @return The name of the active subtitle decoder for the currently playing item\, for example
+///             ff-pgssub or SSA Subtitle Decoder.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link Player_Process_subtitledecoder `Player.Process(subtitledecoder)`\endlink
+///     <p>
+///   }
 /// \table_end
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 13> player_process = {{
+constexpr std::array<InfoMap, 20> player_process = {{
     {"videodecoder",        PLAYER_PROCESS_VIDEODECODER},
     {"deintmethod",         PLAYER_PROCESS_DEINTMETHOD},
     {"pixformat",           PLAYER_PROCESS_PIXELFORMAT},
@@ -1158,7 +1233,14 @@ constexpr std::array<InfoMap, 13> player_process = {{
     {"audiochannels",       PLAYER_PROCESS_AUDIOCHANNELS},
     {"audiosamplerate",     PLAYER_PROCESS_AUDIOSAMPLERATE},
     {"audiobitspersample",  PLAYER_PROCESS_AUDIOBITSPERSAMPLE},
+    {"audiolivebitrate",    PLAYER_PROCESS_AUDIO_LIVE_BITRATE},
+    {"audioqueuelevel",     PLAYER_PROCESS_AUDIO_QUEUE_LEVEL},
+    {"audioqueuedatalevel", PLAYER_PROCESS_AUDIO_QUEUE_DATA_LEVEL},
+    {"videolivebitrate",    PLAYER_PROCESS_VIDEO_LIVE_BITRATE},
+    {"videoqueuelevel",     PLAYER_PROCESS_VIDEO_QUEUE_LEVEL},
+    {"videoqueuedatalevel", PLAYER_PROCESS_VIDEO_QUEUE_DATA_LEVEL},
     {"videoscantype",       PLAYER_PROCESS_VIDEOSCANTYPE},
+    {"subtitledecoder",     PLAYER_PROCESS_SUBTITLEDECODER},
 }};
 // clang-format on
 
@@ -3914,6 +3996,22 @@ constexpr std::array<InfoMap, 46> musicplayer = {{
 ///     @skinning_v13 **[New Infolabel]** \link VideoPlayer_AudioLanguage `VideoPlayer.AudioLanguage`\endlink
 ///     <p>
 ///   }
+///   \table_row3{   <b>`VideoPlayer.AudioLanguageEx`</b>,
+///                  \anchor VideoPlayer_AudioLanguageEx
+///                  _string_,
+///     @return The English name of the language of the current audio stream of the currently playing item.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link VideoPlayer_AudioLanguageEx `VideoPlayer.AudioLanguageEx`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`VideoPlayer.AudioName`</b>,
+///                  \anchor VideoPlayer_AudioName
+///                  _string_,
+///     @return The name of the active audio stream of the currently playing video.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link VideoPlayer_AudioName `VideoPlayer.AudioName`\endlink
+///     <p>
+///   }
 ///   \table_row3{   <b>`VideoPlayer.SubtitlesLanguage`</b>,
 ///                  \anchor VideoPlayer_SubtitlesLanguage
 ///                  _string_,
@@ -3923,6 +4021,51 @@ constexpr std::array<InfoMap, 46> musicplayer = {{
 ///     subtitle stream if subtitles are disabled in the player
 ///     <p><hr>
 ///     @skinning_v13 **[New Infolabel]** \link VideoPlayer_SubtitlesLanguage `VideoPlayer.SubtitlesLanguage`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`VideoPlayer.SubtitleLanguageEx`</b>,
+///                  \anchor VideoPlayer_SubtitleLanguageEx
+///                  _string_,
+///     @return The English name of the language of the current subtitle stream of the currently playing item.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link VideoPlayer_SubtitleLanguageEx `VideoPlayer.SubtitleLanguageEx`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`VideoPlayer.SubtitleCodec`</b>,
+///                  \anchor VideoPlayer_SubtitleCodec
+///                  _string_,
+///     @return The codec of the current subtitles of the currently playing video. Possible values include:
+///       - <b>ass</b>
+///       - <b>dvb_subtitle</b>
+///       - <b>dvb_teletext</b>
+///       - <b>dvd_subtitle</b>
+///       - <b>hdmv_pgs_subtitle</b>
+///       - <b>microdvd</b>
+///       - <b>mov_text</b>
+///       - <b>mpl2</b>
+///       - <b>realtext</b>
+///       - <b>sami</b>
+///       - <b>srt</b>
+///       - <b>ssa</b>
+///       - <b>subrip</b>
+///       - <b>text</b>
+///       - <b>ttml</b>
+///       - <b>vplayer</b>
+///       - <b>webvtt</b>
+///       - <b>xsub</b>
+///
+///     @note `VideoPlayer.SubtitleCodec` holds the codec of the next available subtitles stream
+///     if subtitles are disabled in the player.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link VideoPlayer_SubtitleCodec `VideoPlayer.SubtitleCodec`\endlink
+///     <p>
+///   }
+///   \table_row3{   <b>`VideoPlayer.SubtitleName`</b>,
+///                  \anchor VideoPlayer_SubtitleName
+///                  _string_,
+///     @return The name of the active subtitle stream of the currently playing video.
+///     <p><hr>
+///     @skinning_v22 **[New Infolabel]** \link VideoPlayer_SubtitleName `VideoPlayer.SubtitleName`\endlink
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`VideoPlayer.StereoscopicMode`</b>,
@@ -4171,7 +4314,7 @@ constexpr std::array<InfoMap, 46> musicplayer = {{
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 83> videoplayer = {{
+constexpr std::array<InfoMap, 88> videoplayer = {{
     {"title",                 VIDEOPLAYER_TITLE},
     {"genre",                 VIDEOPLAYER_GENRE},
     {"country",               VIDEOPLAYER_COUNTRY},
@@ -4213,12 +4356,17 @@ constexpr std::array<InfoMap, 83> videoplayer = {{
     {"audiochannels",         VIDEOPLAYER_AUDIO_CHANNELS},
     {"audiobitrate",          VIDEOPLAYER_AUDIO_BITRATE},
     {"audiolanguage",         VIDEOPLAYER_AUDIO_LANG},
+    {"audiolanguageex",       VIDEOPLAYER_AUDIO_LANG_EX},
+	{"audioname",             VIDEOPLAYER_AUDIO_NAME},
     {"hasteletext",           VIDEOPLAYER_HASTELETEXT},
     {"lastplayed",            VIDEOPLAYER_LASTPLAYED},
     {"playcount",             VIDEOPLAYER_PLAYCOUNT},
     {"hassubtitles",          VIDEOPLAYER_HASSUBTITLES},
     {"subtitlesenabled",      VIDEOPLAYER_SUBTITLESENABLED},
     {"subtitleslanguage",     VIDEOPLAYER_SUBTITLES_LANG},
+    {"subtitlelanguageex",    VIDEOPLAYER_SUBTITLE_LANG_EX},
+    {"subtitlecodec",         VIDEOPLAYER_SUBTITLE_CODEC},
+    {"subtitlename",          VIDEOPLAYER_SUBTITLE_NAME},
     {"starttime",             VIDEOPLAYER_STARTTIME},
     {"endtime",               VIDEOPLAYER_ENDTIME},
     {"nexttitle",             VIDEOPLAYER_NEXT_TITLE},
@@ -6510,7 +6658,10 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///       - <b>aac_ltp</b>
 ///       - <b>ac3</b>
 ///       - <b>cook</b>
-///       - <b>dca</b>
+///       - <b>dts</b>
+///       - <b>dts_96_24</b>
+///       - <b>dts_es</b>
+///       - <b>dts_express</b>
 ///       - <b>dtshd_hra</b>
 ///       - <b>dtshd_ma</b>
 ///       - <b>dtshd_ma_x</b>
@@ -6528,6 +6679,12 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///       - <b>vorbis</b>
 ///       - <b>wmapro</b>
 ///       - <b>wmav2</b>
+///
+///     The names are based on ffmpeg codec names with exceptions for specific codec profiles.
+///     <p><hr>
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_AudioCodec `ListItem.AudioCodec`\endlink
+///     added aac_lc\, he_aac\, he_aac_v2\, aac_ssr\, aac_ltp\, dts_96_24\, dts_es\, dts_express\,
+///     dtshd_ma_x\, dtshd_ma_x_imax\, eac3_ddp_atmos\, truehd_atmos
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`ListItem.AudioChannels(format)`</b>,
@@ -7428,6 +7585,15 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///     @return String containing the name of the detected HDR type or empty if not HDR. See \ref StreamHdrType for the list of possible values.
 ///     <p><hr>
 ///     @skinning_v20 **[New Infolabel]** \link ListItem_HdrType `ListItem.HdrType`\endlink
+///   }
+///   \table_row3{   <b>`ListItem.Property(HdrType.[n])`</b>,
+///                  \anchor ListItem_Property_HdrType
+///                  _string_,
+///     @return The HDR type of the numbered stream of the currently selected video or empty if not HDR. See \ref StreamHdrType for the list of possible values.
+///     @param n - the number of the videostream.
+///     <p><hr>
+///     @skinning_v20 **[New Infolabel]** \link ListItem_Property_HdrType `ListItem.Property(HdrType.[n])`\endlink
+///     <p>
 ///   }
 ///   \table_row3{   <b>`ListItem.HdrDetail`</b>,
 ///                  \anchor ListItem_HdrDetail
@@ -10682,7 +10848,7 @@ void CGUIInfoManager::SplitInfoString(const std::string& infoString,
 
 /// \brief Translates a string as given by the skin into an int that we use for more
 /// efficient retrieval of data.
-int CGUIInfoManager::TranslateSingleString(const std::string &strCondition)
+int CGUIInfoManager::TranslateSingleString(const std::string& strCondition)
 {
   bool listItemDependent;
   return TranslateSingleString(strCondition, listItemDependent);
@@ -10716,7 +10882,7 @@ std::string TranslateListSeparator(const std::string& param)
 }
 } // unnamed namespace
 
-int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool &listItemDependent)
+int CGUIInfoManager::TranslateSingleString(const std::string& strCondition, bool& listItemDependent)
 {
   /* We need to disable caching in INFO::InfoBool::Get if either of the following are true:
    *  1. if condition is between LISTITEM_START and LISTITEM_END
@@ -10727,13 +10893,13 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
   std::string strTest = strCondition;
   StringUtils::Trim(strTest);
 
-  std::vector< Property> info;
+  std::vector<Property> info;
   SplitInfoString(strTest, info);
 
   if (info.empty())
     return 0;
 
-  const Property &cat = info[0];
+  const Property& cat = info[0];
   if (info.size() == 1)
   { // single category
     if (cat.Name() == "false" || cat.Name() == "no")
@@ -10743,12 +10909,13 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
   }
   else if (info.size() == 2)
   {
-    const Property &prop = info[1];
+    const Property& prop = info[1];
     if (cat.Name() == "string")
     {
       if (prop.Name() == "isempty")
       {
-        return AddMultiInfo(CGUIInfo(STRING_IS_EMPTY, TranslateSingleString(prop.param(), listItemDependent)));
+        return AddMultiInfo(
+            CGUIInfo(STRING_IS_EMPTY, TranslateSingleString(prop.param(), listItemDependent)));
       }
       else if (prop.num_params() == 2)
       {
@@ -10883,7 +11050,7 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
       }
       if (prop.num_params() == 1)
       {
-        const std::string &param = prop.param();
+        const std::string& param = prop.param();
         if (prop.Name() == "getbool")
         {
           std::string paramCopy = param;
@@ -10951,11 +11118,14 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
         }
       }
       if (prop.Name() == "alarmlessorequal" && prop.num_params() == 2)
-        return AddMultiInfo(CGUIInfo(SYSTEM_ALARM_LESS_OR_EQUAL, prop.param(0), atoi(prop.param(1).c_str())));
+        return AddMultiInfo(
+            CGUIInfo(SYSTEM_ALARM_LESS_OR_EQUAL, prop.param(0), atoi(prop.param(1).c_str())));
       else if (prop.Name() == "date")
       {
         if (prop.num_params() == 2)
-          return AddMultiInfo(CGUIInfo(SYSTEM_DATE, StringUtils::DateStringToYYYYMMDD(prop.param(0)) % 10000, StringUtils::DateStringToYYYYMMDD(prop.param(1)) % 10000));
+          return AddMultiInfo(CGUIInfo(SYSTEM_DATE,
+                                       StringUtils::DateStringToYYYYMMDD(prop.param(0)) % 10000,
+                                       StringUtils::DateStringToYYYYMMDD(prop.param(1)) % 10000));
         else if (prop.num_params() == 1)
         {
           int dateformat = StringUtils::DateStringToYYYYMMDD(prop.param(0));
@@ -10974,11 +11144,13 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
         {
           TIME_FORMAT timeFormat = TranslateTimeFormat(prop.param(0));
           if (timeFormat == TIME_FORMAT_GUESS)
-            return AddMultiInfo(CGUIInfo(SYSTEM_TIME, StringUtils::TimeStringToSeconds(prop.param(0))));
+            return AddMultiInfo(
+                CGUIInfo(SYSTEM_TIME, StringUtils::TimeStringToSeconds(prop.param(0))));
           return AddMultiInfo(CGUIInfo(SYSTEM_TIME, timeFormat));
         }
         else
-          return AddMultiInfo(CGUIInfo(SYSTEM_TIME, StringUtils::TimeStringToSeconds(prop.param(0)), StringUtils::TimeStringToSeconds(prop.param(1))));
+          return AddMultiInfo(CGUIInfo(SYSTEM_TIME, StringUtils::TimeStringToSeconds(prop.param(0)),
+                                       StringUtils::TimeStringToSeconds(prop.param(1))));
       }
     }
     else if (cat.Name() == "library")
@@ -11193,9 +11365,12 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
         if (prop.Name() == "string")
         {
           if (prop.num_params() == 2)
-            return AddMultiInfo(CGUIInfo(SKIN_STRING_IS_EQUAL, CSkinSettings::GetInstance().TranslateString(prop.param(0)), prop.param(1)));
+            return AddMultiInfo(CGUIInfo(
+                SKIN_STRING_IS_EQUAL, CSkinSettings::GetInstance().TranslateString(prop.param(0)),
+                prop.param(1)));
           else
-            return AddMultiInfo(CGUIInfo(SKIN_STRING, CSkinSettings::GetInstance().TranslateString(prop.param(0))));
+            return AddMultiInfo(
+                CGUIInfo(SKIN_STRING, CSkinSettings::GetInstance().TranslateString(prop.param(0))));
         }
         else if (prop.Name() == "numeric")
         {
@@ -11203,7 +11378,8 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
               CGUIInfo(SKIN_INTEGER, CSkinSettings::GetInstance().TranslateString(prop.param(0))));
         }
         else if (prop.Name() == "hassetting")
-          return AddMultiInfo(CGUIInfo(SKIN_BOOL, CSkinSettings::GetInstance().TranslateBool(prop.param(0))));
+          return AddMultiInfo(
+              CGUIInfo(SKIN_BOOL, CSkinSettings::GetInstance().TranslateBool(prop.param(0))));
         else if (prop.Name() == "hastheme")
           return AddMultiInfo(CGUIInfo(SKIN_HAS_THEME, prop.param(0)));
         else if (prop.Name() == "timerisrunning")
@@ -11226,7 +11402,8 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
         { //! @todo The parameter for these should really be on the first not the second property
           if (prop.param().find("xml") != std::string::npos)
             return AddMultiInfo(CGUIInfo(window_bool.val, 0, prop.param()));
-          int winID = prop.param().empty() ? WINDOW_INVALID : CWindowTranslator::TranslateWindow(prop.param());
+          int winID = prop.param().empty() ? WINDOW_INVALID
+                                           : CWindowTranslator::TranslateWindow(prop.param());
           return AddMultiInfo(CGUIInfo(window_bool.val, winID, 0));
         }
       }
@@ -11248,7 +11425,8 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
     {
       int groupID = atoi(cat.param().c_str());
       if (groupID)
-        return AddMultiInfo(CGUIInfo(CONTROL_GROUP_HAS_FOCUS, groupID, atoi(prop.param(0).c_str())));
+        return AddMultiInfo(
+            CGUIInfo(CONTROL_GROUP_HAS_FOCUS, groupID, atoi(prop.param(0).c_str())));
     }
     else if (cat.Name() == "playlist")
     {
@@ -11391,14 +11569,15 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
     }
     else if (info[0].Name() == "control")
     {
-      const Property &prop = info[1];
+      const Property& prop = info[1];
       for (const auto& control_label : control_labels)
       {
         if (prop.Name() == control_label.str)
         { //! @todo The parameter for these should really be on the first not the second property
           int controlID = atoi(prop.param().c_str());
           if (controlID)
-            return AddMultiInfo(CGUIInfo(control_label.val, controlID, atoi(info[2].param(0).c_str())));
+            return AddMultiInfo(
+                CGUIInfo(control_label.val, controlID, atoi(info[2].param(0).c_str())));
           return 0;
         }
       }
@@ -11408,7 +11587,10 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
   return 0;
 }
 
-int CGUIInfoManager::TranslateListItem(const Property& cat, const Property& prop, int id, bool container)
+int CGUIInfoManager::TranslateListItem(const Property& cat,
+                                       const Property& prop,
+                                       int id,
+                                       bool container)
 {
   int ret = 0;
   std::string data3;
@@ -11506,7 +11688,7 @@ int CGUIInfoManager::TranslatePlayerString(std::string_view info) const
   return 0;
 }
 
-TIME_FORMAT CGUIInfoManager::TranslateTimeFormat(const std::string &format)
+TIME_FORMAT CGUIInfoManager::TranslateTimeFormat(const std::string& format)
 {
   if (format.empty())
     return TIME_FORMAT_GUESS;
@@ -11543,7 +11725,7 @@ TIME_FORMAT CGUIInfoManager::TranslateTimeFormat(const std::string &format)
   return TIME_FORMAT_GUESS;
 }
 
-std::string CGUIInfoManager::GetLabel(int info, int contextWindow, std::string *fallback) const
+std::string CGUIInfoManager::GetLabel(int info, int contextWindow, std::string* fallback) const
 {
   if (info >= CONDITIONAL_LABEL_START && info <= CONDITIONAL_LABEL_END)
   {
@@ -11565,7 +11747,10 @@ std::string CGUIInfoManager::GetLabel(int info, int contextWindow, std::string *
   return strLabel;
 }
 
-bool CGUIInfoManager::GetInt(int &value, int info, int contextWindow, const CGUIListItem *item /* = nullptr */) const
+bool CGUIInfoManager::GetInt(int& value,
+                             int info,
+                             int contextWindow,
+                             const CGUIListItem* item /* = nullptr */) const
 {
   if (info >= MULTI_INFO_START && info <= MULTI_INFO_END)
   {
@@ -11586,7 +11771,7 @@ bool CGUIInfoManager::GetInt(int &value, int info, int contextWindow, const CGUI
   return m_infoProviders.GetInt(value, m_currentFile.get(), contextWindow, CGUIInfo(info));
 }
 
-INFO::InfoPtr CGUIInfoManager::Register(const std::string &expression, int context)
+INFO::InfoPtr CGUIInfoManager::Register(const std::string& expression, int context)
 {
   std::string condition(CGUIInfoLabel::ReplaceLocalize(expression));
   StringUtils::Trim(condition);
@@ -11624,7 +11809,7 @@ bool CGUIInfoManager::EvaluateBool(const std::string& expression,
   return false;
 }
 
-bool CGUIInfoManager::GetBool(int condition1, int contextWindow, const CGUIListItem *item)
+bool CGUIInfoManager::GetBool(int condition1, int contextWindow, const CGUIListItem* item)
 {
   bool bReturn = false;
   int condition = std::abs(condition1);
@@ -11654,7 +11839,9 @@ bool CGUIInfoManager::GetBool(int condition1, int contextWindow, const CGUIListI
   return (condition1 < 0) ? !bReturn : bReturn;
 }
 
-bool CGUIInfoManager::GetMultiInfoBool(const CGUIInfo &info, int contextWindow, const CGUIListItem *item)
+bool CGUIInfoManager::GetMultiInfoBool(const CGUIInfo& info,
+                                       int contextWindow,
+                                       const CGUIListItem* item)
 {
   bool bReturn = false;
   int condition = std::abs(info.GetInfo());
@@ -11664,7 +11851,8 @@ bool CGUIInfoManager::GetMultiInfoBool(const CGUIInfo &info, int contextWindow, 
     std::shared_ptr<CGUIListItem> itemPtr;
     if (!item)
     {
-      itemPtr = GUIINFO::GetCurrentListItem(contextWindow, info.GetData1(), info.GetData2(), info.GetInfoFlag());
+      itemPtr = GUIINFO::GetCurrentListItem(contextWindow, info.GetData1(), info.GetData2(),
+                                            info.GetInfoFlag());
       item = itemPtr.get();
     }
     if (item)
@@ -11803,7 +11991,10 @@ bool CGUIInfoManager::GetMultiInfoBool(const CGUIInfo &info, int contextWindow, 
   return (info.GetInfo() < 0) ? !bReturn : bReturn;
 }
 
-bool CGUIInfoManager::GetMultiInfoInt(int &value, const CGUIInfo &info, int contextWindow, const CGUIListItem *item) const
+bool CGUIInfoManager::GetMultiInfoInt(int& value,
+                                      const CGUIInfo& info,
+                                      int contextWindow,
+                                      const CGUIListItem* item) const
 {
   if (info.GetInfo() == INTEGER_VALUEOF)
   {
@@ -11815,7 +12006,8 @@ bool CGUIInfoManager::GetMultiInfoInt(int &value, const CGUIInfo &info, int cont
     std::shared_ptr<CGUIListItem> itemPtr;
     if (!item)
     {
-      itemPtr = GUIINFO::GetCurrentListItem(contextWindow, info.GetData1(), info.GetData2(), info.GetInfoFlag());
+      itemPtr = GUIINFO::GetCurrentListItem(contextWindow, info.GetData1(), info.GetData2(),
+                                            info.GetInfoFlag());
       item = itemPtr.get();
     }
     if (item)
@@ -11841,7 +12033,9 @@ bool CGUIInfoManager::GetMultiInfoInt(int &value, const CGUIInfo &info, int cont
   return m_infoProviders.GetInt(value, m_currentFile.get(), contextWindow, info);
 }
 
-std::string CGUIInfoManager::GetMultiInfoLabel(const CGUIInfo &constinfo, int contextWindow, std::string *fallback) const
+std::string CGUIInfoManager::GetMultiInfoLabel(const CGUIInfo& constinfo,
+                                               int contextWindow,
+                                               std::string* fallback) const
 {
   CGUIInfo info(constinfo);
 
@@ -11852,7 +12046,8 @@ std::string CGUIInfoManager::GetMultiInfoLabel(const CGUIInfo &constinfo, int co
     if (item)
     {
       // Image prioritizes images over labels (in the case of music item ratings for instance)
-      return GetMultiInfoItemImage(dynamic_cast<CFileItem*>(item.get()), contextWindow, info, fallback);
+      return GetMultiInfoItemImage(dynamic_cast<CFileItem*>(item.get()), contextWindow, info,
+                                   fallback);
     }
     else
     {
@@ -11876,7 +12071,7 @@ std::string CGUIInfoManager::GetMultiInfoLabel(const CGUIInfo &constinfo, int co
 }
 
 /// \brief Obtains the filename of the image to show from whichever subsystem is needed
-std::string CGUIInfoManager::GetImage(int info, int contextWindow, std::string *fallback)
+std::string CGUIInfoManager::GetImage(int info, int contextWindow, std::string* fallback)
 {
   if (info >= CONDITIONAL_LABEL_START && info <= CONDITIONAL_LABEL_END)
   {
@@ -11886,11 +12081,8 @@ std::string CGUIInfoManager::GetImage(int info, int contextWindow, std::string *
   {
     return GetMultiInfoLabel(m_multiInfo[info - MULTI_INFO_START], contextWindow, fallback);
   }
-  else if (info == LISTITEM_THUMB ||
-           info == LISTITEM_ICON ||
-           info == LISTITEM_ACTUAL_ICON ||
-           info == LISTITEM_OVERLAY ||
-           info == LISTITEM_ART)
+  else if (info == LISTITEM_THUMB || info == LISTITEM_ICON || info == LISTITEM_ACTUAL_ICON ||
+           info == LISTITEM_OVERLAY || info == LISTITEM_ART)
   {
     const std::shared_ptr<CGUIListItem> item = GUIINFO::GetCurrentListItem(contextWindow);
     if (item && item->IsFileItem())
@@ -11906,12 +12098,12 @@ void CGUIInfoManager::ResetCurrentItem()
   m_infoProviders.InitCurrentItem(nullptr);
 }
 
-void CGUIInfoManager::UpdateCurrentItem(const CFileItem &item)
+void CGUIInfoManager::UpdateCurrentItem(const CFileItem& item)
 {
   m_currentFile->UpdateInfo(item);
 }
 
-void CGUIInfoManager::SetCurrentItem(const CFileItem &item)
+void CGUIInfoManager::SetCurrentItem(const CFileItem& item)
 {
   *m_currentFile = item;
   ART::FillInDefaultIcon(*m_currentFile);
@@ -11921,7 +12113,7 @@ void CGUIInfoManager::SetCurrentItem(const CFileItem &item)
   CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Info, "OnChanged");
 }
 
-void CGUIInfoManager::SetCurrentAlbumThumb(const std::string &thumbFileName)
+void CGUIInfoManager::SetCurrentAlbumThumb(const std::string& thumbFileName)
 {
   if (CFileUtils::Exists(thumbFileName))
     m_currentFile->SetArt("thumb", thumbFileName);
@@ -11946,7 +12138,7 @@ void CGUIInfoManager::Clear()
   do
   {
     swapList.clear();
-    for (auto &item : m_bools)
+    for (auto& item : m_bools)
       if (item.use_count() > 1)
         swapList.insert(item);
     m_bools.swap(swapList);
@@ -11976,7 +12168,7 @@ void CGUIInfoManager::UpdateAVInfo() const
   }
 }
 
-int CGUIInfoManager::AddMultiInfo(const CGUIInfo &info)
+int CGUIInfoManager::AddMultiInfo(const CGUIInfo& info)
 {
   // check to see if we have this info already
   for (unsigned int i = 0; i < m_multiInfo.size(); ++i)
@@ -12013,7 +12205,10 @@ bool CGUIInfoManager::IsListItemInfo(int info) const
   return (iResolvedInfo >= LISTITEM_START && iResolvedInfo <= LISTITEM_END);
 }
 
-bool CGUIInfoManager::GetItemInt(int &value, const CGUIListItem *item, int contextWindow, int info) const
+bool CGUIInfoManager::GetItemInt(int& value,
+                                 const CGUIListItem* item,
+                                 int contextWindow,
+                                 int info) const
 {
   value = 0;
 
@@ -12023,12 +12218,18 @@ bool CGUIInfoManager::GetItemInt(int &value, const CGUIListItem *item, int conte
   return m_infoProviders.GetInt(value, item, contextWindow, CGUIInfo(info));
 }
 
-std::string CGUIInfoManager::GetItemLabel(const CFileItem *item, int contextWindow, int info, std::string *fallback /* = nullptr */) const
+std::string CGUIInfoManager::GetItemLabel(const CFileItem* item,
+                                          int contextWindow,
+                                          int info,
+                                          std::string* fallback /* = nullptr */) const
 {
   return GetMultiInfoItemLabel(item, contextWindow, CGUIInfo(info), fallback);
 }
 
-std::string CGUIInfoManager::GetMultiInfoItemLabel(const CFileItem *item, int contextWindow, const CGUIInfo &info, std::string *fallback /* = nullptr */) const
+std::string CGUIInfoManager::GetMultiInfoItemLabel(const CFileItem* item,
+                                                   int contextWindow,
+                                                   const CGUIInfo& info,
+                                                   std::string* fallback /* = nullptr */) const
 {
   if (!item)
     return std::string();
@@ -12160,15 +12361,22 @@ std::string CGUIInfoManager::GetMultiInfoItemLabel(const CFileItem *item, int co
   return value;
 }
 
-std::string CGUIInfoManager::GetItemImage(const CGUIListItem *item, int contextWindow, int info, std::string *fallback /*= nullptr*/) const
+std::string CGUIInfoManager::GetItemImage(const CGUIListItem* item,
+                                          int contextWindow,
+                                          int info,
+                                          std::string* fallback /*= nullptr*/) const
 {
   if (!item || !item->IsFileItem())
     return std::string();
 
-  return GetMultiInfoItemImage(static_cast<const CFileItem*>(item), contextWindow, CGUIInfo(info), fallback);
+  return GetMultiInfoItemImage(static_cast<const CFileItem*>(item), contextWindow, CGUIInfo(info),
+                               fallback);
 }
 
-std::string CGUIInfoManager::GetMultiInfoItemImage(const CFileItem *item, int contextWindow, const CGUIInfo &info, std::string *fallback /*= nullptr*/) const
+std::string CGUIInfoManager::GetMultiInfoItemImage(const CFileItem* item,
+                                                   int contextWindow,
+                                                   const CGUIInfo& info,
+                                                   std::string* fallback /*= nullptr*/) const
 {
   if (info.GetInfo() >= CONDITIONAL_LABEL_START && info.GetInfo() <= CONDITIONAL_LABEL_END)
   {
@@ -12183,7 +12391,7 @@ std::string CGUIInfoManager::GetMultiInfoItemImage(const CFileItem *item, int co
   return GetMultiInfoItemLabel(item, contextWindow, info, fallback);
 }
 
-bool CGUIInfoManager::GetItemBool(const CGUIListItem *item, int contextWindow, int condition) const
+bool CGUIInfoManager::GetItemBool(const CGUIListItem* item, int contextWindow, int condition) const
 {
   if (!item)
     return false;
@@ -12221,7 +12429,7 @@ void CGUIInfoManager::ResetCache()
   ++m_refreshCounter;
 }
 
-void CGUIInfoManager::SetCurrentVideoTag(const CVideoInfoTag &tag)
+void CGUIInfoManager::SetCurrentVideoTag(const CVideoInfoTag& tag)
 {
   m_currentFile->SetFromVideoInfoTag(tag);
   m_currentFile->SetStartOffset(0);
@@ -12229,7 +12437,7 @@ void CGUIInfoManager::SetCurrentVideoTag(const CVideoInfoTag &tag)
   CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Info, "OnChanged");
 }
 
-void CGUIInfoManager::SetCurrentSongTag(const MUSIC_INFO::CMusicInfoTag &tag)
+void CGUIInfoManager::SetCurrentSongTag(const MUSIC_INFO::CMusicInfoTag& tag)
 {
   m_currentFile->SetFromMusicInfoTag(tag);
   m_currentFile->SetStartOffset(0);
@@ -12314,51 +12522,51 @@ void CGUIInfoManager::OnApplicationMessage(KODI::MESSAGING::ThreadMessage* pMsg)
 {
   switch (pMsg->dwMessage)
   {
-  case TMSG_GUI_INFOLABEL:
-  {
-    if (pMsg->lpVoid)
+    case TMSG_GUI_INFOLABEL:
     {
-      auto infoLabels = static_cast<std::vector<std::string>*>(pMsg->lpVoid);
-      for (const auto& param : pMsg->params)
-        infoLabels->emplace_back(GetLabel(TranslateString(param), DEFAULT_CONTEXT));
+      if (pMsg->lpVoid)
+      {
+        auto infoLabels = static_cast<std::vector<std::string>*>(pMsg->lpVoid);
+        for (const auto& param : pMsg->params)
+          infoLabels->emplace_back(GetLabel(TranslateString(param), DEFAULT_CONTEXT));
+      }
     }
-  }
-  break;
-
-  case TMSG_GUI_INFOBOOL:
-  {
-    if (pMsg->lpVoid)
-    {
-      auto infoLabels = static_cast<std::vector<bool>*>(pMsg->lpVoid);
-      for (const auto& param : pMsg->params)
-        infoLabels->push_back(EvaluateBool(param, DEFAULT_CONTEXT));
-    }
-  }
-  break;
-
-  case TMSG_UPDATE_CURRENT_ITEM:
-  {
-    auto* item{static_cast<CFileItem*>(pMsg->lpVoid)};
-    if (!item)
-      return;
-
-    if (pMsg->param1 == 1 && item->HasMusicInfoTag()) // only grab music tag
-      SetCurrentSongTag(*item->GetMusicInfoTag());
-    else if (pMsg->param1 == 2 && item->HasVideoInfoTag()) // only grab video tag
-      SetCurrentVideoTag(*item->GetVideoInfoTag());
-    else
-      SetCurrentItem(*item);
-
-    delete item;
-  }
-  break;
-
-  default:
     break;
+
+    case TMSG_GUI_INFOBOOL:
+    {
+      if (pMsg->lpVoid)
+      {
+        auto infoLabels = static_cast<std::vector<bool>*>(pMsg->lpVoid);
+        for (const auto& param : pMsg->params)
+          infoLabels->push_back(EvaluateBool(param, DEFAULT_CONTEXT));
+      }
+    }
+    break;
+
+    case TMSG_UPDATE_CURRENT_ITEM:
+    {
+      auto* item{static_cast<CFileItem*>(pMsg->lpVoid)};
+      if (!item)
+        return;
+
+      if (pMsg->param1 == 1 && item->HasMusicInfoTag()) // only grab music tag
+        SetCurrentSongTag(*item->GetMusicInfoTag());
+      else if (pMsg->param1 == 2 && item->HasVideoInfoTag()) // only grab video tag
+        SetCurrentVideoTag(*item->GetVideoInfoTag());
+      else
+        SetCurrentItem(*item);
+
+      delete item;
+    }
+    break;
+
+    default:
+      break;
   }
 }
 
-void CGUIInfoManager::RegisterInfoProvider(IGUIInfoProvider *provider)
+void CGUIInfoManager::RegisterInfoProvider(IGUIInfoProvider* provider)
 {
   if (!CServiceBroker::GetWinSystem())
     return;
@@ -12368,7 +12576,7 @@ void CGUIInfoManager::RegisterInfoProvider(IGUIInfoProvider *provider)
   m_infoProviders.RegisterProvider(provider, false);
 }
 
-void CGUIInfoManager::UnregisterInfoProvider(IGUIInfoProvider *provider)
+void CGUIInfoManager::UnregisterInfoProvider(IGUIInfoProvider* provider)
 {
   if (!CServiceBroker::GetWinSystem())
     return;

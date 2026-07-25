@@ -121,7 +121,15 @@ void CGUITextureGLES::Begin(KODI::UTILS::COLOR::Color color)
 
   if (hasAlpha)
   {
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+    // See CGUIFontTTFGLES::FirstBegin for rationale. SDR uses accumulator
+    // coverage alpha; HDR FBO composite uses a compensated squared-alpha
+    // blend because the FBO is color-transformed to PQ/HLG before composite,
+    // and alpha blending in non-linear space is mathematically wrong.
+    if (CServiceBroker::GetWinSystem()->IsHdrComposite())
+      glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA,
+                          GL_ONE_MINUS_SRC_ALPHA);
+    else
+      glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
     glEnable( GL_BLEND );
   }
   else
@@ -165,6 +173,7 @@ void CGUITextureGLES::End()
     glEnableVertexAttribArray(tex0Loc);
 
     glDrawElements(GL_TRIANGLES, m_packedVertices.size()*6 / 4, GL_UNSIGNED_SHORT, m_idx.data());
+    CRenderSystemBase::m_GUIElementCount++;
 
     if (m_diffuse.size())
       glDisableVertexAttribArray(tex1Loc);
@@ -347,6 +356,7 @@ void CGUITextureGLES::DrawQuad(const CRect& rect,
   }
 
   glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, idx);
+  CRenderSystemBase::m_GUIElementCount++;
 
   glDisableVertexAttribArray(posLoc);
   if (texture)

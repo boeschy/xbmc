@@ -127,7 +127,7 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
     // clang-format on
   }
 
-  CLog::Log(LOGINFO, "Creating video codec with codec id: {}", hint.codec);
+  CLog::Log(LOGINFO, "Creating video codec: {}", avcodec_get_name(hint.codec));
 
   if (m_messageQueue.IsInited())
   {
@@ -167,7 +167,8 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
 
 void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVideoCodec> codec)
 {
-  CLog::Log(LOGDEBUG, "CVideoPlayerVideo::OpenStream - open stream with codec id: {}", hint.codec);
+  CLog::Log(LOGDEBUG, "CVideoPlayerVideo::OpenStream - open stream with codec: {}",
+            avcodec_get_name(hint.codec));
 
   m_processInfo.GetVideoBufferManager().ReleasePools();
 
@@ -218,7 +219,7 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVid
 
   if (!codec)
   {
-    CLog::Log(LOGINFO, "Creating video codec with codec id: {}", hint.codec);
+    CLog::Log(LOGINFO, "Creating video codec: {}", avcodec_get_name(hint.codec));
     hint.codecOptions |= CODEC_ALLOW_FALLBACK;
     codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
     if (!codec)
@@ -593,6 +594,7 @@ void CVideoPlayerVideo::Process()
         }
 
         m_videoStats.AddSampleBytes(pPacket->iSize);
+        UpdatePlayerInfo();
 
         if (ProcessDecoderOutput(frametime, pts))
         {
@@ -606,6 +608,13 @@ void CVideoPlayerVideo::Process()
       }
     }
   }
+}
+
+void CVideoPlayerVideo::UpdatePlayerInfo()
+{
+  m_processInfo.SetVideoLiveBitRate(GetVideoBitrate());
+  m_processInfo.SetVideoQueueLevel(std::min(99, m_messageQueue.GetLevel()));
+  m_processInfo.SetVideoQueueDataLevel(std::min(99, m_messageQueue.GetLevel(true)));
 }
 
 bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)

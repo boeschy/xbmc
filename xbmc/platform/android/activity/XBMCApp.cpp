@@ -166,7 +166,8 @@ std::unique_ptr<CXBMCApp> CXBMCApp::m_appinstance;
 
 CXBMCApp::CXBMCApp(ANativeActivity* nativeActivity, IInputHandler& inputHandler)
   : CJNIMainActivity(nativeActivity),
-    CJNIBroadcastReceiver("/XBMCBroadcastReceiver"),
+    CJNIBroadcastReceiver(
+        CJNIBase::ToClassName(CJNIContext::getPackageName() + ".XBMCBroadcastReceiver")),
     m_inputHandler(inputHandler)
 {
   m_activity = nativeActivity;
@@ -1741,10 +1742,8 @@ void CXBMCApp::surfaceCreated(CJNISurfaceHolder holder)
 void CXBMCApp::surfaceDestroyed(CJNISurfaceHolder holder)
 {
   android_printf("CXBMCApp::%s", __FUNCTION__);
+
   // If we have exited XBMC, it no longer exists.
-  auto& components = CServiceBroker::GetAppComponents();
-  const auto appPower = components.GetComponent<CApplicationPowerHandling>();
-  appPower->SetRenderGUI(false);
   if (!m_exiting)
     XBMC_DestroyDisplay();
 

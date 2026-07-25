@@ -282,6 +282,7 @@ macro(BUILD_DEP_TARGET)
 
     if(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_INSTALL_PREFIX)
       list(APPEND CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_INSTALL_PREFIX})
+      set(DEP_LOCATION ${${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_INSTALL_PREFIX})
     else()
       list(APPEND CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${DEP_LOCATION})
     endif()
@@ -535,7 +536,7 @@ macro(BUILD_DEP_TARGET)
   set(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}_FOUND 1)
 
   string(TOUPPER "${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME}" _search_upper)
-  set(${_search_upper}_FOUND ON CACHE BOOL "${_search_upper}_FOUND" FORCE)
+  set(${_search_upper}_FOUND 1)
   unset(_search_upper)
 endmacro()
 
@@ -723,9 +724,15 @@ macro(ADD_MULTICONFIG_BUILDMACRO)
 endmacro()
 
 macro(SEARCH_EXISTING_PACKAGES)
+  if(${CMAKE_FIND_PACKAGE_NAME}_HINT_PREFIX_PATH)
+    set(_search_prefix ${${CMAKE_FIND_PACKAGE_NAME}_HINT_PREFIX_PATH})
+  else()
+    set(_search_prefix ${DEPENDS_PATH})
+  endif()
+
   find_package(${${CMAKE_FIND_PACKAGE_NAME}_SEARCH_NAME} ${CONFIG_${CMAKE_FIND_PACKAGE_NAME}_FIND_SPEC} CONFIG ${SEARCH_QUIET}
-                                                         HINTS ${DEPENDS_PATH}/share/cmake
-                                                               ${DEPENDS_PATH}/lib/cmake
+                                                         HINTS ${_search_prefix}/share/cmake
+                                                               ${_search_prefix}/lib/cmake
                                                          ${${CORE_SYSTEM_NAME}_SEARCH_CONFIG})
 
   # fallback to pkgconfig to cover all bases
@@ -880,6 +887,9 @@ endfunction()
 function(create_mesonproperties)
 
   string(APPEND output_string "pkg_config_libdir = '${DEPENDS_PATH}/lib/pkgconfig'\n")
+  if(CMAKE_TOOLCHAIN_FILE)
+    string(APPEND output_string "cmake_toolchain_file = '${CMAKE_TOOLCHAIN_FILE}'\n")
+  endif()
 
   # Easiest to just prepend header at the end of the full string creation
   string(PREPEND output_string "[properties]\n")

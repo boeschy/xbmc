@@ -5,7 +5,6 @@ DEPS = ../../Makefile.include Makefile PYTHON3-VERSION ../../download-files.incl
                                  static-compile.patch \
                                  10-android-modules.patch \
                                  11-android-ctypes.patch \
-                                 12-android-arm.patch \
                                  13-wasm-em-config-clang.patch \
                                  14-wasm-build-wasm-default.patch \
                                  15-wasm-static-hacl.patch
@@ -71,7 +70,8 @@ PY_MODULES = py_cv_module_grp=n/a \
 # are not installed outside of the cpython build tree, and cause failure in kodi linking
 # If we wish to support them in the future, we should create "system libs" for them
 PY_MODULES+= py_cv_module__decimal=n/a \
-             py_cv_module__sha2=n/a
+             py_cv_module__sha2=n/a \
+             py_cv_module__zstd=n/a
 
 
 ifeq ($(OS), darwin_embedded)
@@ -111,7 +111,6 @@ all: .installed-$(PLATFORM)
 ifeq ($(OS),android)
 	cd $(PLATFORM); patch -p1 -i ../10-android-modules.patch
 	cd $(PLATFORM); patch -p1 -i ../11-android-ctypes.patch
-	cd $(PLATFORM); patch -p1 -i ../12-android-arm.patch
 endif
 ifeq ($(OS),wasm)
 	cd $(PLATFORM); patch -p1 -i ../13-wasm-em-config-clang.patch

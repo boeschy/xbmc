@@ -16,6 +16,7 @@
 #include "PasswordManager.h"
 #include "PlayListPlayer.h" //! @todo Remove me
 #include "ServiceBroker.h"
+#include "TextureCache.h"
 #include "Util.h"
 #include "addons/AddonManager.h" //! @todo Remove me
 #include "addons/Service.h" //! @todo Remove me
@@ -310,6 +311,15 @@ bool CProfileManager::LoadProfile(unsigned int index)
   // unload any old settings
   settings->Unload();
 
+  // Stop all texture cache jobs and close the old profile's texture database
+  CServiceBroker::GetTextureCache()->Deinitialize();
+
+  // Reset database manager state while the texture cache is quiet.
+  // The manager holds no persistent connections; this call just clears
+  // m_dbStatus so the next Initialize() re-runs schema checks and
+  // migrations for the new profile.
+  CServiceBroker::GetDatabaseManager().Deinitialize();
+
   SetCurrentProfileId(index);
   m_previousProfileLoadedForLogin = false;
 
@@ -324,7 +334,16 @@ bool CProfileManager::LoadProfile(unsigned int index)
 
   CreateProfileFolders();
 
-  CServiceBroker::GetDatabaseManager().Initialize();
+  // Update/migrate databases for the new profile first, then re-start the
+  // texture cache. The cache opens its own connection, but the Textures DB
+  // schema must be current before that happens - the order matters.
+  if (!CServiceBroker::GetDatabaseManager().Initialize())
+  {
+    CLog::Log(LOGFATAL, "CProfileManager: unable to initialize databases for profile \"{}\"",
+              m_profiles.at(index).getName());
+    return false;
+  }
+  CServiceBroker::GetTextureCache()->Initialize();
   CServiceBroker::GetInputManager().LoadKeymaps();
 
   CServiceBroker::GetInputManager().SetMouseEnabled(settings->GetBool(CSettings::SETTING_INPUT_ENABLEMOUSE));
@@ -454,6 +473,12 @@ void CProfileManager::LogOff()
 
   networkManager.NetworkMessage(CNetworkBase::SERVICES_DOWN, 1);
 
+  // Reset the database manager so the master profile's databases are
+  // re-initialized cleanly when the login screen is shown again.
+  CServiceBroker::GetDatabaseManager().Deinitialize();
+
+  // LoadMasterProfileForLogin calls LoadProfile, which closes and re-opens
+  // all databases at the correct point in the switch sequence.
   LoadMasterProfileForLogin();
 
   g_passwordManager.bMasterUser = false;
@@ -473,27 +498,15 @@ void CProfileManager::LogOff()
 bool CProfileManager::DeleteProfile(unsigned int index)
 {
   std::unique_lock lock(m_critical);
-  const CProfile *profile = GetProfile(index);
+  const CProfile* profile = GetProfile(index);
   if (!profile)
   {
     CLog::LogF(LOGERROR, "Profile not deleted. Invalid profile id {}", index);
     return false;
   }
 
-  // fall back to master profile if necessary
-  if (static_cast<int>(index) == m_autoLoginProfile)
-    m_autoLoginProfile = MASTER_PROFILE_ID;
-
-  // delete profile
+  // Grab the directory before we erase the profile from the vector.
   std::string strDirectory = profile->getDirectory();
-  m_profiles.erase(m_profiles.begin() + index);
-
-  // fall back to master profile if necessary
-  if (index == m_currentProfile)
-  {
-    LoadProfile(MASTER_PROFILE_ID);
-    m_settings->Save();
-  }
 
   CFileItemPtr item =
       std::make_shared<CFileItem>(URIUtils::AddFileToFolder(GetUserDataFolder(), strDirectory));
@@ -501,8 +514,43 @@ bool CProfileManager::DeleteProfile(unsigned int index)
   item->SetFolder(true);
   item->Select(true);
 
-  CGUIComponent *gui = CServiceBroker::GetGUI();
-  if (gui && gui->ConfirmDelete(item->GetPath()))
+  // Ask whether to delete the profile's files before changing any profile state.
+  // Doing it after a profile switch can prevent the confirmation dialog
+  // from ever being shown (the old profile's windows are already gone).
+  CGUIComponent* gui = CServiceBroker::GetGUI();
+  const bool deleteFiles = gui && gui->ConfirmDelete(item->GetPath());
+
+  // Keep auto-login and last-used indices consistent with the vector after
+  // the erase, regardless of which profile is being removed.
+  if (static_cast<int>(index) == m_autoLoginProfile)
+    m_autoLoginProfile = MASTER_PROFILE_ID;
+  else if (static_cast<int>(index) < m_autoLoginProfile)
+    --m_autoLoginProfile;
+
+  if (index == m_lastUsedProfile)
+    m_lastUsedProfile = MASTER_PROFILE_ID;
+  else if (index < m_lastUsedProfile)
+    --m_lastUsedProfile;
+
+  const bool deletingCurrentProfile = (index == m_currentProfile);
+
+  m_profiles.erase(m_profiles.begin() + index);
+
+  if (deletingCurrentProfile)
+  {
+    // Switch away from the deleted profile - this also releases open
+    // database and texture-cache handles so the folder can be removed.
+    LoadProfile(MASTER_PROFILE_ID);
+    m_settings->Save();
+  }
+  else if (index < m_currentProfile)
+  {
+    // A profile before the current one was removed; the current index
+    // shifted down, so keep it pointing at the same profile.
+    SetCurrentProfileId(m_currentProfile - 1);
+  }
+
+  if (deleteFiles)
     CFileUtils::DeleteItem(item);
 
   return Save();
