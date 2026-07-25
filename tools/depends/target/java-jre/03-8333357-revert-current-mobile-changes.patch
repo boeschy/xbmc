@@ -60,21 +60,17 @@ diff --git a/make/autoconf/flags.m4 b/make/autoconf/flags.m4
 index 50438dd6a4f..d50538108a4 100644
 --- a/make/autoconf/flags.m4
 +++ b/make/autoconf/flags.m4
-@@ -286,15 +286,7 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
+@@ -289,11 +289,7 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
    GLOBAL_CXXFLAGS="$MACHINE_FLAG $SYSROOT_CFLAGS $USER_CXXFLAGS"
    GLOBAL_LDFLAGS="$MACHINE_FLAG $SYSROOT_LDFLAGS $USER_LDFLAGS"
    # FIXME: Don't really know how to do with this, but this was the old behavior
 -  if test "x$OPENJDK_TARGET_OS" = xios; then
 -    GLOBAL_CPPFLAGS="$MACHINE_FLAG $USER_CFLAGS $SYSROOT_CFLAGS"
--    AC_SUBST(GLOBAL_CFLAGS)
--    AC_SUBST(GLOBAL_CXXFLAGS)
--    AC_SUBST(GLOBAL_LDFLAGS)
--    AC_SUBST(GLOBAL_CPPFLAGS)
 -  else
 -    GLOBAL_CPPFLAGS="$SYSROOT_CFLAGS"
 -  fi
 +  GLOBAL_CPPFLAGS="$SYSROOT_CFLAGS"
- 
+
    # FIXME: For compatibility, export this as EXTRA_CFLAGS for now.
    EXTRA_CFLAGS="$MACHINE_FLAG $USER_CFLAGS"
 diff --git a/make/autoconf/lib-freetype.m4 b/make/autoconf/lib-freetype.m4
@@ -145,50 +141,24 @@ diff --git a/make/autoconf/toolchain.m4 b/make/autoconf/toolchain.m4
 index 43c68da6f1d..15f4247b274 100644
 --- a/make/autoconf/toolchain.m4
 +++ b/make/autoconf/toolchain.m4
-@@ -182,7 +182,7 @@ AC_DEFUN([TOOLCHAIN_SETUP_FILENAME_PATTERNS],
-     STATIC_LIBRARY_SUFFIX='.a'
+@@ -188,7 +188,7 @@ AC_DEFUN([TOOLCHAIN_SETUP_FILENAME_PATTERNS],
+     STATIC_LIBRARY='lib[$]1.a'
      OBJ_SUFFIX='.o'
      EXECUTABLE_SUFFIX=''
--    if test "x$OPENJDK_TARGET_OS" = xmacosx || test "x$OPENJDK_TARGET_OS" = xios ; then
+-    if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
 +    if test "x$OPENJDK_TARGET_OS" = xmacosx; then
-       # For full static builds, we're overloading the shared library suffix
-       # in order to limit the amount of changes required.
+       # For full static builds, we're overloading the SHARED_LIBRARY
+       # variables in order to limit the amount of changes required.
        # It would be better to remove SHARED and just use LIBRARY and
-@@ -223,34 +223,6 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
- 
-   # First toolchain type in the list is the default
-   DEFAULT_TOOLCHAIN=${VALID_TOOLCHAINS%% *}
--  if test "x$OPENJDK_TARGET_OS" = "xios" ; then
--    if test -n "$XCODEBUILD"; then
--      # On Mac OS X, default toolchain to clang after Xcode 5
--      XCODE_VERSION_OUTPUT=`"$XCODEBUILD" -version | $HEAD -n 1`
--      $ECHO "$XCODE_VERSION_OUTPUT" | $GREP "Xcode " > /dev/null
--      if test $? -ne 0; then
--        AC_MSG_NOTICE([xcodebuild output: $XCODE_VERSION_OUTPUT])
--        AC_MSG_ERROR([Failed to determine Xcode version.])
--      fi
--      XCODE_MAJOR_VERSION=`$ECHO $XCODE_VERSION_OUTPUT | \
--          $SED -e 's/^Xcode \(@<:@1-9@:>@@<:@0-9.@:>@*\)/\1/' | \
--          $CUT -f 1 -d .`
--      AC_MSG_NOTICE([Xcode major version: $XCODE_MAJOR_VERSION])
--      if test $XCODE_MAJOR_VERSION -ge 5; then
--          DEFAULT_TOOLCHAIN="clang"
--      else
--          DEFAULT_TOOLCHAIN="gcc"
--      fi
--    else
--      # If Xcode is not installed, but the command line tools are
--      # then we can't run xcodebuild. On these systems we should
--      # default to clang
--      DEFAULT_TOOLCHAIN="clang"
--    fi
--  else
--    # First toolchain type in the list is the default
--    DEFAULT_TOOLCHAIN=${VALID_TOOLCHAINS%% *}
--  fi
- 
-   if test "x$with_toolchain_type" = xlist; then
-     # List all toolchains
+@@ -352,7 +352,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_PRE_DETECTION],
+   # autoconf magic only relies on PATH, so update it if tools dir is specified
+   OLD_PATH="$PATH"
+
+-  if test "x$OPENJDK_BUILD_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
++  if test "x$OPENJDK_BUILD_OS" = "xmacosx"; then
+     if test "x$XCODEBUILD" != x; then
+       XCODE_VERSION_OUTPUT=`"$XCODEBUILD" -version 2> /dev/null | $HEAD -n 1`
+       $ECHO "$XCODE_VERSION_OUTPUT" | $GREP "^Xcode " > /dev/null
 @@ -902,13 +874,11 @@ AC_DEFUN_ONCE([TOOLCHAIN_SETUP_BUILD_COMPILERS],
  
      PATH="$OLDPATH"
@@ -288,14 +258,14 @@ index 19e272b02f3..7fed18491d1 100644
    LIBJLI_EXCLUDE_FILES += java_md.c
  endif
  
-@@ -167,7 +167,6 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJLI, \
-     EXTRA_HEADER_DIRS := libjvm, \
+@@ -172,7 +172,6 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJLI, \
+     EXTRA_FILES := $(LIBJLI_EXTRA_FILES), \
      OPTIMIZATION := HIGH, \
-     CFLAGS := $(LIBJLI_CFLAGS) $(LIBZ_CFLAGS), \
+     CFLAGS := $(CFLAGS_JDKLIB) $(LIBJLI_CFLAGS), \
 -    CFLAGS_ios := -I$(TOPDIR)/src/java.base/macosx/native/libjli, \
      DISABLED_WARNINGS_gcc := unused-function, \
      DISABLED_WARNINGS_clang := format-nonliteral deprecated-non-prototype, \
-     LIBS_unix := $(LIBZ_LIBS), \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
 diff --git a/src/java.base/macosx/native/libjava/java_props_macosx.c b/src/java.base/macosx/native/libjava/java_props_macosx.c
 index 3ef34d4912d..f50daac13cb 100644
 --- a/src/java.base/macosx/native/libjava/java_props_macosx.c

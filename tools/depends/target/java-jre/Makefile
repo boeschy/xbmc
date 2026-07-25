@@ -5,15 +5,10 @@ DEPS = ../../Makefile.include Makefile JAVA-JRE-VERSION ../../download-files.inc
                       03-8333357-revert-current-mobile-changes.patch \
                       04-8333795-mobile-allow-building-jdk-native-libs-for-io.patch \
                       05-8340467-mobile-duplicate-symbols-in-libprefs.a-on-iO.patch \
-                      06-8346233-mobile-enable-static-libs-image-for-iOS.patch \
                       07-8347033-mobile-add-ios-specific-build-docs.patch \
                       08-8357119-Make-Zero-the-default-variant-of-HotSpot-for.patch \
-                      09-8359163-Fix-path-to-current-module-on-ios.patch \
                       10-8370659-mobile-enable-static-libs-image-for-Android.patch \
-                      11-8374535-IOS-uses-different-path-for-modules.patch \
                       12-8374522-Mobile-Add-iOS-as-a-platform-in-OperatingSys.patch \
-                      13-8380088-IOS-jit_write_protect_np-not-allowed.patch \
-                      14-8365887-Outdated-comments-in-String-decode.patch
 
 
 
@@ -96,15 +91,10 @@ all: .installed-$(PLATFORM)
 	cd $(PLATFORM); patch -p1 -i ../03-8333357-revert-current-mobile-changes.patch
 	cd $(PLATFORM); patch -p1 -i ../04-8333795-mobile-allow-building-jdk-native-libs-for-io.patch
 	cd $(PLATFORM); patch -p1 -i ../05-8340467-mobile-duplicate-symbols-in-libprefs.a-on-iO.patch
-	cd $(PLATFORM); patch -p1 -i ../06-8346233-mobile-enable-static-libs-image-for-iOS.patch
 	cd $(PLATFORM); patch -p1 -i ../07-8347033-mobile-add-ios-specific-build-docs.patch
 	cd $(PLATFORM); patch -p1 -i ../08-8357119-Make-Zero-the-default-variant-of-HotSpot-for.patch
-	cd $(PLATFORM); patch -p1 -i ../09-8359163-Fix-path-to-current-module-on-ios.patch
 	cd $(PLATFORM); patch -p1 -i ../10-8370659-mobile-enable-static-libs-image-for-Android.patch
-	cd $(PLATFORM); patch -p1 -i ../11-8374535-IOS-uses-different-path-for-modules.patch
 	cd $(PLATFORM); patch -p1 -i ../12-8374522-Mobile-Add-iOS-as-a-platform-in-OperatingSys.patch
-	cd $(PLATFORM); patch -p1 -i ../13-8380088-IOS-jit_write_protect_np-not-allowed.patch
-	cd $(PLATFORM); patch -p1 -i ../14-8365887-Outdated-comments-in-String-decode.patch
 # Create dummy libraries so we won't have to remove them in OpenJDK makefiles
 	cd $(PLATFORM); mkdir -p dummy_libs
 	cd $(PLATFORM); ar cru dummy_libs/libpthread.a

@@ -189,19 +189,6 @@ index fa885dacb6d..5de04e8e903 100644
  SRC_SUBDIRS += share/classes
  
  SPEC_SUBDIRS += share/specs
-diff --git a/make/common/native/Paths.gmk b/make/common/native/Paths.gmk
-index e021a390289..bbe5a72e4cb 100644
---- a/make/common/native/Paths.gmk
-+++ b/make/common/native/Paths.gmk
-@@ -213,7 +213,7 @@ define SetupObjectFileList
- 
-     # If we are building static library, 'AR' on macosx/aix may not support @-file.
-     ifeq ($$($1_TYPE), STATIC_LIBRARY)
--      ifeq ($(call isTargetOs, macosx aix), true)
-+      ifeq ($(call isTargetOs, macosx ios aix), true)
-         $1_LD_OBJ_ARG := `cat $$($1_OBJ_FILE_LIST)`
-       endif
-     endif
 diff --git a/make/hotspot/lib/JvmFlags.gmk b/make/hotspot/lib/JvmFlags.gmk
 index e5929ab994b..0cbab3d0df9 100644
 --- a/make/hotspot/lib/JvmFlags.gmk
@@ -251,22 +238,23 @@ diff --git a/make/modules/java.desktop/Lib.gmk b/make/modules/java.desktop/Lib.g
 index 01b51fd4788..7615044a8b4 100644
 --- a/make/modules/java.desktop/Lib.gmk
 +++ b/make/modules/java.desktop/Lib.gmk
-@@ -35,10 +35,12 @@ $(call FillFindCache, $(wildcard $(TOPDIR)/src/java.desktop/*/native))
+@@ -35,12 +35,14 @@ $(call FillFindCache, $(wildcard $(TOPDIR)/src/java.desktop/*/native))
  ################################################################################
  # Create the AWT/2D libraries
- 
--include lib/AwtLibraries.gmk
--include lib/ClientLibraries.gmk
+
+-include lib/Awt2dLibraries.gmk
 +ifeq ($(call isTargetOs, android ios), false)
-+  include lib/AwtLibraries.gmk
-+  include lib/ClientLibraries.gmk
++  include lib/Awt2dLibraries.gmk
 +endif
- 
+
+ ################################################################################
+ # Create the libjsound library
+
 -ifeq ($(call isTargetOs, aix), false)
 +ifeq ($(call isTargetOs, aix android ios), false)
-   ##############################################################################
-   # Build libjsound
-   ##############################################################################
+
+   LIBJSOUND_CFLAGS := \
+       $(ALSA_CFLAGS) \
 diff --git a/src/hotspot/os/posix/os_posix.cpp b/src/hotspot/os/posix/os_posix.cpp
 index 1e7473eea1d..cce21e88067 100644
 --- a/src/hotspot/os/posix/os_posix.cpp
@@ -715,6 +703,37 @@ index 81a972999ed..7feb0140d31 100644
  #elif defined(_ALLBSD_SOURCE)
      /*
       * XXXBSD: there's no way available to do it in FreeBSD, AFAIK.
+diff --git a/make/hotspot/lib/JvmMapfile.gmk b/make/hotspot/lib/JvmMapfile.gmk
+index b2199e7d17c..f8c42916f03 100644
+--- a/make/hotspot/lib/JvmMapfile.gmk
++++ b/make/hotspot/lib/JvmMapfile.gmk
+@@ -52,7 +52,7 @@ endif
+ # Create a dynamic list of symbols from the built object files. This is highly
+ # platform dependent.
+
+-ifeq ($(call isTargetOs, linux), true)
++ifeq ($(call isTargetOs, linux android), true)
+   DUMP_SYMBOLS_CMD := $(NM) $(NMFLAGS) --defined-only *$(OBJ_SUFFIX)
+   ifneq ($(FILTER_SYMBOLS_PATTERN), )
+     FILTER_SYMBOLS_PATTERN := $(FILTER_SYMBOLS_PATTERN)|
+@@ -64,7 +64,7 @@ ifeq ($(call isTargetOs, linux), true)
+         if ($$3 ~ /$(FILTER_SYMBOLS_PATTERN)/) print $$3; \
+       }'
+
+-else ifeq ($(call isTargetOs, macosx), true)
++else ifeq ($(call isTargetOs, macosx ios), true)
+   # nm on macosx prints out "warning: nm: no name list" to stderr for
+   # files without symbols. Hide this, even at the expense of hiding real errors.
+   DUMP_SYMBOLS_CMD := $(NM) $(NMFLAGS) -Uj *$(OBJ_SUFFIX) 2> /dev/null
+@@ -144,7 +144,7 @@ $(JVM_OUTPUTDIR)/symbols: $(SYMBOLS_SRC)
+ ################################################################################
+ # Finally convert the symbol list into a platform-specific mapfile
+
+-ifeq ($(call isTargetOs, macosx), true)
++ifeq ($(call isTargetOs, macosx ios), true)
+   # On macosx, we need to add a leading underscore
+   define create-mapfile-work
+          $(AWK) '{ if ($$0 ~ ".") { print "  _" $$0 } }'  < $^ > $@.tmp
 -- 
 2.50.1 (Apple Git-155)
 

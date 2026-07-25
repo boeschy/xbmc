@@ -31,17 +31,6 @@ index 96c6276b2ff..6e4e1868650 100644
      if test "x$ALLOW_ABSOLUTE_PATHS_IN_OUTPUT" = "xfalse"; then
        # Check if compiler supports -fdebug-prefix-map. If so, use that to make
        # the debug symbol paths resolve to paths relative to the workspace root.
-@@ -463,8 +463,8 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
-   elif test "x$OPENJDK_TARGET_OS" = xwindows; then
-     CFLAGS_OS_DEF_JVM="-D_WINDOWS -DWIN32 -D_JNI_IMPLEMENTATION_"
-   elif test "x$OPENJDK_TARGET_OS" = xandroid; then
--    CFLAGS_OS_DEF_JVM="-target aarch64-linux-android -DLINUX -D_ALLBSD_SOURCE -DANDROID"
--    CFLAGS_OS_DEF_JDK="-target aarch64-linux-android -DLINUX -D__USE_BSD"
-+    CFLAGS_OS_DEF_JVM="-target aarch64-linux-android32 -DLINUX -D_ALLBSD_SOURCE -DANDROID"
-+    CFLAGS_OS_DEF_JDK="-target aarch64-linux-android32 -DLINUX -D__USE_BSD"
-   elif test "x$OPENJDK_TARGET_OS" = xios; then
-     CFLAGS_OS_DEF_JVM="-D_ALLBSD_SOURCE -D__IOS__ -D_XOPEN_SOURCE"
-     CFLAGS_OS_DEF_JDK="-D_ALLBSD_SOURCE -D__IOS__"
 diff --git a/make/autoconf/platform.m4 b/make/autoconf/platform.m4
 index 635672a81a7..9e262d4192a 100644
 --- a/make/autoconf/platform.m4
@@ -60,15 +49,23 @@ diff --git a/src/hotspot/os/linux/os_linux.cpp b/src/hotspot/os/linux/os_linux.c
 index 88e5e9b582a..64634b9cebf 100644
 --- a/src/hotspot/os/linux/os_linux.cpp
 +++ b/src/hotspot/os/linux/os_linux.cpp
-@@ -605,12 +605,14 @@ void os::init_system_properties_values() {
- 
-     // Get rid of /lib, if binary is libjvm.so,
-     // or cut off /bin, if it is a statically linked binary.
+@@ -528,6 +528,7 @@ void os::init_system_properties_values() {
+
+     // Found the full path to libjvm.so.
+     // Now cut the path to <java_home>/jre if we can.
 +#ifndef __BIONIC__
+     pslash = strrchr(buf, '/');
+     if (pslash != nullptr) {
+       *pslash = '\0';            // Get rid of /libjvm.so.
+@@ -537,13 +538,13 @@ void os::init_system_properties_values() {
+       *pslash = '\0';            // Get rid of /{client|server|hotspot}.
+     }
+     Arguments::set_dll_dir(buf);
+-
      if (pslash != nullptr) {
        pslash = strrchr(buf, '/');
        if (pslash != nullptr) {
-         *pslash = '\0';
+         *pslash = '\0';        // Get rid of /lib.
        }
      }
 +#endif
@@ -139,17 +136,17 @@ index 88e5e9b582a..64634b9cebf 100644
  }
  
  // Check numa dependent syscalls
-@@ -4409,7 +4428,12 @@ void os::init(void) {
+@@ -4565,7 +4566,12 @@ void os::init(void) {
    check_pax();
- 
+
    // Check the availability of MADV_POPULATE_WRITE.
 +#ifdef __BIONIC__
 +  char dummy2;
 +  FLAG_SET_DEFAULT(UseMadvPopulateWrite, (::madvise(&dummy2, 1, MADV_POPULATE_WRITE) == 0));
 +#else
-   FLAG_SET_DEFAULT(UseMadvPopulateWrite, (::madvise(nullptr, 0, MADV_POPULATE_WRITE) == 0));
+   FLAG_SET_DEFAULT(UseMadvPopulateWrite, (::madvise(0, 0, MADV_POPULATE_WRITE) == 0));
 +#endif
- 
+
    os::Posix::init();
  }
 @@ -5041,7 +5065,11 @@ bool os::is_thread_cpu_time_supported() {
@@ -212,52 +209,24 @@ diff --git a/src/hotspot/share/classfile/classLoader.cpp b/src/hotspot/share/cla
 index d9a63cd154b..a5225521b8f 100644
 --- a/src/hotspot/share/classfile/classLoader.cpp
 +++ b/src/hotspot/share/classfile/classLoader.cpp
-@@ -856,10 +856,17 @@ void ClassLoader::load_jimage_library() {
-   assert(JImageOpen == nullptr, "should not load jimage library twice");
- 
-   if (is_vm_statically_linked()) {
+@@ -976,10 +976,17 @@ void ClassLoader::load_jimage_library() {
+     vm_exit_during_initialization("Unable to load jimage library", path);
+   }
+
 +#ifndef __BIONIC__
-       JImageOpen = CAST_TO_FN_PTR(JImageOpen_t, os::lookup_function("JIMAGE_Open"));
-       JImageClose = CAST_TO_FN_PTR(JImageClose_t, os::lookup_function("JIMAGE_Close"));
-       JImageFindResource = CAST_TO_FN_PTR(JImageFindResource_t, os::lookup_function("JIMAGE_FindResource"));
-       JImageGetResource = CAST_TO_FN_PTR(JImageGetResource_t, os::lookup_function("JIMAGE_GetResource"));
+   JImageOpen = CAST_TO_FN_PTR(JImageOpen_t, dll_lookup(handle, "JIMAGE_Open", path));
+   JImageClose = CAST_TO_FN_PTR(JImageClose_t, dll_lookup(handle, "JIMAGE_Close", path));
+   JImageFindResource = CAST_TO_FN_PTR(JImageFindResource_t, dll_lookup(handle, "JIMAGE_FindResource", path));
+   JImageGetResource = CAST_TO_FN_PTR(JImageGetResource_t, dll_lookup(handle, "JIMAGE_GetResource", path));
 +#else
 +      JImageOpen = JIMAGE_Open;
 +      JImageClose = JIMAGE_Close;
 +      JImageFindResource = JIMAGE_FindResource;
 +      JImageGetResource = JIMAGE_GetResource;
 +#endif
-       assert(JImageOpen != nullptr && JImageClose != nullptr &&
-             JImageFindResource != nullptr && JImageGetResource != nullptr,
-             "could not lookup all jimage library functions");
-diff --git a/src/hotspot/share/utilities/forbiddenFunctions.hpp b/src/hotspot/share/utilities/forbiddenFunctions.hpp
-index 9d1b88e6233..f1f9448977c 100644
---- a/src/hotspot/share/utilities/forbiddenFunctions.hpp
-+++ b/src/hotspot/share/utilities/forbiddenFunctions.hpp
-@@ -35,14 +35,17 @@
- #ifdef _WINDOWS
- #include "forbiddenFunctions_windows.hpp"
- #else
-+#if !defined(__BIONIC__)
- #include "forbiddenFunctions_posix.hpp"
- #endif
-+#endif
- 
- // Forbid the use of various C library functions.  Some of these have os::
- // replacements that should be used instead.  Others are considered obsolete
- // or have security concerns, either with preferred alternatives, or to be
- // avoided entirely.
- 
-+#if !defined(__BIONIC__)
- FORBID_IMPORTED_C_FUNCTION(char* strerror(int), noexcept, "use os::strerror");
- FORBID_IMPORTED_C_FUNCTION(char* strtok(char*, const char*), noexcept, "use strtok_r");
- 
-@@ -63,4 +66,5 @@ PRAGMA_DIAG_POP
- FORBID_IMPORTED_C_FUNCTION(char* strdup(const char *s), noexcept, "use os::strdup");
- FORBID_IMPORTED_C_FUNCTION(wchar_t* wcsdup(const wchar_t *s), noexcept, "don't use");
- 
-+#endif
- #endif // SHARE_UTILITIES_FORBIDDENFUNCTIONS_HPP
+ }
+
+ int ClassLoader::crc32(int crc, const char* buf, int len) {
 diff --git a/src/java.base/unix/native/libjava/ProcessImpl_md.c b/src/java.base/unix/native/libjava/ProcessImpl_md.c
 index f7531ad5abe..10da71517ae 100644
 --- a/src/java.base/unix/native/libjava/ProcessImpl_md.c

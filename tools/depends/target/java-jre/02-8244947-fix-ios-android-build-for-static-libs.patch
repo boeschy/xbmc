@@ -5,7 +5,6 @@ Subject: [PATCH] 8244947: fix ios/android build for static libs
 
 Reviewed-by: bobv
 ---
- make/CompileJavaModules.gmk                   |  4 +-
  make/autoconf/build-aux/config.sub            | 11 ++++-
  make/autoconf/flags-cflags.m4                 |  7 +++
  make/autoconf/flags.m4                        |  6 ++-
@@ -24,37 +23,12 @@ Reviewed-by: bobv
  .../unix/native/libnet/net_util_md.h          |  3 ++
  17 files changed, 145 insertions(+), 19 deletions(-)
 
-diff --git a/make/CompileJavaModules.gmk b/make/CompileJavaModules.gmk
-index 85c2232ec7f..8a4c6852390 100644
---- a/make/CompileJavaModules.gmk
-+++ b/make/CompileJavaModules.gmk
-@@ -124,8 +124,8 @@ java.desktop_EXCLUDE_FILES += \
-     .template \
-     #
- 
--ifeq ($(call isTargetOs, macosx), true)
--  # exclude all X11 on Mac.
-+ifeq ($(call isTargetOs, macosx ios), true)
-+  # exclude all X11 on Mac and iOS.
-   java.desktop_EXCLUDES += \
-       sun/awt/X11 \
-       sun/java2d/x11 \
 diff --git a/make/autoconf/build-aux/config.sub b/make/autoconf/build-aux/config.sub
 index a36e6690728..425c9c90309 100644
 --- a/make/autoconf/build-aux/config.sub
 +++ b/make/autoconf/build-aux/config.sub
-@@ -36,7 +36,8 @@ if echo $* | grep x86_64-pc-wsl >/dev/null ; then
- fi
- 
- # Filter out everything that doesn't begin with "aarch64-"
--if ! echo $* | grep '^aarch64-' >/dev/null ; then
-+# or that ends with "-ios" or "-android"
-+if ! echo $* | egrep "^aarch64-|-ios|-android" >/dev/null ; then
-     . $DIR/autoconf-config.sub "$@"
-     # autoconf-config.sub exits, so we never reach here, but just in
-     # case we do:
-@@ -47,6 +48,14 @@ while test $# -gt 0 ; do
-     case $1 in 
+@@ -39,6 +39,14 @@ while test $# -gt 0 ; do
+     case $1 in
          -- )   # Stop option processing
              shift; break ;;
 +        *-ios* )
@@ -65,14 +39,14 @@ index a36e6690728..425c9c90309 100644
 +            echo $1
 +            exit
 +            ;;
-         aarch64-* )
-             config=`echo $1 | sed 's/^aarch64-/arm-/'`
-             sub_args="$sub_args $config"
+         - )    # Use stdin as input.
+             sub_args="$sub_args $1"
+             shift; break ;;
 diff --git a/make/autoconf/flags-cflags.m4 b/make/autoconf/flags-cflags.m4
 index 99e51891d82..bd08f5bb615 100644
 --- a/make/autoconf/flags-cflags.m4
 +++ b/make/autoconf/flags-cflags.m4
-@@ -437,6 +437,10 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
+@@ -495,6 +495,10 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
    elif test "x$OPENJDK_TARGET_OS" = xmacosx; then
      CFLAGS_OS_DEF_JVM="-D_ALLBSD_SOURCE -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE"
      CFLAGS_OS_DEF_JDK="-D_ALLBSD_SOURCE -D_DARWIN_UNLIMITED_SELECT"
@@ -81,23 +55,23 @@ index 99e51891d82..bd08f5bb615 100644
 +  elif test "x$OPENJDK_TARGET_OS" = xandroid; then
 +    CFLAGS_OS_DEF_JDK="-target aarch64-linux-android -D__USE_BSD"
    elif test "x$OPENJDK_TARGET_OS" = xaix; then
-     CFLAGS_OS_DEF_JVM="-DAIX"
+     CFLAGS_OS_DEF_JVM="-DAIX -D_LARGE_FILES"
    elif test "x$OPENJDK_TARGET_OS" = xbsd; then
-@@ -463,6 +467,9 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
+@@ -521,6 +525,9 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
        -I${TOPDIR}/src/hotspot/share/include \
        -I${TOPDIR}/src/hotspot/os/${HOTSPOT_TARGET_OS_TYPE}/include"
- 
+
 +  if test "x$OPENJDK_TARGET_OS" = xios; then
 +    ALWAYS_CFLAGS_JDK="$ALWAYS_CFLAGS_JDK -I${TOPDIR}/src/java.base/macosx/native/libjava"
 +  fi
    ###############################################################################
- 
+
    # Adjust flags according to debug level.
 diff --git a/make/autoconf/flags.m4 b/make/autoconf/flags.m4
 index 582cd65d0df..5fe1260a32c 100644
 --- a/make/autoconf/flags.m4
 +++ b/make/autoconf/flags.m4
-@@ -278,7 +278,11 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
+@@ -289,7 +289,11 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
    GLOBAL_CXXFLAGS="$MACHINE_FLAG $SYSROOT_CFLAGS $USER_CXXFLAGS"
    GLOBAL_LDFLAGS="$MACHINE_FLAG $SYSROOT_LDFLAGS $USER_LDFLAGS"
    # FIXME: Don't really know how to do with this, but this was the old behavior
@@ -107,9 +81,9 @@ index 582cd65d0df..5fe1260a32c 100644
 +  else
 +    GLOBAL_CPPFLAGS="$SYSROOT_CFLAGS"
 +  fi
-   AC_SUBST(GLOBAL_CFLAGS)
-   AC_SUBST(GLOBAL_CXXFLAGS)
-   AC_SUBST(GLOBAL_LDFLAGS)
+
+   # FIXME: For compatibility, export this as EXTRA_CFLAGS for now.
+   EXTRA_CFLAGS="$MACHINE_FLAG $USER_CFLAGS"
 diff --git a/make/autoconf/lib-freetype.m4 b/make/autoconf/lib-freetype.m4
 index a870a89fba3..f9fecdeed5f 100644
 --- a/make/autoconf/lib-freetype.m4
@@ -155,7 +129,7 @@ diff --git a/make/autoconf/platform.m4 b/make/autoconf/platform.m4
 index ee5c75e7f36..7b9fcdd4ad5 100644
 --- a/make/autoconf/platform.m4
 +++ b/make/autoconf/platform.m4
-@@ -178,6 +178,10 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_OS],
+@@ -202,10 +202,18 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_OS],
        VAR_OS=linux
        VAR_OS_TYPE=unix
        ;;
@@ -163,10 +137,7 @@ index ee5c75e7f36..7b9fcdd4ad5 100644
 +      VAR_OS=android
 +      VAR_OS_TYPE=unix
 +      ;;
-     *solaris*)
-       VAR_OS=solaris
-       VAR_OS_TYPE=unix
-@@ -186,6 +190,10 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_OS],
+     *darwin*)
        VAR_OS=macosx
        VAR_OS_TYPE=unix
        ;;
@@ -181,24 +152,24 @@ diff --git a/make/autoconf/toolchain.m4 b/make/autoconf/toolchain.m4
 index 086b362ac00..2a1f0ad5a98 100644
 --- a/make/autoconf/toolchain.m4
 +++ b/make/autoconf/toolchain.m4
-@@ -189,7 +189,7 @@ AC_DEFUN([TOOLCHAIN_SETUP_FILENAME_PATTERNS],
-     SHARED_LIBRARY='lib[$]1.so'
+@@ -188,7 +188,7 @@ AC_DEFUN([TOOLCHAIN_SETUP_FILENAME_PATTERNS],
      STATIC_LIBRARY='lib[$]1.a'
      OBJ_SUFFIX='.o'
+     EXECUTABLE_SUFFIX=''
 -    if test "x$OPENJDK_TARGET_OS" = xmacosx; then
 +    if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
        # For full static builds, we're overloading the SHARED_LIBRARY
        # variables in order to limit the amount of changes required.
        # It would be better to remove SHARED and just use LIBRARY and
-@@ -225,7 +225,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
-   toolchain_var_name=VALID_TOOLCHAINS_$OPENJDK_BUILD_OS
-   VALID_TOOLCHAINS=${!toolchain_var_name}
- 
--  if test "x$OPENJDK_TARGET_OS" = xmacosx; then
-+  if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
-     if test -n "$XCODEBUILD"; then
-       # On Mac OS X, default toolchain to clang after Xcode 5
-       XCODE_VERSION_OUTPUT=`"$XCODEBUILD" -version 2>&1 | $HEAD -n 1`
+@@ -352,7 +352,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_PRE_DETECTION],
+   # autoconf magic only relies on PATH, so update it if tools dir is specified
+   OLD_PATH="$PATH"
+
+-  if test "x$OPENJDK_BUILD_OS" = "xmacosx"; then
++  if test "x$OPENJDK_BUILD_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
+     if test "x$XCODEBUILD" != x; then
+       XCODE_VERSION_OUTPUT=`"$XCODEBUILD" -version 2> /dev/null | $HEAD -n 1`
+       $ECHO "$XCODE_VERSION_OUTPUT" | $GREP "^Xcode " > /dev/null
 @@ -1013,11 +1013,13 @@ AC_DEFUN_ONCE([TOOLCHAIN_SETUP_BUILD_COMPILERS],
  
      PATH="$OLDPATH"
@@ -264,7 +235,7 @@ diff --git a/make/common/modules/LauncherCommon.gmk b/make/common/modules/Launch
 index 788f9f1783b..74b753c5692 100644
 --- a/make/common/modules/LauncherCommon.gmk
 +++ b/make/common/modules/LauncherCommon.gmk
-@@ -50,6 +50,11 @@ LAUNCHER_CFLAGS += -I$(TOPDIR)/src/java.base/share/native/launcher \
+@@ -49,6 +49,11 @@ LAUNCHER_CFLAGS += -I$(TOPDIR)/src/java.base/share/native/launcher \
      -I$(TOPDIR)/src/java.base/$(OPENJDK_TARGET_OS_TYPE)/native/libjli \
      -I$(TOPDIR)/src/java.base/$(OPENJDK_TARGET_OS)/native/libjli \
      #
@@ -273,9 +244,9 @@ index 788f9f1783b..74b753c5692 100644
 +  LAUNCHER_CFLAGS += -I$(TOPDIR)/src/java.base/macosx/native/libjli
 +fi
 +
- GLOBAL_VERSION_INFO_RESOURCE := $(TOPDIR)/src/java.base/windows/native/common/version.rc
  MACOSX_PLIST_DIR := $(TOPDIR)/src/java.base/macosx/native/launcher
  JAVA_MANIFEST := $(TOPDIR)/src/java.base/windows/native/launcher/java.manifest
+ 
 diff --git a/make/modules/java.base/lib/CoreLibraries.gmk b/make/modules/java.base/lib/CoreLibraries.gmk
 index ab8a75cf454..6877d4a3eba 100644
 --- a/make/modules/java.base/lib/CoreLibraries.gmk
@@ -289,34 +260,34 @@ index ab8a75cf454..6877d4a3eba 100644
    BUILD_LIBJAVA_java_props_md.c_CFLAGS := -x objective-c
    BUILD_LIBJAVA_java_props_macosx.c_CFLAGS := -x objective-c
  endif
-@@ -173,7 +173,7 @@ TARGETS += $(BUILD_LIBJIMAGE)
- 
+@@ -134,7 +134,7 @@ TARGETS += $(BUILD_LIBJIMAGE)
+
  ##########################################################################################
- 
+
 -ifeq ($(call isTargetOs, macosx), true)
 +ifeq ($(call isTargetOs, macosx ios), true)
-   LIBJLI_EXCLUDE_FILES += java_md_solinux.c
+   LIBJLI_EXCLUDE_FILES += java_md.c
  endif
- 
-@@ -209,6 +209,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJLI, \
+
+@@ -172,6 +172,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJLI, \
      EXTRA_FILES := $(LIBJLI_EXTRA_FILES), \
      OPTIMIZATION := HIGH, \
      CFLAGS := $(CFLAGS_JDKLIB) $(LIBJLI_CFLAGS), \
 +    CFLAGS_ios := -I$(TOPDIR)/src/java.base/macosx/native/libjli, \
-     DISABLED_WARNINGS_gcc := unused-function implicit-fallthrough, \
-     DISABLED_WARNINGS_clang := sometimes-uninitialized format-nonliteral, \
+     DISABLED_WARNINGS_gcc := unused-function, \
+     DISABLED_WARNINGS_clang := format-nonliteral deprecated-non-prototype, \
      LDFLAGS := $(LDFLAGS_JDKLIB) \
 diff --git a/make/modules/jdk.net/Lib.gmk b/make/modules/jdk.net/Lib.gmk
 index 8e11c451510..c067ad9de6e 100644
 --- a/make/modules/jdk.net/Lib.gmk
 +++ b/make/modules/jdk.net/Lib.gmk
 @@ -27,7 +27,7 @@ include LibCommon.gmk
- 
+
  ################################################################################
- 
--ifeq ($(call isTargetOs, solaris linux macosx), true)
-+ifeq ($(call isTargetOs, solaris linux macosx ios android), true)
- 
+
+-ifeq ($(call isTargetOs, linux macosx windows aix), true)
++ifeq ($(call isTargetOs, linux macosx windows aixios android), true)
+
    $(eval $(call SetupJdkLibrary, BUILD_LIBEXTNET, \
        NAME := extnet, \
 diff --git a/src/java.base/macosx/native/libjava/java_props_macosx.c b/src/java.base/macosx/native/libjava/java_props_macosx.c
