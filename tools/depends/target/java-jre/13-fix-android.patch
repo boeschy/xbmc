@@ -1,0 +1,77 @@
+diff --git a/make/autoconf/jdk-options.m4 b/make/autoconf/jdk-options.m4
+index 77cba5f2ac5..906346a8579 100644
+--- a/make/autoconf/jdk-options.m4
++++ b/make/autoconf/jdk-options.m4
+@@ -185,6 +185,9 @@ AC_DEFUN_ONCE([JDKOPT_SETUP_JDK_OPTIONS],
+   if test "x$OPENJDK_TARGET_OS" = xaix ; then
+     INCLUDE_SA=false
+   fi
++  if test "x$OPENJDK_TARGET_OS" = xandroid ; then
++    INCLUDE_SA=false
++  fi
+   if test "x$OPENJDK_TARGET_CPU" = xs390x ; then
+     INCLUDE_SA=false
+   fi
+diff --git a/make/common/modules/LauncherCommon.gmk b/make/common/modules/LauncherCommon.gmk
+index 21d2b9a9300..fa016566582 100644
+--- a/make/common/modules/LauncherCommon.gmk
++++ b/make/common/modules/LauncherCommon.gmk
+@@ -170,11 +170,14 @@ define SetupBuildLauncherBody
+           $$($1_LDFLAGS), \
+       LDFLAGS_linux := $$(call SET_EXECUTABLE_ORIGIN,/../lib) \
+           -L$(call FindLibDirForModule, java.base), \
++      LDFLAGS_android := $$(call SET_EXECUTABLE_ORIGIN,/../lib) \
++          -L$(call FindLibDirForModule, java.base), \
+       LDFLAGS_macosx := $$(call SET_EXECUTABLE_ORIGIN,/../lib) \
+           -L$(call FindLibDirForModule, java.base), \
+       LDFLAGS_aix := -L$(SUPPORT_OUTPUTDIR)/native/java.base, \
+       LIBS := $(JDKEXE_LIBS) $$($1_LIBS), \
+       LIBS_linux := -ljli -lpthread $(LIBDL), \
++      LIBS_android := -ljli $(LIBDL), \
+       LIBS_macosx := -ljli -framework Cocoa -framework Security \
+           -framework ApplicationServices, \
+       LIBS_aix := -ljli_static, \
+diff --git a/make/modules/jdk.attach/Lib.gmk b/make/modules/jdk.attach/Lib.gmk
+index 6c61926b804..d826652e218 100644
+--- a/make/modules/jdk.attach/Lib.gmk
++++ b/make/modules/jdk.attach/Lib.gmk
+@@ -34,8 +34,13 @@ ifeq ($(call isTargetOs, windows), true)
+   LIBATTACH_CFLAGS := -DPSAPI_VERSION=1
+ endif
+ 
+-$(eval $(call SetupJdkLibrary, BUILD_LIBATTACH, \
++ifeq ($(call isTargetOs, android), true)
++  LIBATTACH_SRC := $(TOPDIR)/src/jdk.attach/linux/native/libattach
++endif
++
++ $(eval $(call SetupJdkLibrary, BUILD_LIBATTACH, \
+     NAME := attach, \
++    SRC := $(LIBATTACH_SRC), \
+     OPTIMIZATION := LOW, \
+     CFLAGS := $(CFLAGS_JDKLIB) $(LIBATTACH_CFLAGS), \
+     CFLAGS_windows := /Gy, \
+diff --git a/make/modules/jdk.net/Lib.gmk b/make/modules/jdk.net/Lib.gmk
+index ac7648644f8..1d67002798d 100644
+--- a/make/modules/jdk.net/Lib.gmk
++++ b/make/modules/jdk.net/Lib.gmk
+@@ -27,14 +27,20 @@ include LibCommon.gmk
+ 
+ ifeq ($(call isTargetOs, linux macosx windows aix android), true)
+ 
++  ifeq ($(call isTargetOs, android), true)
++    LIBEXTNET_SRC := $(TOPDIR)/src/jdk.net/linux/native/libextnet
++  endif
++ 
+   $(eval $(call SetupJdkLibrary, BUILD_LIBEXTNET, \
+       NAME := extnet, \
++      SRC := $(LIBEXTNET_SRC), \
+       OPTIMIZATION := LOW, \
+       CFLAGS := $(CFLAGS_JDKLIB), \
+       LDFLAGS := $(LDFLAGS_JDKLIB) \
+           $(call SET_SHARED_LIBRARY_ORIGIN), \
+       LIBS_unix := -ljava, \
+       LIBS_linux := -ljvm, \
++      LIBS_android := -ljvm, \
+       LIBS_windows := jvm.lib ws2_32.lib $(WIN_JAVA_LIB), \
+   ))
+ 

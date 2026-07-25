@@ -9,24 +9,33 @@ DEPS = ../../Makefile.include Makefile JAVA-JRE-VERSION ../../download-files.inc
                       08-8357119-Make-Zero-the-default-variant-of-HotSpot-for.patch \
                       10-8370659-mobile-enable-static-libs-image-for-Android.patch \
                       12-8374522-Mobile-Add-iOS-as-a-platform-in-OperatingSys.patch \
+                      13-fix-android.patch \
 
 
 
-
-CONFIGURE += ./configure --openjdk-target=aarch64-android-linux
-                         --with-freetype-include=$(PREFIX)/include/freetype2 \
-                         --with-freetype-lib=$(PREFIX)/lib \
-                         --with-cups=$(PREFIX)/share/cups/cups \
-                         --disable-precompiled-headers \
-                         --disable-warnings-as-errors \
-                         --enable-option-checking=fatal \
-                         --enable-headless-only=yes
 
 ifeq ($(OS),android)
-  CONFIGURE+= --with-libffi=$(PREFIX) \
+  CONFIGURE+= ./configure --build=x86_64-unknown-linux-gnu \
+              --openjdk-target=aarch64-linux-android \
+              --with-toolchain-type=clang \
+              --with-toolchain-path=$(TOOLCHAIN)/bin \
+              --with-sysroot=$(TOOLCHAIN)/sysroot \
+              CC=$(TOOLCHAIN)/bin/aarch64-linux-android24-clang \
+              CXX=$(TOOLCHAIN)/bin/aarch64-linux-android24-clang++ \
+              LD=$(TOOLCHAIN)/bin/ld.lld \
+              AR=$(TOOLCHAIN)/bin/llvm-ar \
+              NM=$(TOOLCHAIN)/bin/llvm-nm \
+              OBJCOPY=$(TOOLCHAIN)/bin/llvm-objcopy \
+              OBJDUMP=$(TOOLCHAIN)/bin/llvm-objdump \
+              STRIP=$(TOOLCHAIN)/bin/llvm-strip \
+              --disable-precompiled-headers \
+              --disable-warnings-as-errors \
+              --enable-option-checking=fatal \
+              --enable-headless-only=yes \
+              --with-cups-include=$(PREFIX)/share/cups \
+              --with-extra-ldflags="-Wl,--undefined-version" \
               --with-fontconfig=$(PREFIX) \
-              --with-fontconfig-include=$(PREFIX)/include \
-              --with-toolchain-type=clang
+              --with-fontconfig-include=$(PREFIX)/include
 endif
 
 # ios     configure \
@@ -78,7 +87,6 @@ export CFLAGS+=" -DLE_STANDALONE"
 export CFLAGS+=" -mllvm -polly -DANDROID -Wno-error=implicit-function-declaration -Wno-error=int-conversion"
 export LDFLAGS+=" -L$(PLATFORM)/dummy_libs -Wl,--undefined-version"
 
-
 LIBDYLIB=$(PLATFORM)/build/lib/$(BYPRODUCT)
 
 all: .installed-$(PLATFORM)
@@ -95,19 +103,25 @@ all: .installed-$(PLATFORM)
 	cd $(PLATFORM); patch -p1 -i ../08-8357119-Make-Zero-the-default-variant-of-HotSpot-for.patch
 	cd $(PLATFORM); patch -p1 -i ../10-8370659-mobile-enable-static-libs-image-for-Android.patch
 	cd $(PLATFORM); patch -p1 -i ../12-8374522-Mobile-Add-iOS-as-a-platform-in-OperatingSys.patch
+	cd $(PLATFORM); patch -p1 -i ../13-fix-android.patch
 # Create dummy libraries so we won't have to remove them in OpenJDK makefiles
 	cd $(PLATFORM); mkdir -p dummy_libs
 	cd $(PLATFORM); ar cru dummy_libs/libpthread.a
 	cd $(PLATFORM); ar cru dummy_libs/librt.a
 	cd $(PLATFORM); ar cru dummy_libs/libthread_db.a
-	cd $(PLATFORM); $(CONFIGURE)
+	cd $(PLATFORM); bash $(CONFIGURE)
 	touch $@
 
 $(LIBDYLIB): .configured-$(PLATFORM)
-	$(MAKE) -C $(PLATFORM)/build
+	$(MAKE) -C $(PLATFORM)
 
 .installed-$(PLATFORM): $(LIBDYLIB)
-	$(MAKE) -C $(PLATFORM)/build install
+	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/bin $(PREFIX)/
+	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/conf $(PREFIX)/
+	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/include $(PREFIX)/
+	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/lib $(PREFIX)/
+	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/man $(PREFIX)/
+	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/modules $(PREFIX)/
 	touch $@
 
 clean:
