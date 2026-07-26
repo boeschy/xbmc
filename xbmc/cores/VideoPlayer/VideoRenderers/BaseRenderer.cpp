@@ -14,6 +14,7 @@
 #include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
+#include "rendering/RenderSystemTypes.h"
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "settings/DisplaySettings.h"
@@ -357,9 +358,14 @@ void CBaseRenderer::ManageRenderArea()
   float contentRatio = GetAspectRatio();
   const CRect renderWindow = ApplyContentGeometry(contentRatio);
 
+  // Only a cropped eye needs the per-eye aspect; a full frame keeps its own.
+  const bool eyeCropped =
+      (stereo_view == RenderStereoView::LEFT || stereo_view == RenderStereoView::RIGHT);
+
   CalcNormalRenderRect(renderWindow.x1, renderWindow.y1, renderWindow.Width(),
                        renderWindow.Height(),
-                       contentRatio * CDisplaySettings::GetInstance().GetPixelRatio(),
+                       eyeCropped ? GetPerEyeAspectRatio() : contentRatio *
+                          CDisplaySettings::GetInstance().GetPixelRatio(),
                        CDisplaySettings::GetInstance().GetZoomAmount(),
                        CDisplaySettings::GetInstance().GetVerticalShift());
 }
@@ -396,6 +402,23 @@ CRect CBaseRenderer::ApplyContentGeometry(float& contentRatio)
     renderWindow = KODI::VIDEO::GEOMETRY::FitAspect(inputs.maintainAspect, m_viewRect, pixelRatio);
 
   return renderWindow;
+}
+
+float CBaseRenderer::GetPerEyeAspectRatio() const
+{
+  const float ratio = GetAspectRatio();
+
+  // A half packing squeezes each eye into a normal-looking frame, so it stays inside
+  // the range a single frame can have and is left to the display mode's pixel ratio.
+  switch (CONF_FLAGS_STEREO_MODE_MASK(m_iFlags))
+  {
+    case CONF_FLAGS_STEREO_MODE_SBS:
+      return ratio > STEREO_FULL_SBS_MIN_ASPECT ? ratio * 0.5f : ratio;
+    case CONF_FLAGS_STEREO_MODE_TAB:
+      return ratio < STEREO_FULL_TAB_MAX_ASPECT ? ratio * 2.0f : ratio;
+    default:
+      return ratio;
+  }
 }
 
 EShaderFormat CBaseRenderer::GetShaderFormat()
