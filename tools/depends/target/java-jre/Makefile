@@ -20,6 +20,8 @@ ifeq ($(OS),android)
               --with-toolchain-type=clang \
               --with-toolchain-path=$(TOOLCHAIN)/bin \
               --with-sysroot=$(TOOLCHAIN)/sysroot \
+              BUILD_CC=$$(which clang) \
+              BUILD_CXX=$$(which clang++) \
               CC=$(TOOLCHAIN)/bin/aarch64-linux-android24-clang \
               CXX=$(TOOLCHAIN)/bin/aarch64-linux-android24-clang++ \
               LD=$(TOOLCHAIN)/bin/ld.lld \
@@ -33,7 +35,8 @@ ifeq ($(OS),android)
               --enable-option-checking=fatal \
               --enable-headless-only=yes \
               --with-cups-include=$(PREFIX)/share/cups \
-              --with-extra-ldflags="-Wl,--undefined-version" \
+              --with-extra-cflags=" -DLE_STANDALONE -mllvm -polly -DANDROID -Wno-error=implicit-function-declaration -Wno-error=int-conversion" \
+              --with-extra-ldflags=" -L$(PLATFORM)/dummy_libs  -Wl,--undefined-version -Wl,--allow-shlib-undefined" \
               --with-fontconfig=$(PREFIX) \
               --with-fontconfig-include=$(PREFIX)/include
 endif
@@ -82,10 +85,6 @@ endif
 export AR RANLIB STRIP
 
 export CUPS_DIR=$(PREFIX)/share/cups
-export CFLAGS+=" -DLE_STANDALONE"
-
-export CFLAGS+=" -mllvm -polly -DANDROID -Wno-error=implicit-function-declaration -Wno-error=int-conversion"
-export LDFLAGS+=" -L$(PLATFORM)/dummy_libs -Wl,--undefined-version"
 
 LIBDYLIB=$(PLATFORM)/build/lib/$(BYPRODUCT)
 
@@ -113,15 +112,10 @@ all: .installed-$(PLATFORM)
 	touch $@
 
 $(LIBDYLIB): .configured-$(PLATFORM)
-	$(MAKE) -C $(PLATFORM)
+	$(MAKE) -j1 -C $(PLATFORM) images
+
 
 .installed-$(PLATFORM): $(LIBDYLIB)
-	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/bin $(PREFIX)/
-	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/conf $(PREFIX)/
-	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/include $(PREFIX)/
-	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/lib $(PREFIX)/
-	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/man $(PREFIX)/
-	cp -rf $(PLATFORM)/build/android-aarch64-server-release/jdk/modules $(PREFIX)/
 	touch $@
 
 clean:

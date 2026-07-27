@@ -1,3 +1,69 @@
+--- a/make/common/modules/GensrcProperties.gmk
++++ b/make/common/modules/GensrcProperties.gmk
+@@ -92,7 +92,9 @@
+       $$(patsubst %.properties, %.java, \
+       $$(subst /$(OPENJDK_TARGET_OS)/classes,, \
+       $$(subst /$(OPENJDK_TARGET_OS_TYPE)/classes,, \
+-      $$(subst /share/classes,, $$($1_SRC_FILES))))))
++      $$(subst /linux/classes,, \
++      $$(subst /macosx/classes,, \
++      $$(subst /share/classes,, $$($1_SRC_FILES))))))))
+ 
+   # Generate the package dirs for the to be generated java files. Sort to remove
+   # duplicates.
+--- a/src/hotspot/share/utilities/elfFile.hpp
++++ b/src/hotspot/share/utilities/elfFile.hpp
+@@ -46,7 +46,7 @@ typedef Elf64_Shdr      Elf_Shdr;
+ typedef Elf64_Phdr      Elf_Phdr;
+ typedef Elf64_Sym       Elf_Sym;
+
+-#if !defined(_ALLBSD_SOURCE) || defined(__APPLE__)
++#if !defined(ELF_ST_TYPE) && (!defined(_ALLBSD_SOURCE) || defined(__APPLE__))
+ #define ELF_ST_TYPE ELF64_ST_TYPE
+ #endif
+ 
+diff --git a/make/autoconf/flags-cflags.m4 b/make/autoconf/flags-cflags.m4
+index 12de561cb3a..3d3fce1cdb3 100644
+--- a/make/autoconf/flags-cflags.m4
++++ b/make/autoconf/flags-cflags.m4
+@@ -502,7 +502,7 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
+   elif test "x$OPENJDK_TARGET_OS" = xwindows; then
+     CFLAGS_OS_DEF_JVM="-D_WINDOWS -DWIN32 -D_JNI_IMPLEMENTATION_"
+   elif test "x$OPENJDK_TARGET_OS" = xandroid; then
+-    CFLAGS_OS_DEF_JVM="-target aarch64-linux-android -DLINUX -D_ALLBSD_SOURCE -DANDROID"
+-    CFLAGS_OS_DEF_JDK="-target aarch64-linux-android -DLINUX -D__USE_BSD"
++    CFLAGS_OS_DEF_JVM="-target aarch64-linux-android -DLINUX -DANDROID"
++    CFLAGS_OS_DEF_JDK="-target aarch64-linux-android -DLINUX -D_GNU_SOURCE"
+   elif test "x$OPENJDK_TARGET_OS" = xios; then
+     CFLAGS_OS_DEF_JVM="-DLINUX -D__IOS__ "
+diff --git a/make/autoconf/buildjdk-spec.gmk.in b/make/autoconf/buildjdk-spec.gmk.in
+index 3e7c4a39f60..9b04d95d4e4 100644
+--- a/make/autoconf/buildjdk-spec.gmk.in
++++ b/make/autoconf/buildjdk-spec.gmk.in
+@@ -77,9 +77,20 @@ CFLAGS_JDKEXE := @OPENJDK_BUILD_CFLAGS_JDKEXE@
+ CXXFLAGS_JDKEXE := @OPENJDK_BUILD_CXXFLAGS_JDKEXE@
+ LDFLAGS_JDKEXE := @OPENJDK_BUILD_LDFLAGS_JDKEXE@
++ 
++CFLAGS_JDKLIB := $(filter-out -target aarch64-linux-android, $(CFLAGS_JDKLIB))
++CXXFLAGS_JDKLIB := $(filter-out -target aarch64-linux-android, $(CXXFLAGS_JDKLIB))
++CFLAGS_JDKEXE := $(filter-out -target aarch64-linux-android, $(CFLAGS_JDKEXE))
++CXXFLAGS_JDKEXE := $(filter-out -target aarch64-linux-android, $(CXXFLAGS_JDKEXE))
+ 
++CFLAGS_JDKLIB := $(filter-out -DANDROID, $(CFLAGS_JDKLIB))
++CXXFLAGS_JDKLIB := $(filter-out -DANDROID, $(CXXFLAGS_JDKLIB))
++CFLAGS_JDKEXE := $(filter-out -DANDROID, $(CFLAGS_JDKEXE))
++CXXFLAGS_JDKEXE := $(filter-out -DANDROID, $(CXXFLAGS_JDKEXE))
++
+-JVM_CFLAGS := @OPENJDK_BUILD_JVM_CFLAGS@
+-JVM_LDFLAGS := @OPENJDK_BUILD_JVM_LDFLAGS@
+-JVM_ASFLAGS := @OPENJDK_BUILD_JVM_ASFLAGS@
++JVM_CFLAGS := $(filter-out -target aarch64-linux-android, @OPENJDK_BUILD_JVM_CFLAGS@)
++JVM_LDFLAGS := $(filter-out -target aarch64-linux-android, @OPENJDK_BUILD_JVM_LDFLAGS@)
++JVM_ASFLAGS := $(filter-out -target aarch64-linux-android, @OPENJDK_BUILD_JVM_ASFLAGS@)
++JVM_CFLAGS := $(filter-out -DANDROID, $(JVM_CFLAGS))
+ JVM_LIBS := @OPENJDK_BUILD_JVM_LIBS@
+ 
+ FDLIBM_CFLAGS := @OPENJDK_BUILD_FDLIBM_CFLAGS@
 diff --git a/make/autoconf/jdk-options.m4 b/make/autoconf/jdk-options.m4
 index 77cba5f2ac5..906346a8579 100644
 --- a/make/autoconf/jdk-options.m4
@@ -75,3 +141,71 @@ index ac7648644f8..1d67002798d 100644
        LIBS_windows := jvm.lib ws2_32.lib $(WIN_JAVA_LIB), \
    ))
  
+--- a/make/modules/java.base/Lib.gmk
++++ b/make/modules/java.base/Lib.gmk
+@@ -68,8 +68,15 @@
+ ################################################################################
+ # Create the nio library
+ 
++ifeq ($(call isTargetOs, android), true)
++  LIBNIO_SRC := $(TOPDIR)/src/java.base/share/native/libnio \
++      $(TOPDIR)/src/java.base/unix/native/libnio \
++      $(TOPDIR)/src/java.base/linux/native/libnio
++endif
++
+ $(eval $(call SetupJdkLibrary, BUILD_LIBNIO, \
+     NAME := nio, \
++    SRC := $(LIBNIO_SRC), \
+     OPTIMIZATION := HIGH, \
+     WARNINGS_AS_ERRORS_xlc := false, \
+     CFLAGS := $(CFLAGS_JDKLIB), \
+@@ -80,7 +91,8 @@
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LIBS_unix := -ljava -lnet, \
+     LIBS_linux := -lpthread $(LIBDL), \
++    LIBS_android := $(LIBDL), \
+     LIBS_aix := $(LIBDL), \
+     LIBS_macosx := \
+         -framework CoreFoundation -framework CoreServices, \
+diff --git a/src/java.base/share/classes/jdk/internal/util/OperatingSystem.java b/src/java.base/share/classes/jdk/internal/util/OperatingSystem.java
+index 527a01526a6..8a23a6fe5ec 100644
+--- a/src/java.base/share/classes/jdk/internal/util/OperatingSystem.java
++++ b/src/java.base/share/classes/jdk/internal/util/OperatingSystem.java
+@@ -86,6 +86,10 @@ public enum OperatingSystem {
+      * The iOS Operating system.
+      */
+     IOS,
++    /**
++     * The Android Operating system.
++     */
++    ANDROID,
+     ;
+
+     // The current OperatingSystem
+@@ -130,6 +134,13 @@ public enum OperatingSystem {
+         return PlatformProps.TARGET_OS_IS_IOS;
+     }
+
++    /**
++     * {@return {@code true} if built for the Android operating system}
++     */
++    public static boolean isAndroid() {
++        return PlatformProps.TARGET_OS_IS_ANDROID;
++    }
++
+     /**
+      * {@return the current operating system}
+      */
+diff --git a/src/java.base/share/classes/jdk/internal/util/PlatformProps.java.template b/src/java.base/share/classes/jdk/internal/util/PlatformProps.java.template
+index 0991ff6143a..c67c33ccfab 100644
+--- a/src/java.base/share/classes/jdk/internal/util/PlatformProps.java.template
++++ b/src/java.base/share/classes/jdk/internal/util/PlatformProps.java.template
+@@ -40,6 +40,7 @@ class PlatformProps {
+     static final boolean TARGET_OS_IS_WINDOWS = "@@OPENJDK_TARGET_OS@@" == "windows";
+     static final boolean TARGET_OS_IS_AIX     = "@@OPENJDK_TARGET_OS@@" == "aix";
+     static final boolean TARGET_OS_IS_IOS     = "@@OPENJDK_TARGET_OS@@" == "ios";
++    static final boolean TARGET_OS_IS_ANDROID = "@@OPENJDK_TARGET_OS@@" == "android";
+
+     // The Architecture value for the current architecture
+     static final String CURRENT_ARCH_STRING = "@@OPENJDK_TARGET_CPU@@";
