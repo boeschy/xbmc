@@ -637,8 +637,10 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   if (!programProp.isNull())
     m_initialProgramNumber = static_cast<int>(programProp.asInteger());
 
-  // The transport stream re-open below skips avformat_find_stream_info(), so put back what the
-  // first probe established before the streams are built from it.
+  // The transport stream re-open below skips avformat_find_stream_info(), so put back what the first
+  // probe established (profile, pixel format, channel layout, frame rate, extradata) before the
+  // streams are built from it. Otherwise the player opens its codecs with worse hints than we
+  // already had and has to re-open them as soon as the demuxer fills the gaps in while parsing.
   RestoreProbedStreamParameters();
 
   // in case of mpegts and we have not seen pat/pmt, defer creation of streams
@@ -1797,7 +1799,7 @@ void CDVDDemuxFFmpeg::SaveProbedStreamParameters()
   for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
   {
     const AVStream* st = m_pFormatContext->streams[i];
-    if (!st || !st->codecpar)
+    if (!st)
       continue;
 
     ProbedStream probed;
@@ -1833,25 +1835,31 @@ void CDVDDemuxFFmpeg::RestoreProbedStreamParameters()
     if (!st || !st->codecpar || !probed)
       continue;
 
+    // A different stream at the same index means the container disagrees with what we probed, so
+    // leave it alone and let the demuxer describe it.
     if (st->codecpar->codec_type != probed->codec_type ||
         st->codecpar->codec_id != probed->codec_id)
     {
-      CLog::LogF(LOGDEBUG, "stream {} changed across the re-open, keeping the current parameters",
-                 i);
+      CLog::LogF(LOGDEBUG, "stream {} changed across the re-open, keeping the current parameters", i);
       continue;
     }
 
+    // A video stream the probe could not size has nothing useful to give back.
     if (probed->codec_type == AVMEDIA_TYPE_VIDEO && (probed->width == 0 || probed->height == 0))
     {
       CLog::LogF(LOGDEBUG, "stream {} was not fully probed, leaving it to the demuxer", i);
       continue;
     }
 
-    // Only fill in what the re-open does not know, and never extradata or ch_layout:
-    // ResetVideoStreams() clears extradata so that TransportStreamVideoState() waits for the
-    // demuxer to find it again, which is what starts playback on an i-frame; a restored ch_layout
-    // outlives the channel count the demuxer resets from the PMT, which IsProgramChange() then
-    // reads as a change and rebuilds the streams for nothing.
+    // Only fill in what the re-open does not know. Two fields are deliberately left out:
+    //
+    // extradata, because ResetVideoStreams() clears it on purpose so that TransportStreamVideoState()
+    // waits for the demuxer to find it again in the stream, which is what starts playback on an
+    // i-frame. Putting it back would report the stream ready before that.
+    //
+    // ch_layout, because the demuxer re-reads the PMT and sets the channel count back to unknown
+    // while the streams keep the restored value, and IsProgramChange() reads that difference as a
+    // change and rebuilds the streams for nothing.
     AVCodecParameters* cur = st->codecpar;
 
     if (cur->profile == AV_PROFILE_UNKNOWN)
