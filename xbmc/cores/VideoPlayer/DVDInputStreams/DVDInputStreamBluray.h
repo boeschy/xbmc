@@ -14,6 +14,8 @@
 #include "filesystem/BlurayDiscAssetCache.h"
 #include "cores/VideoPlayer/DVDDemuxers/BlurayOffsetMetadata.h"
 #include "filesystem/bluray/PlaylistStructure.h"
+#include "filesystem/BlurayCallback.h"
+#include "filesystem/BlurayDiscAssetCache.h"
 #include "threads/CriticalSection.h"
 #if defined(HAS_UDFREAD)
 #include "filesystem/UDFContext.h"
