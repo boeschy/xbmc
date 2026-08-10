@@ -24719,6 +24719,14 @@ msgctxt "#39212"
 msgid "Do not turn on subtitles that are in the same language as the audio being played. Forced subtitles are not affected."
 msgstr ""
 
+msgctxt "#39213"
+msgid "Disc menu overlay brightness (HDR)"
+msgstr ""
+
+msgctxt "#39214"
+msgid "Brightness of Blu-ray/DVD disc-menu overlays composited over HDR video. Only takes effect when the Android HDR GUI surface is enabled. Raise until the disc-menu highlights are as bright as you want over the film; adjusts in real time."
+msgstr ""
+
 #empty strings from id 39213 to 39899
 
 #. List formatting: pattern used to join a list of exactly two items, e.g. "A and B"
