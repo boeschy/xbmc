@@ -25432,7 +25432,7 @@ msgid "Limit GUI updates during playback"
 msgstr ""
 
 msgctxt "#39314"
-msgid "Maximum frames per second the GUI layer is redrawn while video plays on its own layer. Requires \"Reduce GUI updates during disc menus\" under Discs to be enabled. Only engages when the display refresh rate is higher than this value, so it does nothing once \"Adjust display refresh rate\" has matched the output to the video. Use it when the display stays at 60Hz for 24p content - some TVs re-sync on every GUI update in that case. 0 = unlimited."
+msgid "Maximum frames per second the GUI layer is redrawn while video plays on its own layer. Only engages when the display refresh rate is higher than this value, so it does nothing once \"Adjust display refresh rate\" has matched the output to the video. Use it when the display stays at 60Hz for 24p content - some TVs re-sync on every GUI update in that case. 0 = unlimited."
 msgstr ""
 
 msgctxt "#39315"
