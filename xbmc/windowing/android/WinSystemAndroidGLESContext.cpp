@@ -264,8 +264,13 @@ bool CWinSystemAndroidGLESContext::SetHDR(const VideoPicture* videoPicture)
       if (hasDisplayMetadata)
         m_displayMetadata =
             std::make_unique<AVMasteringDisplayMetadata>(videoPicture->displayMetadata);
-      // TODO: discuss with NVIDIA why this prevent turning HDR display off
-      //m_lightMetadata = !videoPicture || m_HDRColorSpace == EGL_NONE ? nullptr : std::unique_ptr<AVContentLightMetadata>(new AVContentLightMetadata(videoPicture->lightMetadata));
+      // Attach content-light metadata (CTA861.3 MaxCLL/MaxFALL) too when supplied, so an HDR
+      // GUI/overlay surface advertises the same envelope as the video plane and the compositor
+      // has no reason to re-derive the HDMI HDR infoframe on GUI redraws.
+      m_lightMetadata =
+          (m_HDRColorSpace == EGL_NONE || !videoPicture || !videoPicture->hasLightMetadata)
+              ? nullptr
+              : std::make_unique<AVContentLightMetadata>(videoPicture->lightMetadata);
       m_pGLContext.DestroySurface();
       CreateSurface();
       m_pGLContext.BindContext();
