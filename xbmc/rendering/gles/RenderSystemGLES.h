@@ -149,6 +149,7 @@ public:
   GLint GUIShaderGetCoordStep();
   GLint GUIShaderGetDepth();
   GLint GUIShaderGetPma();
+  GLint GUIShaderGetSdrPeak();
   GLint GUIShaderGetGUIMatrix();
   GLint GUIShaderGetSnap();
   GLint GUIShaderGetAttrSnap();
