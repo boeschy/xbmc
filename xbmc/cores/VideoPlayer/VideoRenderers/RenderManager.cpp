@@ -180,6 +180,8 @@ bool CRenderManager::Configure()
 
   if (m_pRenderer)
   {
+    // The renderer is only being replaced by one for the new stream, playback continues.
+    m_pRenderer->SetTransientRelease(true);
     DeleteRenderer();
   }
 
