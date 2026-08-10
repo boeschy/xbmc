@@ -833,6 +833,7 @@ GLint CRenderSystemGLES::GUIShaderGetPma()
   return -1;
 }
 
+<<<<<<< HEAD
 GLint CRenderSystemGLES::GUIShaderGetGUIMatrix()
 {
   if (m_pShader[m_method])
@@ -877,6 +878,14 @@ GLint CRenderSystemGLES::GUIShaderGetTexSwap()
 {
   if (m_pShader[m_method])
     return m_pShader[m_method]->GetTexSwapLoc();
+
+  return -1;
+}
+
+GLint CRenderSystemGLES::GUIShaderGetSdrPeak()
+{
+  if (m_pShader[m_method])
+    return m_pShader[m_method]->GetSdrPeakLoc();
 
   return -1;
 }
