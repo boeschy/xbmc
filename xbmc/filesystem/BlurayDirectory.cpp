@@ -919,7 +919,9 @@ bool CBlurayDirectory::EnsureBlurayOpen()
   const std::string menuLang{g_langInfo.GetDVDMenuLanguage().AsIso6392T()};
   bd_set_player_setting_str(m_bd, BLURAY_PLAYER_SETTING_MENU_LANG, menuLang.c_str());
 
-  if (!bd_open_files(m_bd, &m_realPath, CBlurayCallback::dir_open, CBlurayCallback::file_open))
+  m_discAccess.basePath = m_realPath;
+
+  if (!bd_open_files(m_bd, &m_discAccess, CBlurayCallback::dir_open, CBlurayCallback::file_open))
   {
     CLog::LogF(LOGERROR, "Failed to open {}", CURL::GetRedacted(m_realPath));
     Dispose();
