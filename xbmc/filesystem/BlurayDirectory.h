@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "BlurayCallback.h"
 #include "DiscDirectoryHelper.h"
 #include "IDirectory.h"
 #include "URL.h"
@@ -152,6 +153,9 @@ private:
 
   CURL m_url;
   std::string m_realPath;
+  //! What libbluray reads the disc through. Browsing never uses a local mirror - it reads a
+  //! handful of small files once, so there would be nothing to amortise a copy over.
+  BlurayDiscAccess m_discAccess;
   BLURAY* m_bd{nullptr};
   bool m_blurayInitialized{false};
 
