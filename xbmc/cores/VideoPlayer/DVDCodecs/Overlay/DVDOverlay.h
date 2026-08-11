@@ -46,6 +46,7 @@ public:
     m_setForcedMargins = false;
     m_discMenu = false;
     m_stereoView = DVDOverlayStereoView::BOTH;
+    m_isDiscMenuGraphic = false;
   }
 
   CDVDOverlay(const CDVDOverlay& src) : std::enable_shared_from_this<CDVDOverlay>(src)
@@ -61,6 +62,10 @@ public:
     m_setForcedMargins = src.m_setForcedMargins;
     m_discMenu = src.m_discMenu;
     m_stereoView = src.m_stereoView;
+    // Must be copied: the disc menu is split into dirty sub-rects through the
+    // CDVDOverlayImage crop constructor, which delegates here. Dropping it would
+    // silently demote every redrawn menu region to a subtitle.
+    m_isDiscMenuGraphic = src.m_isDiscMenuGraphic;
   }
 
   virtual ~CDVDOverlay() = default;
@@ -125,6 +130,17 @@ public:
    */
   bool IsDiscMenu() const { return m_discMenu; }
 
+  /*
+   * \brief Mark the overlay as part of a disc's own graphics planes (BD-J / HDMV
+   *        menu), as opposed to a subtitle. Both arrive as CDVDOverlayImage.
+   */
+  void SetDiscMenuGraphic(bool isDiscMenuGraphic) { m_isDiscMenuGraphic = isDiscMenuGraphic; }
+
+  /*
+   * \brief Return true if the overlay is a disc menu graphic rather than a subtitle.
+   */
+  bool IsDiscMenuGraphic() const { return m_isDiscMenuGraphic; }
+
   double iPTSStartTime;
   double iPTSStopTime;
   bool bForced; // display, no matter what
@@ -138,6 +154,7 @@ protected:
   bool m_overlayContainerFlushable;
   bool m_setForcedMargins;
   bool m_discMenu;
+  bool m_isDiscMenuGraphic;
 };
 
 using VecOverlays = std::vector<std::shared_ptr<CDVDOverlay>>;
