@@ -104,6 +104,14 @@ public:
   virtual std::string GetContentGeometryInfo() { return {}; }
 };
 
+  /*!
+   * \brief Hold on to the decoder over the next CloseStream() so that the
+   * OpenStream() which follows it can adopt the decoder instead of building a
+   * new one. Only honoured when the new stream is compatible with the old one.
+   */
+  virtual void SetKeepCodecOnClose(bool keep) {}
+};
+
 class CDVDAudioCodec;
 class IDVDStreamPlayerAudio : public IDVDStreamPlayer
 {
