@@ -4850,13 +4850,20 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
                                                    (double)DVD_TIME_BASE * hint.fpsscale /
                                                    (hint.fpsrate * (hint.interlaced ? 2 : 1)));
 
-      RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
-      // CloseFile() blocks the app thread in StopThread(), don't wait for it past that
-      CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false,
-                                                                         &GetStopEvent());
-      if (m_bStop)
-        return false;
-      m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode);
+      if (framerate >= 5.0 && framerate <= 120.0)
+      {
+        RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
+        CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false,
+                                                                           &GetStopEvent());
+        if (m_bStop)
+          return false;
+        m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode);
+      }
+      else
+        CLog::Log(LOGDEBUG,
+                  "CVideoPlayer::OpenStream - not changing the display mode for an implausible "
+                  "frame rate ({:0.3f}, from fpsrate {} / fpsscale {}); the clip is not parsed yet",
+                  framerate, hint.fpsrate, hint.fpsscale);
     }
   }
 
