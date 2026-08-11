@@ -553,7 +553,7 @@
         </setting>
         <setting id="disc.cachemenuassetslimit" type="integer" label="39319" help="39320">
           <level>1</level>
-          <default>100</default>
+          <default>20</default>
           <dependencies>
             <dependency type="enable" setting="disc.cachemenuassets" operator="is">true</dependency>
           </dependencies>
