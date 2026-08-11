@@ -967,6 +967,9 @@ void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)
   if (ov->img && ov->cmd == BD_OVERLAY_DRAW)
   {
     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
+    // The disc's own HDMV graphics plane, not a subtitle - so it follows the disc
+    // menu brightness setting rather than the subtitle one.
+    overlay->SetDiscMenuGraphic(true);
 
     if (ov->palette)
     {
@@ -1030,6 +1033,9 @@ void CDVDInputStreamBluray::OverlayCallbackARGB(const struct bd_argb_overlay_s *
   if (ov->argb && ov->cmd == BD_ARGB_OVERLAY_DRAW)
   {
     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
+    // The disc's own BD-J ARGB graphics plane, not a subtitle - so it follows the
+    // disc menu brightness setting rather than the subtitle one.
+    overlay->SetDiscMenuGraphic(true);
 
     overlay->palette.clear();
     overlay->linesize = ov->w * 4;
