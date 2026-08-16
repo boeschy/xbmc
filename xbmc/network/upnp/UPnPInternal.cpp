@@ -1154,6 +1154,7 @@ int PopulateTagFromObject(CVideoInfoTag& tag,
       detail->m_iChannels = resource->m_NbAudioChannels;
       tag.m_streamDetails.AddStream(detail);
     }
+    tag.m_streamDetails.SetSources(CStreamDetail::EXTERNAL);
   }
   return NPT_SUCCESS;
 }
@@ -1244,12 +1245,12 @@ std::shared_ptr<CFileItem> BuildObject(PLT_MediaObject* entry,
   }
 
   // look for date?
-  if (entry->m_Description.date.GetLength())
+  if (entry->m_Date.GetLength())
   {
-    KODI::TIME::SystemTime time = {};
-    sscanf(entry->m_Description.date, "%hu-%hu-%huT%hu:%hu:%hu", &time.year, &time.month, &time.day,
-           &time.hour, &time.minute, &time.second);
-    pItem->SetDateTime(time);
+    CDateTime date;
+    date.SetFromW3CDateTime((const char*)entry->m_Date);
+    if (date.IsValid())
+      pItem->SetDateTime(date);
   }
 
   // if there is a thumbnail available set it here

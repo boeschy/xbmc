@@ -324,8 +324,10 @@ bool CVideoDatabase::GetSubPaths(const std::string& basepath,
     sql = "SELECT idPath, strPath FROM path WHERE " + startsWith(path);
     if (excludeDiscPaths)
     {
-      sql += " AND idPath NOT IN (SELECT idPath FROM files WHERE strFileName='video_ts.ifo')"
-             " AND idPath NOT IN (SELECT idPath FROM files WHERE strFileName='index.bdmv')";
+      // mysql/mariadb are made case-insensitive by setting a collation on connection
+      // sqlite LIKE is case-insensitive, '=' is not
+      sql += " AND idPath NOT IN (SELECT idPath FROM files WHERE strFileName LIKE 'VIDEO_TS.IFO')"
+             " AND idPath NOT IN (SELECT idPath FROM files WHERE strFileName LIKE 'index.bdmv')";
     }
     else
     {
@@ -703,6 +705,24 @@ bool CVideoDatabase::SetPathHash(const std::string &path, const std::string &has
   }
 
   return false;
+}
+
+void CVideoDatabase::ClearPathHash(const std::string& strPath)
+{
+  try
+  {
+    if (nullptr == m_pDB || nullptr == m_pDS)
+      return;
+
+    std::string path{strPath};
+    URIUtils::AddSlashAtEnd(path);
+
+    m_pDS->exec(PrepareSQL("update path set strHash='' where strPath='%s'", path.c_str()));
+  }
+  catch (...)
+  {
+    CLog::LogF(LOGERROR, "({}) failed", strPath);
+  }
 }
 
 bool CVideoDatabase::LinkMovieToTvshow(int idMovie, int idShow, bool bRemove)
@@ -2839,6 +2859,9 @@ int CVideoDatabase::SetFileForEpisode(const std::string& fileAndPath,
   if (newIdFile < 0)
     return -1;
 
+  if (newIdFile == oldIdFile)
+    return newIdFile; // Nothing to do, and the file must not be deleted below
+
   try
   {
     m_pDS->exec(
@@ -2864,8 +2887,27 @@ int CVideoDatabase::SetFileForMovie(const std::string& fileAndPath,
   if (newIdFile < 0)
     return -1;
 
+  if (newIdFile == oldIdFile)
+    return newIdFile; // Nothing to do
+
   try
   {
+    // The file played may already be a version of the movie in its own right
+    // eg. selecting a known version playlist through the bluray menu
+    // Only a version of this same movie is adopted. A file belonging to another movie, or held as
+    // an extra, is not the replacement that was asked for, so it falls through to fail and roll back
+    if (GetSingleValueInt(PrepareSQL("SELECT COUNT(1) FROM videoversion WHERE idFile=%i AND "
+                                     "media_type='movie' AND idMedia=%i AND itemType=%i",
+                                     newIdFile, idMovie,
+                                     static_cast<int>(VideoAssetType::VERSION))) > 0)
+    {
+      CLog::LogF(LOGDEBUG,
+                 "File {} ({}) is already a version of movie {} - keeping both it and "
+                 "file {}",
+                 newIdFile, CURL::GetRedacted(fileAndPath), idMovie, oldIdFile);
+      return newIdFile;
+    }
+
     m_pDS->exec(PrepareSQL("UPDATE movie SET idFile=%i WHERE idFile=%i AND idMovie=%i", newIdFile,
                            oldIdFile, idMovie));
     m_pDS->exec(PrepareSQL(
@@ -2896,6 +2938,9 @@ int CVideoDatabase::SetFileForUnknown(const std::string& fileAndPath, int oldIdF
 
   if (newIdFile < 0)
     return -1;
+
+  if (newIdFile == oldIdFile)
+    return newIdFile; // Nothing to do, and the file must not be deleted below
 
   try
   {
@@ -3181,35 +3226,43 @@ bool CVideoDatabase::SetStreamDetailsForFileId(const CStreamDetails& details, in
   {
     m_pDS->exec(PrepareSQL("DELETE FROM streamdetails WHERE idFile = %i", idFile));
 
-    for (int i=1; i<=details.GetVideoStreamCount(); i++)
+    for (int i = 1; i <= details.GetVideoStreamCount(); i++)
     {
       m_pDS->exec(PrepareSQL(
           "INSERT INTO streamdetails "
           "(idFile, iStreamType, strVideoCodec, fVideoAspect, iVideoWidth, iVideoHeight, "
-          "iVideoDuration, strStereoMode, strVideoLanguage, strHdrType, strHdrDetail) "
-          "VALUES (%i,%i,'%s',%f,%i,%i,%i,'%s','%s','%s','%s')",
+          "iVideoDuration, strStereoMode, strVideoLanguage, strHdrType, strHdrDetail, iSource, "
+          "iVersion) "
+          "VALUES (%i,%i,'%s',%f,%i,%i,%i,'%s','%s','%s','%s',%i,%i)",
           idFile, static_cast<int>(CStreamDetail::VIDEO), details.GetVideoCodec(i).c_str(),
           static_cast<double>(details.GetVideoAspect(i)), details.GetVideoWidth(i),
           details.GetVideoHeight(i), details.GetVideoDuration(i), details.GetStereoMode(i).c_str(),
           details.GetVideoLanguage(i).c_str(), details.GetVideoHdrType(i).c_str(),
-          details.GetVideoHdrDetail(i).c_str()));
+          details.GetVideoHdrDetail(i).c_str(),
+          static_cast<int>(details.GetSource(CStreamDetail::VIDEO, i)),
+          details.GetVersion(CStreamDetail::VIDEO, i)));
     }
-    for (int i=1; i<=details.GetAudioStreamCount(); i++)
-    {
-      m_pDS->exec(PrepareSQL(
-          "INSERT INTO streamdetails "
-          "(idFile, iStreamType, strAudioCodec, iAudioChannels, strAudioLanguage) "
-          "VALUES (%i,%i,'%s',%i,'%s')",
-          idFile, static_cast<int>(CStreamDetail::AUDIO), details.GetAudioCodec(i).c_str(),
-          details.GetAudioChannels(i), details.GetAudioLanguage(i).c_str()));
-    }
-    for (int i=1; i<=details.GetSubtitleStreamCount(); i++)
+    for (int i = 1; i <= details.GetAudioStreamCount(); i++)
     {
       m_pDS->exec(PrepareSQL("INSERT INTO streamdetails "
-                             "(idFile, iStreamType, strSubtitleLanguage) "
-                             "VALUES (%i,%i,'%s')",
+                             "(idFile, iStreamType, strAudioCodec, iAudioChannels, "
+                             "strAudioLanguage, iSource, iVersion) "
+                             "VALUES (%i,%i,'%s',%i,'%s',%i, %i)",
+                             idFile, static_cast<int>(CStreamDetail::AUDIO),
+                             details.GetAudioCodec(i).c_str(), details.GetAudioChannels(i),
+                             details.GetAudioLanguage(i).c_str(),
+                             static_cast<int>(details.GetSource(CStreamDetail::AUDIO, i)),
+                             details.GetVersion(CStreamDetail::AUDIO, i)));
+    }
+    for (int i = 1; i <= details.GetSubtitleStreamCount(); i++)
+    {
+      m_pDS->exec(PrepareSQL("INSERT INTO streamdetails "
+                             "(idFile, iStreamType, strSubtitleLanguage, iSource, iVersion) "
+                             "VALUES (%i,%i,'%s',%i, %i)",
                              idFile, static_cast<int>(CStreamDetail::SUBTITLE),
-                             details.GetSubtitleLanguage(i).c_str()));
+                             details.GetSubtitleLanguage(i).c_str(),
+                             static_cast<int>(details.GetSource(CStreamDetail::SUBTITLE, i)),
+                             details.GetVersion(CStreamDetail::SUBTITLE, i)));
     }
 
     // update the runtime information, if empty
@@ -4579,6 +4632,8 @@ bool CVideoDatabase::GetStreamDetails(CVideoInfoTag& tag)
           p->m_strLanguage = pDS->fv(12).get_asString();
           p->m_strHdrType = pDS->fv(13).get_asString();
           p->m_strHdrDetail = pDS->fv(14).get_asString();
+          p->m_source = static_cast<CStreamDetail::Source>(pDS->fv(15).get_asInt());
+          p->m_version = pDS->fv(16).get_asInt();
           details.AddStream(p);
           retVal = true;
           break;
@@ -4592,6 +4647,8 @@ bool CVideoDatabase::GetStreamDetails(CVideoInfoTag& tag)
           else
             p->m_iChannels = pDS->fv(7).get_asInt();
           p->m_strLanguage = pDS->fv(8).get_asString();
+          p->m_source = static_cast<CStreamDetail::Source>(pDS->fv(15).get_asInt());
+          p->m_version = pDS->fv(16).get_asInt();
           details.AddStream(p);
           retVal = true;
           break;
@@ -4600,6 +4657,8 @@ bool CVideoDatabase::GetStreamDetails(CVideoInfoTag& tag)
         {
           auto* p = new CStreamDetailSubtitle();
           p->m_strLanguage = pDS->fv(9).get_asString();
+          p->m_source = static_cast<CStreamDetail::Source>(pDS->fv(15).get_asInt());
+          p->m_version = pDS->fv(16).get_asInt();
           details.AddStream(p);
           retVal = true;
           break;
@@ -7902,6 +7961,8 @@ bool CVideoDatabase::GetMoviesByWhere(const std::string& strBaseDir, const Filte
     const bool videoVersionNav{options.contains("videoversionid")};
     // navigation = list of assets of the movie
     const bool assetsNav{options.contains("assetType")};
+    const bool flattenVersions{CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+        CSettings::SETTING_VIDEOLIBRARY_FLATTENVERSIONS)};
 
     int total = -1;
 
@@ -7978,10 +8039,24 @@ bool CVideoDatabase::GetMoviesByWhere(const std::string& strBaseDir, const Filte
         {
           itemUrl.AppendPath(std::to_string(movie.m_iDbId));
 
-          // Turn a movie with versions or extras into a folder item that navigates to a list of
-          // the versions and a virtual Extras folder (special assetType -2 value).
-          if (movie.HasVideoVersions() || movie.HasVideoExtras())
+          if (flattenVersions && movie.HasVideoVersions())
           {
+            static std::string versionPath{
+                std::to_string(static_cast<int>(VideoAssetType::VERSION)) + "/"};
+            itemUrl.AppendPath(versionPath);
+            itemUrl.AppendPath(std::to_string(movie.m_iFileId));
+            // for recognition by IsVideoAssetFile()
+            //! @todo figure out a more efficient and robust way
+            itemUrl.AddOption("assetType", static_cast<int>(VideoAssetType::VERSION));
+            //! @todo reset hasvideoversions/hasvideoextras or not? have to let the implementation
+            //! mature to decide.
+            //item->GetVideoInfoTag()->SetHasVideoVersions(false);
+            //item->GetVideoInfoTag()->SetHasVideoExtras(false);
+          }
+          else if (!flattenVersions && (movie.HasVideoVersions() || movie.HasVideoExtras()))
+          {
+            // Turn a movie with versions or extras into a folder item that navigates to a list of
+            // the versions and a virtual Extras folder (special assetType -2 value).
             static std::string hybridFolderPath{
                 std::to_string(static_cast<int>(VideoAssetType::VERSIONSANDEXTRASFOLDER)) + "/"};
             item->SetProperty("IsHybridFolder", true);
@@ -11636,11 +11711,22 @@ void CVideoDatabase::InvalidatePathHash(const std::string& strPath)
   SScanSettings settings;
   bool foundDirectly;
 
-  const std::string path{URIUtils::IsBlurayPath(strPath) ? URIUtils::GetDiscBasePath(strPath)
-                                                         : strPath};
+  // A disc rip is anchored in files/path on its disc structure (a bluray:// playlist row,
+  // or a BDMV/ or VIDEO_TS/ row), but the scanner hashes the movie folder that contains
+  // that structure.
+  const std::string path{URIUtils::IsBlurayPath(strPath) || URIUtils::IsDiscPath(strPath)
+                             ? URIUtils::GetDiscBasePath(strPath)
+                             : strPath};
 
   ScraperPtr info = GetScraperForPath(path, settings, foundDirectly);
+
+  // strPath is a known row (it comes from a files/path join), so it can be set directly.
+  // (SetPathHash includes AddPath if the path is not already known)
+  // Subsequently use ClearPathHash to ensure no paths added inadvertently.
+  // SetPathHash (via AddPath) also handles zip:// <-> archive:// aliasing
   SetPathHash(strPath, "");
+  if (path != strPath)
+    ClearPathHash(path);
   if (!info)
     return;
   if (info->Content() == ContentType::TVSHOWS ||
@@ -11652,7 +11738,7 @@ void CVideoDatabase::InvalidatePathHash(const std::string& strPath)
       std::string strParent;
       if (URIUtils::GetParentPath(path, strParent) &&
           (!URIUtils::IsPlugin(path) || !CURL(strParent).GetHostName().empty()))
-        SetPathHash(strParent, "");
+        ClearPathHash(strParent);
     }
   }
 }
@@ -11952,9 +12038,14 @@ bool CVideoDatabase::GetFilter(CDbUrl &videoUrl, Filter &filter, SortDescription
 
     if (!assetAware)
     {
-      //! @todo not necessary with current movie view but wouldn't hurt?
-      // filter.AppendWhere(PrepareSQL("videoVersionTypeItemType = %i", VideoAssetType::VERSION));
-      filter.AppendWhere("isDefaultVersion = 1");
+      const bool flattenVersions = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          CSettings::SETTING_VIDEOLIBRARY_FLATTENVERSIONS);
+
+      if (flattenVersions)
+        filter.AppendWhere(
+            PrepareSQL("videoVersionTypeItemType = %i", static_cast<int>(VideoAssetType::VERSION)));
+      else
+        filter.AppendWhere("isDefaultVersion = 1");
     }
 
     AppendIdLinkFilter("tag", "tag", "movie", "movie", "idMovie", options, filter);

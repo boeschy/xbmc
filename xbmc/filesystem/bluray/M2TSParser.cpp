@@ -1351,6 +1351,19 @@ bool ParseH265SPS(const std::span<std::byte>& buffer, TSVideoStreamInfo* streamI
   return true;
 }
 
+void ParseH264ScalingList(BitReader& br, int sizeOfScalingList)
+{
+  int lastScale{8};
+  int nextScale{8};
+  for (int j = 0; j < sizeOfScalingList; j++)
+  {
+    if (nextScale != 0)
+      nextScale = (lastScale + br.ReadSE() + 256) % 256;
+    if (nextScale != 0)
+      lastScale = nextScale;
+  }
+}
+
 bool ParseH264SPS(const std::span<std::byte>& buffer, TSVideoStreamInfo* streamInfo)
 {
   CLog::LogFC(LOGDEBUG, LOGBLURAY, "Parsing H264 SPS");
@@ -1378,7 +1391,8 @@ bool ParseH264SPS(const std::span<std::byte>& buffer, TSVideoStreamInfo* streamI
     if (br.ReadBits(1) == 1) // seq_scaling_matrix_present_flag
     {
       for (int i = 0; i < ((chroma_format != 3) ? 8 : 12); i++)
-        br.SkipBits(1);
+        if (br.ReadBits(1) == 1) // seq_scaling_list_present_flag[i]
+          ParseH264ScalingList(br, i < 6 ? 16 : 64);
     }
   }
   else
@@ -1423,10 +1437,13 @@ bool ParseH264SPS(const std::span<std::byte>& buffer, TSVideoStreamInfo* streamI
     frame_crop_bottom_offset = br.ReadUE();
   }
 
+  // Crop offsets are in units of CropUnitX/CropUnitY, not luma samples (7-19 to 7-22). Blurays are
+  // always 4:2:0, so CropUnitX is 2 and CropUnitY is 2 * (2 - frame_mbs_only_flag)
+  const unsigned int cropUnitY{frame_mbs_only_flag ? 2u : 4u};
   streamInfo->width =
       pic_width_in_mbs * 16 - (frame_crop_left_offset + frame_crop_right_offset) * 2;
   streamInfo->height = (2 - (frame_mbs_only_flag ? 1 : 0)) * pic_height_in_map_units * 16 -
-                       (frame_crop_top_offset + frame_crop_bottom_offset) * 2;
+                       (frame_crop_top_offset + frame_crop_bottom_offset) * cropUnitY;
 
   if (br.ReadBits(1) == 1) // vui_parameters_present_flag
     streamInfo->aspectRatio = ParseVUI(br);
@@ -1629,9 +1646,15 @@ bool GetNALType(const std::span<std::byte>& data,
 
 void CheckFor3D(const std::span<std::byte>& data,
                 unsigned int& relativeOffset,
+                VideoCodec videoCodec,
                 unsigned int nal_unit_type,
                 TSVideoStreamInfo* streamInfo)
 {
+  // 3D bluray (MVC/AVC 3D) is H264 only. The NAL unit types below overlap with HEVC types
+  // (eg. IDR_N_LP is 20) so checking them for any other codec gives false positives.
+  if (videoCodec != VideoCodec::H264)
+    return;
+
   switch (nal_unit_type)
   {
     case H264_PREFIX_NAL_UNIT:
@@ -1663,30 +1686,49 @@ void CheckFor3D(const std::span<std::byte>& data,
 }
 
 void ProcessNALUnit(std::vector<std::byte>& unit,
+                    VideoCodec videoCodec,
                     unsigned int nal_unit_type,
                     unsigned int header,
                     TSVideoStreamInfo* streamInfo)
 {
-  switch (nal_unit_type)
+  // NAL unit types are codec specific and the values overlap, so dispatch per codec
+  switch (videoCodec)
   {
-    case H264_NAL_SPS:
-      ParseH264SPS(unit, streamInfo);
+    using enum VideoCodec;
+    case H264:
+      switch (nal_unit_type)
+      {
+        case H264_NAL_SPS:
+          ParseH264SPS(unit, streamInfo);
+          break;
+        case H264_NAL_SEI:
+          ParseSEI(unit, streamInfo);
+          break;
+        default:
+          break;
+      }
       break;
-    case H265_NAL_SPS:
-      ParseH265SPS(unit, streamInfo);
-      break;
-    case H264_NAL_SEI:
-    case H265_NAL_SEI_PREFIX:
-    case H265_NAL_SEI_SUFFIX:
-      ParseSEI(unit, streamInfo);
-      break;
-    case DOLBY_VISION_RPU:
-      if (header == DOLBY_VISION_RPU_HEADER)
-        streamInfo->dolbyVision = true;
-      break;
-    case DOLBY_VISION_EL:
-      if (header == DOLBY_VISION_EL_HEADER)
-        streamInfo->dolbyVision = true;
+    case H265:
+      switch (nal_unit_type)
+      {
+        case H265_NAL_SPS:
+          ParseH265SPS(unit, streamInfo);
+          break;
+        case H265_NAL_SEI_PREFIX:
+        case H265_NAL_SEI_SUFFIX:
+          ParseSEI(unit, streamInfo);
+          break;
+        case DOLBY_VISION_RPU:
+          if (header == DOLBY_VISION_RPU_HEADER)
+            streamInfo->dolbyVision = true;
+          break;
+        case DOLBY_VISION_EL:
+          if (header == DOLBY_VISION_EL_HEADER)
+            streamInfo->dolbyVision = true;
+          break;
+        default:
+          break;
+      }
       break;
     default:
       break;
@@ -1722,14 +1764,14 @@ bool ParseNAL(const std::span<std::byte>& buffer,
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "Parsing NAL - type {}", nal_unit_type);
 
     // Look for markers of a 3D stream
-    CheckFor3D(data, relativeOffset, nal_unit_type, streamInfo);
+    CheckFor3D(data, relativeOffset, videoCodec, nal_unit_type, streamInfo);
 
     const size_t length{end.empty() ? data.size() - relativeOffset
                                     : end.data() - data.data() - relativeOffset};
     std::vector<std::byte> unit{
         RemoveEmulationPreventionBytes(data.subspan(relativeOffset, length), videoCodec)};
 
-    ProcessNALUnit(unit, nal_unit_type, header, streamInfo);
+    ProcessNALUnit(unit, videoCodec, nal_unit_type, header, streamInfo);
 
     if (end.empty())
       break;

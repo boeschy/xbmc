@@ -273,7 +273,7 @@ set(optional_deps Alsa>=1.0.27
                   Bluetooth
                   Bluray>=0.9.3
                   CAP
-                  CEC>=4.0.0
+                  CEC>=7.0.0
                   DBus
                   Iso9660pp>=2.1.0
                   LCMS2>=2.10
@@ -396,10 +396,10 @@ endif()
 if(WIN32)
   configure_file(${CMAKE_SOURCE_DIR}/xbmc/platform/win32/XBMC_PC.rc.in
                  ${CORE_BUILD_DIR}/xbmc/platform/win32/XBMC_PC.rc @ONLY)
-  add_library(resources OBJECT ${CORE_BUILD_DIR}/xbmc/platform/win32/XBMC_PC.rc)
-  set_target_properties(resources PROPERTIES FOLDER "Build Utilities")
-  target_include_directories(resources PRIVATE ${CMAKE_SOURCE_DIR}/tools/windows/packaging/media)
-  set(RESOURCES $<TARGET_OBJECTS:resources>)
+  add_library(windows_resources OBJECT ${CORE_BUILD_DIR}/xbmc/platform/win32/XBMC_PC.rc)
+  set_target_properties(windows_resources PROPERTIES FOLDER "Build Utilities")
+  target_include_directories(windows_resources PRIVATE ${CMAKE_SOURCE_DIR}/tools/windows/packaging/media)
+  set(RESOURCES $<TARGET_OBJECTS:windows_resources>)
 endif()
 
 # Generate messages

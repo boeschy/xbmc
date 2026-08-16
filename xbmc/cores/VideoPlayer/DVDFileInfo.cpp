@@ -379,6 +379,11 @@ bool CDVDFileInfo::CanExtract(const CFileItem& fileItem)
       URIUtils::IsOpticalMediaFile(fileItem.GetPath()) || URIUtils::IsDiscImage(fileItem.GetPath()))
     return false;
 
+  // ..nor from a stack still holding unresolved disc parts.
+  // A stack of bluray:// playlists is extractable and DemuxerToStreamDetails() sums their durations
+  if (URIUtils::IsDiscImageStack(fileItem.GetDynPath()))
+    return false;
+
   // For HTTP/FTP we only allow extraction when on a LAN
   if (URIUtils::IsRemote(fileItem.GetPath()) && !URIUtils::IsOnLAN(fileItem.GetPath()) &&
       (URIUtils::IsFTP(fileItem.GetPath()) || URIUtils::IsHTTP(fileItem.GetPath())))
@@ -448,6 +453,7 @@ bool CDVDFileInfo::DemuxerToStreamDetails(const std::shared_ptr<CDVDInputStream>
   {
     CStreamDetailSubtitle* sub = new CStreamDetailSubtitle();
     sub->m_strLanguage = subs[i].m_strLanguage;
+    sub->SetSource(CStreamDetail::MEDIA);
     details.AddStream(sub);
     result = true;
   }
@@ -587,6 +593,7 @@ bool CDVDFileInfo::DemuxerToStreamDetails(const std::shared_ptr<CDVDInputStream>
         if (!GetDetailsFromFrame(vstream, pDemux, *p))
           CLog::LogF(LOGERROR, "Failed to get HDR details from frame");
       }
+      p->SetSource(CStreamDetail::MEDIA);
 
       // stack handling
       if (URIUtils::IsStack(path))
@@ -633,6 +640,7 @@ bool CDVDFileInfo::DemuxerToStreamDetails(const std::shared_ptr<CDVDInputStream>
       p->m_iChannels = static_cast<CDemuxStreamAudio*>(stream)->iChannels;
       p->m_strLanguage = stream->language;
       p->m_strCodec = pDemux->GetStreamCodecName(stream->demuxerId, stream->uniqueId);
+      p->SetSource(CStreamDetail::MEDIA);
       details.AddStream(p);
       retVal = true;
     }
@@ -641,6 +649,7 @@ bool CDVDFileInfo::DemuxerToStreamDetails(const std::shared_ptr<CDVDInputStream>
     {
       CStreamDetailSubtitle *p = new CStreamDetailSubtitle();
       p->m_strLanguage = stream->language;
+      p->SetSource(CStreamDetail::MEDIA);
       details.AddStream(p);
       retVal = true;
     }
@@ -709,6 +718,7 @@ bool CDVDFileInfo::AddExternalSubtitleToDetails(const std::string &path, CStream
       CStreamDetailSubtitle *dsub = new CStreamDetailSubtitle();
       std::string lang = stream->language;
       dsub->m_strLanguage = g_LangCodeExpander.ConvertToISO6392B(lang);
+      dsub->SetSource(CStreamDetail::MEDIA);
       details.AddStream(dsub);
     }
     return true;
@@ -723,6 +733,7 @@ bool CDVDFileInfo::AddExternalSubtitleToDetails(const std::string &path, CStream
   CStreamDetailSubtitle *dsub = new CStreamDetailSubtitle();
   ExternalStreamInfo info = CUtil::GetExternalStreamDetailsFromFilename(path, filename);
   dsub->m_strLanguage = g_LangCodeExpander.ConvertToISO6392B(info.language);
+  dsub->SetSource(CStreamDetail::MEDIA);
   details.AddStream(dsub);
 
   return true;

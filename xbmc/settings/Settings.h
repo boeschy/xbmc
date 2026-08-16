@@ -70,6 +70,7 @@ public:
   static constexpr auto SETTING_VIDEOLIBRARY_SHOWUNWATCHEDPLOTS = "videolibrary.showunwatchedplots";
   static constexpr auto SETTING_VIDEOLIBRARY_ACTORTHUMBS = "videolibrary.actorthumbs";
   static constexpr auto SETTING_MYVIDEOS_FLATTEN = "myvideos.flatten";
+  static constexpr auto SETTING_VIDEOLIBRARY_FLATTENVERSIONS = "videolibrary.flattenversions";
   static constexpr auto SETTING_VIDEOLIBRARY_FLATTENTVSHOWS = "videolibrary.flattentvshows";
   static constexpr auto SETTING_VIDEOLIBRARY_TVSHOWSSELECTFIRSTUNWATCHEDITEM =
       "videolibrary.tvshowsselectfirstunwatcheditem";
@@ -184,7 +185,7 @@ public:
   static constexpr auto SETTING_SUBTITLES_DOWNLOADFIRST = "subtitles.downloadfirst";
   static constexpr auto SETTING_SUBTITLES_TV = "subtitles.tv";
   static constexpr auto SETTING_SUBTITLES_MOVIE = "subtitles.movie";
-  static constexpr auto SETTING_DVDS_AUTORUN = "dvds.autorun";
+  static constexpr auto SETTING_DVDS_AUTOACTION = "dvds.autoaction";
   static constexpr auto SETTING_DVDS_PLAYERREGION = "dvds.playerregion";
   static constexpr auto SETTING_DVDS_AUTOMENU = "dvds.automenu";
   static constexpr auto SETTING_DISC_PLAYBACK = "disc.playback";
