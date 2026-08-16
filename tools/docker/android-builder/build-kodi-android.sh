@@ -98,8 +98,8 @@ fi
 # Settings
 # ---------------------------------------------------------------------------
 KODI_ARCH="${KODI_ARCH:-arm64-v8a}"
-KODI_APP_PACKAGE="${KODI_APP_PACKAGE:-org.xbmc.fandangos}"
-KODI_BUILD_CONFIG="${KODI_BUILD_CONFIG:-Release}"
+KODI_APP_PACKAGE="${KODI_APP_PACKAGE:-org.xbmc.kodi}"
+KODI_BUILD_CONFIG="${KODI_BUILD_CONFIG:-Debug}"
 KODI_NDK_API="${KODI_NDK_API:-24}"
 KODI_DEPENDS_DEBUG="${KODI_DEPENDS_DEBUG:-yes}"
 KODI_JOBS="${KODI_JOBS:-$(getconf _NPROCESSORS_ONLN)}"
