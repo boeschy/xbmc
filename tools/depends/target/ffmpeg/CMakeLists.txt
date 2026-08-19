@@ -158,9 +158,9 @@ if(CMAKE_GENERATOR STREQUAL Ninja)
 endif()
 
 if(NOT DISABLE_FFMPEG_SOURCE_PLUGINS)
-  set(sourceplugin_patch PATCH_COMMAND /bin/sh -c "patch -p1 -i <SOURCE_DIR>/001-ffmpeg-all-libpostproc-plugin.patch && patch -p1 -i <SOURCE_DIR>/002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch")
+  set(sourceplugin_patch PATCH_COMMAND /bin/sh -c "patch -p1 -i <SOURCE_DIR>/001-ffmpeg-all-libpostproc-plugin.patch && patch -p1 -i <SOURCE_DIR>/002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch && patch -p1 -i <SOURCE_DIR>/0001-added_upstream_mvc_patches.patch && patch -p1 -i <SOURCE_DIR>/0002-MKV-added-basic-block-addition-mapping-support-for-m.patch")
 else()
-  set(sourceplugin_patch PATCH_COMMAND patch -p1 -i <SOURCE_DIR>/002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch)
+  set(sourceplugin_patch PATCH_COMMAND /bin/sh -c "patch -p1 -i <SOURCE_DIR>/002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch && patch -p1 -i <SOURCE_DIR>/0001-added_upstream_mvc_patches.patch && patch -p1 -i <SOURCE_DIR>/0002-MKV-added-basic-block-addition-mapping-support-for-m.patch")
 endif()
 
 include(ExternalProject)
