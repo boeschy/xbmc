@@ -43,6 +43,7 @@ if(CORE_SYSTEM_NAME STREQUAL android)
   # or a FindEdge264-MVC.cmake module by this PoC - that packaging work
   # (cross-compiling edge264-mvc for android/aarch64 as a depends
   # package, the way e.g. libbluray is handled) is a separate task.
+  find_package(Edge264-MVC)
   if(TARGET ${APP_NAME_LC}::Edge264-MVC)
     list(APPEND SOURCES DVDVideoCodecMVCSoftware.cpp)
     list(APPEND HEADERS DVDVideoCodecMVCSoftware.h)
