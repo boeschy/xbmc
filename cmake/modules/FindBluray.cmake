@@ -92,7 +92,7 @@ if(NOT TARGET ${APP_NAME_LC}::${CMAKE_FIND_PACKAGE_NAME})
 
     list(APPEND patches "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/003-all-libxml_searchname.patch")
 
-    # These four are applied unconditionally by tools/depends/target/libbluray/Makefile.
+    # These eight are applied unconditionally by tools/depends/target/libbluray/Makefile.
     # libbluray is not in the depends DEPENDS list, so on any platform that does not have a
     # hand-built libbluray sitting in the depends prefix this internal build is what ends up
     # linked - and without them the JVM search path is wrong on aarch64 (BD-J menus never
@@ -108,7 +108,11 @@ if(NOT TARGET ${APP_NAME_LC}::${CMAKE_FIND_PACKAGE_NAME})
     list(APPEND patches "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/005-aarch64-java-arch.patch"
                         "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/006-all-hdmv-bc-compare.patch"
                         "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/007-all-navigation-angle-oob.patch"
-                        "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/008-all-bdj-await-image-decode.patch")
+                        "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/008-all-bdj-await-image-decode.patch"
+                        "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/008-forward-1.0.2.patch"
+                        "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/009-add-3D-subtitle-depth-plane-info.patch"
+                        "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/010-seek-limit-seek-position-to-title-duration.patch"
+                        "${CORE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/011-seek-fix-cut-off-starting-packet-after-seek.patch")
 
     if(WIN32 OR WINDOWS_STORE)
       set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_libType shared)
