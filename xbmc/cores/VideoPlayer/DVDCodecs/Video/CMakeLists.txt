@@ -35,6 +35,20 @@ endif()
 if(CORE_SYSTEM_NAME STREQUAL android)
   list(APPEND SOURCES DVDVideoCodecAndroidMediaCodec.cpp)
   list(APPEND HEADERS DVDVideoCodecAndroidMediaCodec.h)
+
+  # PoC: software H.264/MVC (Stereo High Profile) decoder, see
+  # DVDVideoCodecMVCSoftware.h for scope/rationale. Requires the
+  # edge264-mvc static library to be built as a dependency and exposed as
+  # the ${APP_NAME_LC}::Edge264-MVC target. NOT wired into tools/depends
+  # or a FindEdge264-MVC.cmake module by this PoC - that packaging work
+  # (cross-compiling edge264-mvc for android/aarch64 as a depends
+  # package, the way e.g. libbluray is handled) is a separate task.
+  if(TARGET ${APP_NAME_LC}::Edge264-MVC)
+    list(APPEND SOURCES DVDVideoCodecMVCSoftware.cpp)
+    list(APPEND HEADERS DVDVideoCodecMVCSoftware.h)
+  else()
+    message(STATUS "Edge264-MVC not found - skipping MVC software decoder PoC")
+  endif()
 endif()
 
 if(("gbm" IN_LIST CORE_PLATFORM_NAME_LC OR "wayland" IN_LIST CORE_PLATFORM_NAME_LC) AND
@@ -44,3 +58,7 @@ if(("gbm" IN_LIST CORE_PLATFORM_NAME_LC OR "wayland" IN_LIST CORE_PLATFORM_NAME_
 endif()
 
 core_add_library(dvdvideocodecs)
+
+if(TARGET ${APP_NAME_LC}::Edge264-MVC)
+  target_link_libraries(dvdvideocodecs PRIVATE ${APP_NAME_LC}::Edge264-MVC)
+endif()
