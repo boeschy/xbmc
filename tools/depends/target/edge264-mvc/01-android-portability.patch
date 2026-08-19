@@ -1,0 +1,52 @@
+--- a/src/edge264.c	2026-08-18 20:40:33.796108491 +0000
++++ b/src/edge264.c	2026-08-18 20:41:05.844557016 +0000
+@@ -86,10 +86,26 @@
+ // the CRT's _aligned_malloc must be released with _aligned_free - plain
+ // free() on such pointers corrupts the heap. Route the two aligned
+ // allocations and their matching frees through this pair.
++//
++// Android's Bionic libc is a separate case: aligned_alloc() itself exists
++// in libc.so since API 28, but its prototype in <stdlib.h> is gated behind
++// __ANDROID_API__ >= 28, which is a *build-time* NDK target flag, not the
++// device's actual runtime API level - a binary built against an older NDK
++// target (common for broad-compatibility Kodi/Android builds) will not
++// even see the declaration, regardless of what the end device supports.
++// posix_memalign() sidesteps this: it has been present and declared on
++// Bionic since API 17, so route through it there instead of chasing the
++// aligned_alloc visibility gate.
+ #ifdef _WIN32
+ 	#include <malloc.h>
+ 	#define aligned_malloc(alignment, size) _aligned_malloc(size, alignment)
+ 	#define aligned_free _aligned_free
++#elif defined(__ANDROID__)
++	static inline void *aligned_malloc(size_t alignment, size_t size) {
++		void *ptr;
++		return posix_memalign(&ptr, alignment, size) == 0 ? ptr : NULL;
++	}
++	#define aligned_free free
+ #else
+ 	#define aligned_malloc aligned_alloc
+ 	#define aligned_free free
+@@ -269,8 +285,21 @@
+ 					if (i == n_threads) {
+ 						return dec;
+ 					}
++					// pthread_cancel does not exist on Android/Bionic at all
++					// (not header-gated like aligned_alloc above - genuinely
++					// unimplemented), so it can't be used here even just for
++					// this rare partial-spawn-failure teardown. Reuse the same
++					// cooperative shutdown edge264_free() already relies on
++					// below: threads i-1..0 are sitting in worker_loop's
++					// task_ready wait, so set dec->shutdown, wake them, and
++					// join - rather than a mechanism that only ever worked on
++					// pthreads implementations with real cancellation support.
++					pthread_mutex_lock(&dec->lock);
++					dec->shutdown = 1;
++					pthread_cond_broadcast(&dec->task_ready);
++					pthread_mutex_unlock(&dec->lock);
+ 					while (i-- > 0)
+-						pthread_cancel(dec->threads[i]);
++						pthread_join(dec->threads[i], NULL);
+ 					pthread_cond_destroy(&dec->task_complete);
+ 				}
+ 				pthread_cond_destroy(&dec->task_progress);
