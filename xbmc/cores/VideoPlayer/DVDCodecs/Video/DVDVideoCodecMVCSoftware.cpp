@@ -69,22 +69,44 @@ bool CDVDVideoCodecMVCSoftware::Register()
 
 bool CDVDVideoCodecMVCSoftware::DetectStereoHighProfile(const CDVDStreamInfo& hints)
 {
+  // Primary path: AV_CODEC_ID_H264_MVC, a distinct codec id introduced by
+  // the two FFmpeg patches this build integrates (tools/depends/target/
+  // ffmpeg/008-.../009-...). Once those are applied, both the MPEG-TS
+  // demuxer (STREAM_TYPE_VIDEO_MVC) and the Matroska demuxer (mvcC
+  // BlockAddition) tag the stream with this id directly - the demuxer
+  // has already done the disambiguation work, so no profile inspection
+  // is needed here. This is also the only path that lines up with
+  // ff_h264_mvc_parser actually being selected: FFmpeg picks a parser by
+  // codec id (see libavcodec/parsers.c/PARSER_CODEC_LIST), and only
+  // ff_h264_mvc_parser sets H264ParseContext.is_mvc, which is what makes
+  // FFmpeg's own H.264 parser keep the dependent-view extension slices
+  // (NAL type 20) attached to the same access unit as the base view
+  // instead of splitting them off - without that, AddData() would only
+  // ever see the base view regardless of what this function returns.
+  if (hints.codec == AV_CODEC_ID_H264_MVC)
+    return true;
+
   if (hints.codec != AV_CODEC_ID_H264)
     return false;
 
-  // AV_PROFILE_H264_STEREO_HIGH (128). FFmpeg renamed the old
-  // FF_PROFILE_H264_* constants to AV_PROFILE_H264_* in the 6.x/7.x
-  // cycle; this Kodi checkout vendors FFmpeg 9.0.1, which only has the
-  // new name.
+  // Fallback path: plain AV_CODEC_ID_H264 with Stereo High profile, for
+  // sources that never go through the two demuxers patched above (e.g. a
+  // raw elementary .264 stream demuxed generically) and therefore never
+  // get remapped to AV_CODEC_ID_H264_MVC. AV_PROFILE_H264_STEREO_HIGH
+  // (128); FFmpeg renamed the old FF_PROFILE_H264_* constants to
+  // AV_PROFILE_H264_* in the 6.x/7.x cycle, this Kodi checkout vendors
+  // FFmpeg 9.0.1, which only has the new name.
   if (hints.codec_tag == 0 && hints.profile == AV_PROFILE_H264_STEREO_HIGH)
     return true;
 
-  // Fallback: scan extradata for a subset SPS (NAL unit type 15), which
-  // only exists when a dependent (MVC) view is muxed alongside the base
-  // view. This catches containers/demuxers that don't populate `profile`
-  // for MVC content. This is a minimal byte scan, not a real bitstream
-  // parser - it does not validate emulation-prevention bytes and can in
-  // principle false-positive on other streams that happen to contain the
+  // Last-resort fallback: scan extradata for a subset SPS (NAL unit type
+  // 15). Kept for completeness, but in practice this rarely fires for
+  // MKV-muxed BD 3D rips specifically - those carry the dependent view
+  // via BlockAdditions (handled by the AV_CODEC_ID_H264_MVC path above),
+  // not as an extra SPS inside the container's avcC extradata. This is a
+  // minimal byte scan, not a real bitstream parser - it does not
+  // validate emulation-prevention bytes and can in principle
+  // false-positive on other streams that happen to contain the
   // NAL-type-15 byte pattern outside of a real start code. Good enough
   // for a PoC; a real implementation should reuse a proper Annex-B/AVCC
   // NAL walker (e.g. CBitstreamConverter's parsing helpers) instead.
@@ -125,7 +147,14 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   // resolution instead of horizontal and may suit some panels better.
   m_packMode = PackMode::SBS;
 
-  if (!m_bitstream.Open(hints.codec, hints.extradata.GetData(), hints.extradata.GetSize(),
+  // CBitstreamConverter's internal NAL/avcC-to-Annex-B logic switches
+  // strictly on AV_CODEC_ID_H264 (see utils/BitstreamConverter.cpp) and
+  // doesn't know AV_CODEC_ID_H264_MVC - it doesn't need to, since avcC
+  // parsing and length-prefix-to-startcode rewriting are identical
+  // regardless of the container-level MVC tagging. Passing the plain id
+  // through avoids having to patch BitstreamConverter.cpp for something
+  // it was already correct about.
+  if (!m_bitstream.Open(AV_CODEC_ID_H264, hints.extradata.GetData(), hints.extradata.GetSize(),
                         true /* to_annexb */))
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::Open - bitstream converter init failed");
