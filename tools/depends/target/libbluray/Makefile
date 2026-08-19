@@ -8,6 +8,10 @@ DEPS = ../../Makefile.include LIBBLURAY-VERSION Makefile ../../download-files.in
                                   006-all-hdmv-bc-compare.patch \
                                   007-all-navigation-angle-oob.patch \
                                   008-all-bdj-await-image-decode.patch \
+                                  008-forward-1.0.2.patch \
+                                  009-add-3D-subtitle-depth-plane-info.patch \
+                                  010-seek-limit-seek-position-to-title-duration.patch \
+                                  011-seek-fix-cut-off-starting-packet-after-seek.patch \
                                   tvos.patch
 
 MESON_BUILD_TYPE=release
@@ -58,6 +62,10 @@ endif
 	cd $(PLATFORM); patch -p1 -i ../006-all-hdmv-bc-compare.patch
 	cd $(PLATFORM); patch -p1 -i ../007-all-navigation-angle-oob.patch
 	cd $(PLATFORM); patch -p1 -i ../008-all-bdj-await-image-decode.patch
+        cd $(PLATFORM); patch -p1 -i ../008-forward-1.0.2.patch
+        cd $(PLATFORM); patch -p1 -i ../009-add-3D-subtitle-depth-plane-info.patch
+        cd $(PLATFORM); patch -p1 -i ../010-seek-limit-seek-position-to-title-duration.patch
+        cd $(PLATFORM); patch -p1 -i ../011-seek-fix-cut-off-starting-packet-after-seek.patch
 ifeq ($(findstring appletv,$(TARGET_PLATFORM)),appletv)
 	cd $(PLATFORM); patch -p1 -i ../tvos.patch
 endif
