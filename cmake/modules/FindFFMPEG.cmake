@@ -199,7 +199,12 @@ macro(buildFFMPEG)
                       COMMAND ${CMAKE_COMMAND} -E copy
                       ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch
                       <SOURCE_DIR>
-    )
+                      COMMAND ${CMAKE_COMMAND} -E copy
+                      ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-added_upstream_mvc_patches.patch
+                      <SOURCE_DIR>
+                      COMMAND ${CMAKE_COMMAND} -E copy
+                      ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0002-MKV-added-basic-block-addition-mapping-support-for-m.patch
+                      <SOURCE_DIR>)
 
     if(NOT DISABLE_FFMPEG_SOURCE_PLUGINS)
       list(APPEND PATCH_COMMAND COMMAND ${CMAKE_COMMAND} -E copy

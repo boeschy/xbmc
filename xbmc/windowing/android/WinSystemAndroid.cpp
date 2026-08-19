@@ -16,6 +16,9 @@
 #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererOpenGLES.h"
 #include "cores/VideoPlayer/DVDCodecs/Audio/DVDAudioCodecAndroidMediaCodec.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.h"
+#if defined(HAS_EDGE264MVC)
+#include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecMVCSoftware.h"
+#endif
 #include "cores/VideoPlayer/Process/android/ProcessInfoAndroid.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererMediaCodec.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererMediaCodecSurface.h"
@@ -73,6 +76,15 @@ bool CWinSystemAndroid::InitWindowSystem()
   m_decoderFilterManager = new(CMediaCodecDecoderFilterManager);
   CServiceBroker::RegisterDecoderFilterManager(m_decoderFilterManager);
 
+#if defined(HAS_EDGE264MVC)
+  // PoC software H.264/MVC decoder; registered before mediacodec_dec (see
+  // CDVDVideoCodecMVCSoftware::Register()) so genuine MVC streams get
+  // offered to it first. HAS_EDGE264MVC needs to be propagated to this
+  // target's compile definitions from cores/VideoPlayer/DVDCodecs/Video's
+  // CMakeLists.txt when TARGET ${APP_NAME_LC}::Edge264-MVC exists; not
+  // wired up by this PoC diff.
+  CDVDVideoCodecMVCSoftware::Register();
+#endif
   CDVDVideoCodecAndroidMediaCodec::Register();
   CDVDAudioCodecAndroidMediaCodec::Register();
 

@@ -115,7 +115,7 @@ option(ENABLE_TESTING     "Enable testing support?" ON)
 option(ENABLE_INTERNAL_CROSSGUID "Enable internal crossguid?" ON)
 
 # use ffmpeg from depends or system
-option(ENABLE_INTERNAL_FFMPEG "Enable internal ffmpeg?" OFF)
+option(ENABLE_INTERNAL_FFMPEG "Enable internal ffmpeg?" ON)
 
 # These are built for all platforms not using system libs or disabled by user
 dependent_option(ENABLE_INTERNAL_ASS "Enable internal libass?")
@@ -275,6 +275,7 @@ set(optional_deps Alsa>=1.0.27
                   CAP
                   CEC>=7.0.0
                   DBus
+                  Edge264-MVC
                   Iso9660pp>=2.1.0
                   LCMS2>=2.10
                   LircClient
