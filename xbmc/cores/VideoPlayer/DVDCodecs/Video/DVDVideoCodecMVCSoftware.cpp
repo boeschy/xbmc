@@ -270,7 +270,7 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   if (!m_hasPicture)
   {
     Edge264Frame frame{};
-    if (edge264_get_frame(m_decoder, &frame, 0) == 0 && frame.samples[0] && frame.samples_mvc[0])
+    if (edge264_get_frame(m_decoder, &frame, 1) == 0 && frame.samples[0] && frame.samples_mvc[0])
     {
       m_picture.Reset();
       if (PackFrame(frame, &m_picture))
@@ -278,6 +278,9 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
         m_hasPicture = true;
         m_pts = m_ptsPending;
       }
+      // Only safe to give the slot back now that PackFrame() has
+      // finished copying every plane out of it.
+      edge264_return_frame(m_decoder, frame.return_arg);
     }
   }
 
