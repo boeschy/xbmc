@@ -18,6 +18,7 @@
 #include "settings/SettingsComponent.h"
 #include "utils/log.h"
 
+#include <cerrno>
 #include <cstdlib>
 
 namespace
@@ -238,19 +239,29 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   // above (mirrors how CDVDVideoCodecAndroidMediaCodec handles MPEG2/VC1
   // elsewhere in this codebase).
   const uint8_t* nal = edge264_find_start_code(buf, end, 1);
-  while (nal < end)
+  if (nal < end)
   {
-    const uint8_t* nextStart = edge264_find_start_code(nal + 1, end, 1);
-    const uint8_t* nalEnd = nextStart < end ? nextStart : end;
-
-    int ret = edge264_decode_NAL(m_decoder, nal, nalEnd, nullptr, nullptr);
-    if (ret < 0 && ret != -ENOBUFS)
+    nal += 3 + (nal[2] == 0);
+    while (nal < end)
     {
-      CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264_decode_NAL returned {}",
-                ret);
-    }
+      const uint8_t* nalEnd = edge264_find_start_code(nal, end, 0);
 
-    nal = nextStart;
+      // edge264 uses plain (non-negated) errno-style return codes - 0 on
+      // success, positive errno values (ENOBUFS, ENOTSUP, ...)
+      // otherwise - unlike FFmpeg's negative-errno convention. ENOBUFS
+      // just means the DPB is temporarily full and is expected during
+      // normal decode, not an error worth logging.
+      int ret = edge264_decode_NAL(m_decoder, nal, nalEnd, nullptr, nullptr);
+      if (ret != 0 && ret != ENOBUFS)
+      {
+        CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264_decode_NAL returned {}",
+                  ret);
+      }
+
+      if (nalEnd >= end)
+        break;
+      nal = nalEnd + 3 + (nalEnd[2] == 0);
+    }
   }
 
   // Pull at most one frame per AddData call; GetPicture() drives further
