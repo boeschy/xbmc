@@ -89,6 +89,37 @@ bool CDVDVideoCodecMVCSoftware::DetectStereoHighProfile(const CDVDStreamInfo& hi
   if (hints.codec != AV_CODEC_ID_H264)
     return false;
 
+  // MKV path (the actual demuxer path for this PoC's test files): the
+  // Matroska demuxer patch (009-ffmpeg-mkv-mvcc-block-addition.patch,
+  // mkv_parse_mvcc() in libavformat/matroskadec.c) deliberately does NOT
+  // touch st->codecpar->codec_id - it only appends the raw mvcC
+  // BlockAddition config record to codecpar->extradata, tagged with a
+  // fixed marker: a 4-byte fill (0xfdf8f800), a 4-byte length, and the
+  // 4-byte 'mvcC' fourcc (0x6d766343), followed by the config bytes
+  // themselves. So for MKV sources codec_id stays plain AV_CODEC_ID_H264
+  // and profile stays whatever the base-view SPS alone reports (usually
+  // High, not Stereo High) - this marker in extradata is the only
+  // reliable signal available. Confirmed against a real capture: a
+  // 252-byte base avcC grew to 436 bytes (+184, i.e. 12-byte marker
+  // header + a 172-byte mvcC config record) once 009 was applied.
+  if (hints.extradata)
+  {
+    const uint8_t* data = hints.extradata.GetData();
+    size_t size = hints.extradata.GetSize();
+    for (size_t i = 0; i + 12 <= size; i++)
+    {
+      uint32_t fill = (static_cast<uint32_t>(data[i]) << 24) | (static_cast<uint32_t>(data[i + 1]) << 16) |
+                      (static_cast<uint32_t>(data[i + 2]) << 8) | data[i + 3];
+      if (fill != 0xfdf8f800)
+        continue;
+
+      uint32_t fourcc = (static_cast<uint32_t>(data[i + 8]) << 24) | (static_cast<uint32_t>(data[i + 9]) << 16) |
+                        (static_cast<uint32_t>(data[i + 10]) << 8) | data[i + 11];
+      if (fourcc == 0x6d766343) // 'mvcC'
+        return true;
+    }
+  }
+
   // Fallback path: plain AV_CODEC_ID_H264 with Stereo High profile, for
   // sources that never go through the two demuxers patched above (e.g. a
   // raw elementary .264 stream demuxed generically) and therefore never
