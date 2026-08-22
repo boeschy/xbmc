@@ -162,6 +162,7 @@ if(NOT DISABLE_FFMPEG_SOURCE_PLUGINS)
 else()
   set(sourceplugin_patch PATCH_COMMAND /bin/sh -c "patch -p1 -i <SOURCE_DIR>/002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch && patch -p1 -i <SOURCE_DIR>/0001-added_upstream_mvc_patches.patch && patch -p1 -i <SOURCE_DIR>/0002-MKV-added-basic-block-addition-mapping-support-for-m.patch")
 endif()
+list(APPEND sourceplugin_patch COMMAND patch -p1 -i <SOURCE_DIR>/008-ffmpeg-all-pgssubdec-use-caller-colorspace.patch)
 
 include(ExternalProject)
 externalproject_add(ffmpeg
