@@ -35,6 +35,7 @@
 #include "utils/BitstreamConverter.h"
 
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -102,6 +103,14 @@ protected:
   // back, not the size - and the pool needs the size to bucket the block
   // for reuse.
   std::unordered_map<void*, unsigned> m_blockSizes;
+  // AllocCb/FreeCb are called by edge264 from its own worker threads
+  // (n_threads=4 in Open()), not just from the thread that calls
+  // AddData() - m_samplesPool/m_mbsPool/m_blockSizes are ordinary STL
+  // containers with no internal locking, so concurrent mutation from
+  // multiple worker threads (e.g. two threads both reallocating the same
+  // vector's backing store at once) is a real, unguarded data race.
+  // Every access to those three members must hold this mutex.
+  std::mutex m_poolMutex;
 
   static void AllocCb(void** samples,
                        unsigned samples_size,
