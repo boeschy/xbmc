@@ -122,26 +122,27 @@ bool CDVDVideoCodecMVCSoftware::DetectStereoHighProfile(const CDVDStreamInfo& hi
   }
 
   // Fallback path: plain AV_CODEC_ID_H264 with Stereo High profile, for
-  // sources that never go through the two demuxers patched above (e.g. a
-  // raw elementary .264 stream demuxed generically) and therefore never
-  // get remapped to AV_CODEC_ID_H264_MVC. AV_PROFILE_H264_STEREO_HIGH
-  // (128); FFmpeg renamed the old FF_PROFILE_H264_* constants to
-  // AV_PROFILE_H264_* in the 6.x/7.x cycle, this Kodi checkout vendors
-  // FFmpeg 9.0.1, which only has the new name.
+  // sources that never go through either patched demuxer (e.g. a raw
+  // elementary .264 stream demuxed generically) and therefore never get
+  // remapped/tagged at all. AV_PROFILE_H264_STEREO_HIGH (128); FFmpeg
+  // renamed the old FF_PROFILE_H264_* constants to AV_PROFILE_H264_* in
+  // the 6.x/7.x cycle, this Kodi checkout vendors FFmpeg 9.0.1, which
+  // only has the new name.
   if (hints.codec_tag == 0 && hints.profile == AV_PROFILE_H264_STEREO_HIGH)
     return true;
 
   // Last-resort fallback: scan extradata for a subset SPS (NAL unit type
-  // 15). Kept for completeness, but in practice this rarely fires for
-  // MKV-muxed BD 3D rips specifically - those carry the dependent view
-  // via BlockAdditions (handled by the AV_CODEC_ID_H264_MVC path above),
-  // not as an extra SPS inside the container's avcC extradata. This is a
-  // minimal byte scan, not a real bitstream parser - it does not
-  // validate emulation-prevention bytes and can in principle
-  // false-positive on other streams that happen to contain the
-  // NAL-type-15 byte pattern outside of a real start code. Good enough
-  // for a PoC; a real implementation should reuse a proper Annex-B/AVCC
-  // NAL walker (e.g. CBitstreamConverter's parsing helpers) instead.
+  // 15) sitting directly in the base avcC SPS list, Annex-B style. Kept
+  // for completeness/other muxing conventions this PoC hasn't seen; it
+  // will not find anything for the mvcC-tagged MKV case above, since
+  // that config record uses its own internal (non-Annex-B) framing, not
+  // 00 00 01 start codes. This is a minimal byte scan, not a real
+  // bitstream parser - it does not validate emulation-prevention bytes
+  // and can in principle false-positive on other streams that happen to
+  // contain the NAL-type-15 byte pattern outside of a real start code.
+  // Good enough for a PoC; a real implementation should reuse a proper
+  // Annex-B/AVCC NAL walker (e.g. CBitstreamConverter's parsing helpers)
+  // instead.
   if (hints.extradata)
   {
     const uint8_t* data = hints.extradata.GetData();
@@ -238,6 +239,16 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   // Annex-B start codes, which is why we ran the bitstream converter
   // above (mirrors how CDVDVideoCodecAndroidMediaCodec handles MPEG2/VC1
   // elsewhere in this codebase).
+  //
+  // edge264_find_start_code() returns a pointer to the start of the
+  // "00 00 01"/"00 00 00 01" delimiter itself, NOT past it - passing
+  // that pointer straight to edge264_decode_NAL() (as an earlier version
+  // of this function did) feeds it the delimiter's leading zero byte as
+  // if it were the NAL header, which decodes to nal_unit_type 0
+  // ("Unknown") and an ENOTSUP from every single NAL. The delimiter has
+  // to be skipped manually first - "nal[2] == 0" distinguishes a 3-byte
+  // (00 00 01) from a 4-byte (00 00 00 01) delimiter, exactly matching
+  // the reference decode loop in edge264-mvc's own src/edge264_test.c.
   const uint8_t* nal = edge264_find_start_code(buf, end, 1);
   if (nal < end)
   {
@@ -270,6 +281,18 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   if (!m_hasPicture)
   {
     Edge264Frame frame{};
+    // borrow=1: with borrow=0, edge264_get_frame() immediately clears the
+    // DPB slot's "still owned by caller" bit *inside the call itself*,
+    // before PackFrame() below has copied a single pixel out of
+    // frame.samples/samples_mvc - and edge264's n_threads=4 worker pool
+    // keeps decoding in the background the whole time (visibly, in
+    // practice: workers are often already multiple frames ahead by the
+    // time this runs), so that freed buffer can get reused and
+    // overwritten by a worker thread mid-copy. That's a genuine data
+    // race, not a hypothetical one - it explains a decode that runs
+    // cleanly for a while (pure thread-timing luck) and then corrupts/
+    // crashes once a worker catches up at the wrong moment. borrow=1
+    // keeps the slot reserved until we explicitly release it below.
     if (edge264_get_frame(m_decoder, &frame, 1) == 0 && frame.samples[0] && frame.samples_mvc[0])
     {
       m_picture.Reset();
@@ -419,6 +442,11 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
 
 void* CDVDVideoCodecMVCSoftware::AllocFromPool(std::vector<PooledBlock>& pool, unsigned size)
 {
+  // Called from AllocCb, which edge264 invokes from whichever of its own
+  // worker threads needs a new DPB slot - never assume single-threaded
+  // access here.
+  std::lock_guard<std::mutex> lock(m_poolMutex);
+
   for (size_t i = 0; i < pool.size(); i++)
   {
     if (pool[i].size == size)
@@ -439,6 +467,10 @@ void CDVDVideoCodecMVCSoftware::ReleaseToPool(std::vector<PooledBlock>& pool, vo
 {
   if (!ptr)
     return;
+
+  // Same rationale as AllocFromPool(): FreeCb is called from edge264's
+  // worker threads too.
+  std::lock_guard<std::mutex> lock(m_poolMutex);
 
   auto it = m_blockSizes.find(ptr);
   if (it == m_blockSizes.end())
@@ -461,6 +493,11 @@ void CDVDVideoCodecMVCSoftware::ReleaseToPool(std::vector<PooledBlock>& pool, vo
 
 void CDVDVideoCodecMVCSoftware::DrainPool(std::vector<PooledBlock>& pool)
 {
+  // Only called from the destructor, after edge264_free() has already
+  // joined every worker thread (see edge264.c's shutdown path) - no
+  // concurrent AllocCb/FreeCb calls can be in flight here, so no lock
+  // needed despite this being the counterpart to the two locked
+  // functions above.
   for (auto& block : pool)
     std::free(block.ptr);
   pool.clear();
