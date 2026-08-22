@@ -803,6 +803,8 @@ void CDVDInputStreamBluray::OverlayClose()
     plane.o.clear();
   auto group = std::make_shared<CDVDOverlayGroup>();
   group->bForced = true;
+  group->SetSource(DVDOverlaySource::MENU);
+  group->SetOverlayContainerFlushable(false);
   m_player->OnDiscNavResult(static_cast<void*>(&group), BD_EVENT_MENU_OVERLAY);
   m_hasOverlay = false;
   m_menuGoneAt = {}; // an explicit close is not a flicker, take it immediately
@@ -864,6 +866,12 @@ void CDVDInputStreamBluray::OverlayFlush(int64_t pts)
   group->bForced       = true;
   group->iPTSStartTime = static_cast<double>(pts);
   group->iPTSStopTime  = 0;
+
+  // A menu, so that only the next page ends or replaces it and never a subtitle, and not
+  // flushable: a seek flushes the container, and libbluray will not draw the page again on
+  // its own.
+  group->SetSource(DVDOverlaySource::MENU);
+  group->SetOverlayContainerFlushable(false);
 
   for(SPlane& plane : m_planes)
   {
