@@ -18,6 +18,7 @@
 #include "settings/SettingsComponent.h"
 #include "utils/log.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 
@@ -353,6 +354,23 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
     CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::PackFrame - failed to get video buffer");
     return false;
   }
+
+  // Get() only reserves a block of storage sized for the format above -
+  // it does NOT configure the buffer's plane pointers/strides.
+  // CVideoBufferSysMem zero-initializes its YuvImage in its constructor
+  // (see VideoBuffer.cpp), so without an explicit SetDimensions() call
+  // here, GetPlanes()/GetStrides() below return {nullptr, nullptr,
+  // nullptr} / {0, 0, 0} on a freshly allocated buffer, and the copy
+  // loop writes straight through a null pointer on literally the first
+  // packed frame - a guaranteed SIGSEGV that happens before a single
+  // picture is ever handed to the renderer, which is why it isn't
+  // preceded by anything more specific in Kodi's own log. Every other
+  // caller of GetVideoBufferManager().Get() in this codebase
+  // (AddonVideoCodec::GetFrameBuffer, CDVDVideoPPFFmpeg::Process) calls
+  // SetDimensions() for the same reason before touching the planes.
+  const int initialStrides[YuvImage::MAX_PLANES] = {
+      static_cast<int>(packedWidth), static_cast<int>(packedWidth) / 2, static_cast<int>(packedWidth) / 2};
+  buffer->SetDimensions(static_cast<int>(packedWidth), static_cast<int>(packedHeight), initialStrides);
 
   uint8_t* planes[YuvImage::MAX_PLANES];
   int strides[YuvImage::MAX_PLANES];
