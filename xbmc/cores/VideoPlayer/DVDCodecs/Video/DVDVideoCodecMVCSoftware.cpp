@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
+#include <set>
 
 namespace
 {
@@ -232,6 +233,10 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   }
 
   m_ptsPending = packet.pts != DVD_NOPTS_VALUE ? packet.pts : packet.dts;
+  // Queue every fed access unit's pts in decode order; consumed below
+  // (smallest-first) once a frame actually comes out, not when it was
+  // fed - see the m_ptsQueue comment in the header for why.
+  m_ptsQueue.insert(m_ptsPending);
 
   const uint8_t* buf = m_bitstream.GetConvertBuffer();
   const uint8_t* end = buf + m_bitstream.GetConvertSize();
@@ -300,7 +305,20 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
       if (PackFrame(frame, &m_picture))
       {
         m_hasPicture = true;
-        m_pts = m_ptsPending;
+        // Pop the smallest still-pending pts, not m_ptsPending (decode
+        // order) - see m_ptsQueue's declaration for why. Guard against an
+        // empty queue defensively; it should be impossible (one insert
+        // per AddData() call, one erase per frame out) but a stray/odd
+        // stream is not worth a crash over.
+        if (!m_ptsQueue.empty())
+        {
+          m_pts = *m_ptsQueue.begin();
+          m_ptsQueue.erase(m_ptsQueue.begin());
+        }
+        else
+        {
+          m_pts = m_ptsPending;
+        }
       }
       // Only safe to give the slot back now that PackFrame() has
       // finished copying every plane out of it.
@@ -318,6 +336,7 @@ void CDVDVideoCodecMVCSoftware::Reset()
   m_hasPicture = false;
   m_pts = DVD_NOPTS_VALUE;
   m_ptsPending = DVD_NOPTS_VALUE;
+  m_ptsQueue.clear();
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVideoPicture)
