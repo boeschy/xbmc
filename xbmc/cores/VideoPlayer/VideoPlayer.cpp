@@ -6240,7 +6240,7 @@ void CVideoPlayer::GetAudioStreamInfo(int index, AudioStreamInfo& info) const
 
   if (index < 0 || index > GetAudioStreamCount() - 1)
   {
-    info.valid = false;
+    info = AudioStreamInfo{};
     return;
   }
 
@@ -6288,9 +6288,7 @@ void CVideoPlayer::GetSubtitleStreamInfo(int index, SubtitleStreamInfo& info) co
 
   if (index < 0 || index > GetSubtitleCount() - 1)
   {
-    info.valid = false;
-    info.language.clear();
-    info.flags = StreamFlags::FLAG_NONE;
+    info = SubtitleStreamInfo{};
     return;
   }
 
