@@ -15,6 +15,7 @@
 #include "VideoShaders/dither.h"
 #include "application/Application.h"
 #include "cores/IPlayer.h"
+#include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
 #include "guilib/Texture.h"
 #include "rendering/GLExtensions.h"
 #include "rendering/MatrixGL.h"
@@ -188,6 +189,16 @@ bool CLinuxRendererGLES::Configure(const VideoPicture &picture, float fps, unsig
   m_sourceWidth = picture.iWidth;
   m_sourceHeight = picture.iHeight;
   m_renderOrientation = orientation;
+
+  // Unlike CLinuxRendererGL::Configure() (the desktop GL renderer), this
+  // GLES path never populated m_iFlags at all, so
+  // CONF_FLAGS_STEREO_MODE_MASK(m_iFlags) was always 0 in
+  // CBaseRenderer::ManageRenderArea() - the per-eye source-rect crop for
+  // stereoscopic content (CONF_FLAGS_STEREO_MODE_SBS/_TAB) could never
+  // trigger on this renderer, for any stereoscopic content, in any
+  // output stereo mode. Chroma siting was silently defaulted too.
+  m_iFlags = GetFlagsChromaPosition(picture.chroma_position) |
+             GetFlagsStereoMode(picture.stereoMode);
 
   m_srcPrimaries = picture.color_primaries;
   m_srcColorBits = picture.colorBits;
