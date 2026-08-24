@@ -466,7 +466,7 @@ bool CRenderManager::Flush(bool wait, bool saveBuffers)
     CServiceBroker::GetAppMessenger()->PostMsg(TMSG_RENDERER_FLUSH);
     if (wait)
     {
-      if (!m_flushEvent.Wait(1000ms))
+      if (!m_flushEvent.Wait(3000ms))
       {
         CLog::Log(LOGERROR, "{} - timed out waiting for renderer to flush", __FUNCTION__);
         return false;
