@@ -21,7 +21,8 @@
  *
  *  Known PoC limitations (see accompanying .cpp for details):
  *   - no interlace/field support
- *   - PTS handling assumes AddData() is fed one demux packet == one AU
+ *   - PTS reordering assumes AddData() is fed one demux packet == one AU
+ *     (each feed contributes exactly one pending pts to reorder against)
  *   - no secure/DRM path
  *   - thread count and buffering are unturned
  */
@@ -36,6 +37,7 @@
 
 #include <memory>
 #include <mutex>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -132,6 +134,18 @@ protected:
   VideoPicture m_picture; // holds the ref-counted buffer built by PackFrame() until GetPicture() collects it
   double m_pts = DVD_NOPTS_VALUE;
   double m_ptsPending = DVD_NOPTS_VALUE;
+  // edge264 decodes in bitstream/decode order but - per its own
+  // documented guarantee - always emits frames via edge264_get_frame()
+  // in strict, monotonic DISPLAY order. m_ptsPending only ever holds the
+  // pts of whichever demux packet was *most recently fed*, i.e. decode
+  // order; whenever a B-frame (or any reordering) is in play, that is
+  // not the pts of the frame actually being emitted right now. A real
+  // pts (unlike decode order) is fundamentally a display-time value, so
+  // sorting the pending, not-yet-consumed pts values and handing out the
+  // smallest one on every successful frame is correct independent of
+  // GOP structure, reorder depth, or B-frame count - no bitstream POC
+  // math required. See AddData()/GetPicture().
+  std::multiset<double> m_ptsQueue;
 
   CDVDStreamInfo m_hints;
 };
