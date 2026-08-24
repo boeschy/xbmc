@@ -24707,23 +24707,11 @@ msgctxt "#39210"
 msgid "If enabled, Dolby Vision files will have level 5 (active area) metadata overridden to zero offsets. Enable if your display has issues with incorrectly cropped image in Dolby Vision playback."
 msgstr ""
 
-#. Title of the setting that skips subtitles whose language matches the audio language
-#: system/settings/settings.xml
 msgctxt "#39211"
-msgid "Don't show subtitles matching the audio language"
-msgstr ""
-
-#. Help text for setting "Don't show subtitles matching the audio language" of label #39211
-#: system/settings/settings.xml
-msgctxt "#39212"
-msgid "Do not turn on subtitles that are in the same language as the audio being played. Forced subtitles are not affected."
-msgstr ""
-
-msgctxt "#39213"
 msgid "Disc menu overlay brightness (HDR)"
 msgstr ""
 
-msgctxt "#39214"
+msgctxt "#39212"
 msgid "Brightness of Blu-ray/DVD disc-menu overlays composited over HDR video. Only takes effect when the Android HDR GUI surface is enabled. Raise until the disc-menu highlights are as bright as you want over the film; adjusts in real time."
 msgstr ""
 
@@ -24767,7 +24755,19 @@ msgctxt "#39222"
 msgid "Brightness of disc (PGS) subtitles composited over HDR video. 500 matches the rest of the interface, lower is dimmer and higher pushes them above it; adjust until they are comfortable to read over the film. Takes effect in real time while subtitles are on screen. The disc menu has its own separate setting."
 msgstr ""
 
-#empty strings from id 39223 to 39899
+#. Title of the setting that skips subtitles whose language matches the audio language
+#: system/settings/settings.xml
+msgctxt "#39223"
+msgid "Don't show subtitles matching the audio language"
+msgstr ""
+
+#. Help text for setting "Don't show subtitles matching the audio language" of label #39223
+#: system/settings/settings.xml
+msgctxt "#39224"
+msgid "Do not turn on subtitles that are in the same language as the audio being played. Forced subtitles are not affected."
+msgstr ""
+
+#empty strings from id 39225 to 39899
 
 #. List formatting: pattern used to join a list of exactly two items, e.g. "A and B"
 #. STR_LIST_AND_TWO
