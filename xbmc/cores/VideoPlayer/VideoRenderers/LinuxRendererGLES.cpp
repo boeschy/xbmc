@@ -603,6 +603,24 @@ void CLinuxRendererGLES::RenderUpdate(int index, int index2, bool clear, unsigne
 
   ManageRenderArea();
 
+  // ManageRenderArea() just recomputed m_sourceRect for THIS render call,
+  // including the per-eye stereo crop from the current
+  // CServiceBroker::...GetStereoView() (see CBaseRenderer::ManageRenderArea).
+  // But the actual UV rect used by the draw below (buf.fields[*][*].rect)
+  // is only baked from m_sourceRect inside CalculateTextureSourceRects(),
+  // which UploadTexture()/UploadPlanarYUVTexture() calls - and only on the
+  // pass that actually uploads the pixels, gated by "buf.loaded". For
+  // stereoscopic split (SBS/TAB) output, the SAME uploaded picture is
+  // rendered twice per frame - once per eye, via two separate RenderUpdate()
+  // calls with SetStereoView(LEFT)/SetStereoView(RIGHT) around them (see
+  // CApplication::Render()) - so only the FIRST of the two calls uploads
+  // and bakes the crop; the second reuses the already-loaded texture and,
+  // without this call, its stale rect from the first eye's crop, showing
+  // the same eye on both sides of the screen. Recompute it every render
+  // call regardless of upload state - it's pure CPU-side rect math, no GL
+  // work, so doing it redundantly on non-stereo content is harmless.
+  CalculateTextureSourceRects(index, 3);
+
   if (clear)
   {
     if (alpha == 255)
