@@ -60,7 +60,7 @@ public:
   void Reset() override;
   VCReturn GetPicture(VideoPicture* pVideoPicture) override;
   const char* GetName() override { return "mvc-sw-edge264"; }
-  unsigned GetAllowedReferences() override { return 4; }
+  unsigned GetAllowedReferences() override { return 16; }
 
 protected:
   enum class PackMode
