@@ -301,6 +301,21 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
     // keeps the slot reserved until we explicitly release it below.
     if (edge264_get_frame(m_decoder, &frame, 1) == 0 && frame.samples[0] && frame.samples_mvc[0])
     {
+      // TEMP DIAGNOSTIC - remove once the "same eye on both sides" bug is
+      // root-caused. Confirms whether the decoder genuinely hands us two
+      // distinct views (different FrameId/Poc/pointer) or something
+      // equivalent to the same view twice.
+      static int s_diagCount = 0;
+      if (s_diagCount < 20)
+      {
+        s_diagCount++;
+        CLog::Log(LOGDEBUG,
+                   "CDVDVideoCodecMVCSoftware::AddData - DIAG FrameId={}/{} Poc={}/{} "
+                   "DisplayPoc={}/{} samplesY={} samplesY_mvc={}",
+                   frame.FrameId, frame.FrameId_mvc, frame.Poc, frame.Poc_mvc, frame.DisplayPoc,
+                   frame.DisplayPoc_mvc, static_cast<const void*>(frame.samples[0]),
+                   static_cast<const void*>(frame.samples_mvc[0]));
+      }
       m_picture.Reset();
       if (PackFrame(frame, &m_picture))
       {
