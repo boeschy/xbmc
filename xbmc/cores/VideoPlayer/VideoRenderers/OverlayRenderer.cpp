@@ -162,6 +162,9 @@ void CRenderer::Render(int idx, float depth)
   {
     if (it->overlay_dvd)
     {
+      const RenderStereoView stereoView =
+          CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView();
+
       std::shared_ptr<COverlay> o = Convert(*it);
       if (!o)
         continue;
@@ -195,6 +198,9 @@ void CRenderer::RenderHDROverlays(int idx)
   {
     if (it->overlay_dvd)
     {
+      const RenderStereoView stereoView =
+          CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView();
+
       std::shared_ptr<COverlay> o = Convert(*it);
       if (!o || !o->m_isHDROverlay)
         continue;

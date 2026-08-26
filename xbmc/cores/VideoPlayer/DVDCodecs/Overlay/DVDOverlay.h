@@ -37,6 +37,13 @@ enum class DVDOverlaySource
   MENU,
 };
 
+enum class DVDOverlayStereoView
+{
+  BOTH,
+  LEFT,
+  RIGHT,
+};
+
 class CDVDOverlay : public std::enable_shared_from_this<CDVDOverlay>
 {
 public:
@@ -55,6 +62,7 @@ public:
     m_stereoView = DVDOverlayStereoView::BOTH;
     m_isDiscMenuGraphic = false;
     m_source = DVDOverlaySource::SUBTITLE;
+    m_stereoView = DVDOverlayStereoView::BOTH;
   }
 
   CDVDOverlay(const CDVDOverlay& src) : std::enable_shared_from_this<CDVDOverlay>(src)
@@ -74,6 +82,7 @@ public:
     // silently demote every redrawn menu region to a subtitle.
     m_isDiscMenuGraphic = src.m_isDiscMenuGraphic;
     m_source = src.m_source;
+    m_stereoView = src.m_stereoView;
   }
 
   virtual ~CDVDOverlay() = default;
