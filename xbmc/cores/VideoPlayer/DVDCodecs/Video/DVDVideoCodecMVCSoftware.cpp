@@ -44,13 +44,12 @@ CDVDVideoCodecMVCSoftware::~CDVDVideoCodecMVCSoftware()
   if (m_decoder)
   {
     // edge264_free() releases every DPB slot it still owns via FreeCb,
-    // which returns each block to m_samplesPool/m_mbsPool rather than
-    // freeing it immediately (see ReleaseToPool()) - so the actual
-    // std::free() calls only happen afterwards, here.
+    // which returns each block to m_framePool rather than freeing it
+    // immediately (see ReleaseToPool()) - so the actual std::free() call
+    // only happens afterwards, here.
     edge264_free(&m_decoder);
   }
-  DrainPool(m_samplesPool);
-  DrainPool(m_mbsPool);
+  DrainPool(m_framePool);
 }
 
 std::unique_ptr<CDVDVideoCodec> CDVDVideoCodecMVCSoftware::Create(CProcessInfo& processInfo)
@@ -301,21 +300,6 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
     // keeps the slot reserved until we explicitly release it below.
     if (edge264_get_frame(m_decoder, &frame, 1) == 0 && frame.samples[0] && frame.samples_mvc[0])
     {
-      // TEMP DIAGNOSTIC - remove once the "same eye on both sides" bug is
-      // root-caused. Confirms whether the decoder genuinely hands us two
-      // distinct views (different FrameId/Poc/pointer) or something
-      // equivalent to the same view twice.
-      static int s_diagCount = 0;
-      if (s_diagCount < 20)
-      {
-        s_diagCount++;
-        CLog::Log(LOGDEBUG,
-                   "CDVDVideoCodecMVCSoftware::AddData - DIAG FrameId={}/{} Poc={}/{} "
-                   "DisplayPoc={}/{} samplesY={} samplesY_mvc={}",
-                   frame.FrameId, frame.FrameId_mvc, frame.Poc, frame.Poc_mvc, frame.DisplayPoc,
-                   frame.DisplayPoc_mvc, static_cast<const void*>(frame.samples[0]),
-                   static_cast<const void*>(frame.samples_mvc[0]));
-      }
       m_picture.Reset();
       if (PackFrame(frame, &m_picture))
       {
@@ -559,9 +543,15 @@ void CDVDVideoCodecMVCSoftware::AllocCb(
     void** samples, unsigned samples_size, void** mbs, unsigned mbs_size, int errno_on_fail, void* alloc_arg)
 {
   auto* self = static_cast<CDVDVideoCodecMVCSoftware*>(alloc_arg);
-  *samples = self->AllocFromPool(self->m_samplesPool, samples_size);
-  *mbs = self->AllocFromPool(self->m_mbsPool, mbs_size);
-  if ((!*samples || !*mbs) && errno_on_fail)
+  // One contiguous allocation for samples+mbs - see the m_framePool
+  // comment in the header for why this must not be two separate
+  // allocations (edge264's SIMD inter-prediction reads a short distance
+  // past the nominal samples region, relying on it spilling harmlessly
+  // into the immediately-following mbs region of the same block).
+  void* base = self->AllocFromPool(self->m_framePool, samples_size + mbs_size);
+  *samples = base;
+  *mbs = base ? static_cast<uint8_t*>(base) + samples_size : nullptr;
+  if (!base && errno_on_fail)
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::AllocCb - allocation failed ({} + {} bytes)",
               samples_size, mbs_size);
@@ -571,8 +561,11 @@ void CDVDVideoCodecMVCSoftware::AllocCb(
 void CDVDVideoCodecMVCSoftware::FreeCb(void* samples, void* mbs, void* alloc_arg)
 {
   auto* self = static_cast<CDVDVideoCodecMVCSoftware*>(alloc_arg);
-  self->ReleaseToPool(self->m_samplesPool, samples);
-  self->ReleaseToPool(self->m_mbsPool, mbs);
+  // mbs is just samples+samples_size within the same allocation (see
+  // AllocCb) - only samples is ever handed back to the pool/freed,
+  // exactly like edge264's own internal_free() only frees the base
+  // pointer it originally returned as *samples.
+  self->ReleaseToPool(self->m_framePool, samples);
 }
 
 int CDVDVideoCodecMVCSoftware::LogCb(const char* str, void* log_arg)
