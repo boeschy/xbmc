@@ -84,6 +84,27 @@ protected:
   // given stream (fixed resolution) these come in a small, stable set of
   // sizes, so a malloc/free per frame is pure, avoidable churn. Actual
   // frees only happen in the destructor via DrainPool().
+  // Single pool keyed by the *combined* samples+mbs size. edge264's
+  // internal default allocator (used whenever no alloc_cb is supplied,
+  // i.e. exactly what a plain vanilla caller like edge264_test gets)
+  // allocates samples and mbs as ONE contiguous block and derives mbs as
+  // samples+samples_size (see internal_alloc() in edge264.c) - and its
+  // SIMD-based inter-prediction code (edge264_inter.c, e.g.
+  // decode_inter_chroma's _mm_loadu_si128/NEON equivalent) reads a short
+  // distance past the nominal end of the samples region, relying on that
+  // spilling harmlessly into the adjacent, same-allocation mbs region.
+  // Handing back samples/mbs as two independent allocations (our
+  // original approach here) breaks that: the exact same read becomes a
+  // genuine heap-buffer-overflow into unrelated memory the moment it
+  // walks off the end of the standalone samples block, rather than
+  // landing safely inside the (still allocated, just logically separate
+  // to us) mbs block. Confirmed by reproducing the crash standalone
+  // under ASan against the actual failing stream: identical two-pool
+  // scheme => heap-buffer-overflow in decode_inter_chroma every time;
+  // switching to one contiguous samples+mbs allocation => clean decode,
+  // zero ASan reports, same stream, same alloc/borrow pattern otherwise.
+  // Pool by the *sum* so a same-format stream keeps reusing one
+  // contiguous block per slot, exactly as it did per-plane before.
   struct PooledBlock
   {
     void* ptr;
@@ -94,12 +115,11 @@ protected:
   static void DrainPool(std::vector<PooledBlock>& pool);
 
   // Defensive cap so a misbehaving/variable-resolution stream can't grow
-  // these pools without bound; edge264's actual DPB is far smaller than
+  // this pool without bound; edge264's actual DPB is far smaller than
   // this in practice (typically <= 16 frames * 2 views).
   static constexpr size_t MAX_POOLED_BLOCKS = 40;
 
-  std::vector<PooledBlock> m_samplesPool;
-  std::vector<PooledBlock> m_mbsPool;
+  std::vector<PooledBlock> m_framePool;
   // Records the allocation size for every live pointer handed out by
   // AllocFromPool(), since edge264's FreeCb only gives us the pointer
   // back, not the size - and the pool needs the size to bucket the block
@@ -107,11 +127,11 @@ protected:
   std::unordered_map<void*, unsigned> m_blockSizes;
   // AllocCb/FreeCb are called by edge264 from its own worker threads
   // (n_threads=4 in Open()), not just from the thread that calls
-  // AddData() - m_samplesPool/m_mbsPool/m_blockSizes are ordinary STL
-  // containers with no internal locking, so concurrent mutation from
-  // multiple worker threads (e.g. two threads both reallocating the same
+  // AddData() - m_framePool/m_blockSizes are ordinary STL containers
+  // with no internal locking, so concurrent mutation from multiple
+  // worker threads (e.g. two threads both reallocating the same
   // vector's backing store at once) is a real, unguarded data race.
-  // Every access to those three members must hold this mutex.
+  // Every access to those two members must hold this mutex.
   std::mutex m_poolMutex;
 
   static void AllocCb(void** samples,
