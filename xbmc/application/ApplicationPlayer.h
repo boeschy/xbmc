@@ -122,6 +122,7 @@ public:
    * \return The supported menu type
   */
   MenuType GetSupportedMenuType() const;
+  bool CanShowDiscMenu() const;
 
   bool HasVideo() const;
   bool HasGame() const;
