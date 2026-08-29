@@ -1,4 +1,5 @@
 set(SOURCES TestCCBitstreamParser.cpp
+            TestBlurayOffsetMetadata.cpp
             TestDVDDemuxClient.cpp
             TestDVDDemuxUtils.cpp)
 
