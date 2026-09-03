@@ -11,6 +11,11 @@
 #include "DVDDemux.h"
 #include "threads/CriticalSection.h"
 #include "threads/SystemClock.h"
+#ifdef HAVE_LIBBLURAY
+// Needed in full (not just forward-declared) for the nested
+// CDVDInputStream::IExtentionStream type used by m_pExtentionStream below.
+#include "DVDInputStreams/DVDInputStream.h"
+#endif
 #include <deque>
 #include <map>
 #include <memory>
@@ -23,6 +28,7 @@ extern "C" {
 
 class CDVDDemuxFFmpeg;
 class CDVDInputStream;
+class CDemuxStreamSSIF;
 class CURL;
 struct ChapterFFmpeg;
 
@@ -146,6 +152,13 @@ protected:
 
   StreamHdrType DetermineHdrType(AVStream* pStream);
 
+#ifdef HAVE_LIBBLURAY
+  // BD-3D: wires up the merge with the dependent (MVC) view demuxed separately by
+  // CDVDInputStreamBluray (see its m_bMVCPlayback comment), once found. See
+  // DemuxStreamSSIF.h for the merge itself.
+  void SetupMVCMerge();
+#endif
+
 #ifdef HAVE_LIBDOVI
   // Dolby Vision profile 7 UHD Blu-ray: merge the enhancement-layer RPU into the base
   // layer and present it as single-layer profile 8.1 so Android MediaCodec outputs real
@@ -231,4 +244,17 @@ protected:
   bool m_seekToKeyFrame = false;
   double m_startTime = 0;
   std::vector<ChapterFFmpeg> m_chapters;
+
+#ifdef HAVE_LIBBLURAY
+  // BD-3D SSIF/MVC merge (see SetupMVCMerge()). Only non-null once a base view + a
+  // dependent-view demuxer (CDemuxMVC, via CDVDInputStreamBluray) have actually been
+  // found together.
+  std::unique_ptr<CDemuxStreamSSIF> m_pSSIF;
+  // Cached alongside m_pSSIF - re-resolved on every SetupMVCMerge() call (see
+  // CreateStreams()) since m_pInput doesn't change but the cast is cheap either way.
+  // ReadInternal() uses this every packet to keep the dependent-view demuxer's timestamp
+  // offset in sync with m_startTime - see CDemuxMVC::SetTimestampOffset()'s own comment
+  // for why that has to happen continuously rather than once.
+  std::shared_ptr<CDVDInputStream::IExtentionStream> m_pExtentionStream;
+#endif
 };

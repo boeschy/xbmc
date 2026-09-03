@@ -49,6 +49,7 @@ namespace XFILE
 
 struct DemuxPacket;
 class CDemuxStream;
+class CDVDDemux;
 class CStreamDetails;
 struct SPlayerState;
 
@@ -131,6 +132,42 @@ public:
     virtual bool GetState(std::string &xmlstate) = 0;
     virtual bool SetState(const std::string &xmlstate) = 0;
     virtual bool CanSeek() { return !IsInMenu(); }
+  };
+
+  /*!
+   * \brief Lets a demuxer reach a second, related elementary stream that its input
+   *        stream knows about but does not carry itself - specifically, the BD-3D
+   *        H.264/MVC dependent (right-eye) view, which on disc is authored as its own
+   *        clip under the playlist's stereoscopic sub-path, in its own separate .m2ts,
+   *        not multiplexed into the base-view clip CDVDDemuxFFmpeg is otherwise reading.
+   *        See CDVDInputStreamBluray::OpenMVCDemux()/DemuxStreamSSIF.h for how the two
+   *        get recombined into single MVC access units.
+   */
+  class IExtentionStream
+  {
+  public:
+    virtual ~IExtentionStream() = default;
+
+    //! True if the current title actually has a stereoscopic sub-path (and, in
+    //! practice, that its first clip's demuxer opened successfully).
+    virtual bool HasExtention() = 0;
+
+    //! The demuxer reading the dependent view's current clip, or nullptr if none is
+    //! open (no stereoscopic sub-path, or it failed to open).
+    virtual CDVDDemux* GetExtentionDemux() = 0;
+
+    //! Tells the extension demuxer what point in absolute (container) time the base
+    //! view's own demuxer is currently treating as zero, so both views' packets end up
+    //! on the same normalized timeline for CDemuxStreamSSIF's pts/dts-based pairing to
+    //! work. Called continuously (cheap: a single double assignment), not just once at
+    //! open time, since that value isn't resolved until the base view's own first
+    //! packet is read - see CDVDDemuxFFmpeg::m_startTime.
+    virtual void SetExtentionTimestampOffset(double offsetSeconds) = 0;
+
+    //! Advance the dependent-view demuxer to the next queued clip, mirroring a
+    //! base-view clip change (BD_EVENT_PLAYITEM) or a seek. Returns false once there
+    //! is no further clip queued.
+    virtual bool OpenNextStream() = 0;
   };
 
   class IDemux

@@ -10,6 +10,8 @@
 
 #include "DVDCodecs/Overlay/DVDOverlay.h"
 #include "DVDCodecs/Overlay/DVDOverlayImage.h"
+#include "DVDDemuxers/DemuxMVC.h"
+#include "DVDInputStreamFile.h"
 #include "IVideoPlayer.h"
 #include "LangInfo.h"
 #include "ServiceBroker.h"
@@ -38,8 +40,14 @@
 #include <libbluray/bluray.h>
 #include <libbluray/clpi_data.h>
 #include <libbluray/log_control.h>
+#include <libbluray/mpls_data.h>
 
 #define LIBBLURAY_BYTESEEK 0
+#define EMPTY_QUEUE(x) \
+  { \
+    while (!x.empty()) \
+      x.pop(); \
+  }
 
 using namespace KODI;
 using namespace std::chrono_literals;
@@ -428,6 +436,10 @@ bool CDVDInputStreamBluray::Open()
 // close file and reset everything
 void CDVDInputStreamBluray::Close()
 {
+  CloseMVCDemux();
+  EMPTY_QUEUE(m_clipQueue);
+  m_bMVCPlayback = false;
+
   FreeTitleInfo();
 
   if(m_bd)
@@ -604,6 +616,30 @@ void CDVDInputStreamBluray::ProcessEvent() {
     m_playlist = m_event.param;
     FreeTitleInfo();
     m_titleInfo = bd_get_playlist_info(m_bd, m_playlist, m_angle);
+
+    // BD-3D: does this playlist have a stereoscopic (MVC dependent-view) sub-path? See
+    // the m_bMVCPlayback comment in the header for the full picture.
+    m_bMVCPlayback = false;
+    if (m_titleInfo)
+    {
+      if (MPLS_PL* mpls = bd_get_title_mpls(m_bd))
+      {
+        for (int i = 0; i < mpls->ext_sub_count; i++)
+        {
+          if (mpls->ext_sub_path[i].type == 8 &&
+              mpls->ext_sub_path[i].sub_playitem_count == mpls->list_count)
+          {
+            CLog::Log(LOGDEBUG,
+                      "CDVDInputStreamBluray - BD-3D MVC sub-path found (index {})", i);
+            m_bMVCPlayback = true;
+            m_nMVCSubPathIndex = i;
+            break;
+          }
+        }
+      }
+    }
+    CloseMVCDemux();
+    EMPTY_QUEUE(m_clipQueue);
     break;
 
   case BD_EVENT_PLAYITEM:
@@ -696,6 +732,99 @@ void CDVDInputStreamBluray::ProcessEvent() {
 
   /* event has been consumed */
   m_event.event = BD_EVENT_NONE;
+
+  // A base-view clip change just happened (m_clip was updated by UpdateClipInfo() inside
+  // the BD_EVENT_PLAYITEM case above, or possibly not at all this call - this check runs
+  // after every event so it always notices) - queue the matching dependent-view clip.
+  if (m_bMVCPlayback && m_clip && m_titleInfo && m_clip < m_titleInfo->clips + m_titleInfo->clip_count &&
+      m_pMVCClip != m_clip &&
+      (m_clipQueue.empty() || m_clip != m_titleInfo->clips + m_clipQueue.back()))
+  {
+    m_clipQueue.push(static_cast<int>(m_clip - m_titleInfo->clips));
+    if (!m_pMVCDemux)
+      OpenNextStream();
+  }
+}
+
+bool CDVDInputStreamBluray::OpenNextStream()
+{
+  if (m_clipQueue.empty())
+    return false;
+
+  int clip = m_clipQueue.front();
+  m_clipQueue.pop();
+
+  CloseMVCDemux();
+
+  return OpenMVCDemux(clip);
+}
+
+bool CDVDInputStreamBluray::OpenMVCDemux(int playItem)
+{
+  if (m_rootPath.empty())
+  {
+    // No plain filesystem/UDF root to read a second, independently-opened file from (disc
+    // opened in bd_open_stream()/bd_open_disc() mode) - MVC dependent-view demuxing needs
+    // "files" mode.
+    CLog::Log(LOGDEBUG,
+              "CDVDInputStreamBluray::OpenMVCDemux - no root path available, 3D playback of "
+              "this title's dependent view is not possible");
+    return false;
+  }
+
+  MPLS_PL* pl = bd_get_title_mpls(m_bd);
+  if (!pl || playItem < 0 || playItem >= pl->ext_sub_path[m_nMVCSubPathIndex].sub_playitem_count)
+    return false;
+
+  std::string strFileName = m_rootPath + "/BDMV/STREAM/" +
+                             pl->ext_sub_path[m_nMVCSubPathIndex].sub_play_item[playItem].clip->clip_id +
+                             ".m2ts";
+
+  CLog::Log(LOGDEBUG, "CDVDInputStreamBluray::OpenMVCDemux - opening dependent-view clip at {}",
+            strFileName);
+
+  CFileItem fileitem(CURL(strFileName), false);
+  m_pMVCInput = new CDVDInputStreamFile(fileitem, 0);
+
+  if (!m_pMVCInput->Open())
+  {
+    CLog::Log(LOGWARNING, "CDVDInputStreamBluray::OpenMVCDemux - failed to open {}", strFileName);
+    CloseMVCDemux();
+    return false;
+  }
+
+  auto* pMVCDemux = new CDemuxMVC();
+  m_pMVCDemux = pMVCDemux;
+
+  if (!pMVCDemux->Open(m_pMVCInput))
+  {
+    CLog::Log(LOGWARNING,
+              "CDVDInputStreamBluray::OpenMVCDemux - no usable H.264/MVC stream in {}",
+              strFileName);
+    CloseMVCDemux();
+    return false;
+  }
+
+  m_pMVCClip = m_titleInfo->clips + playItem;
+  return true;
+}
+
+bool CDVDInputStreamBluray::CloseMVCDemux()
+{
+  delete m_pMVCDemux;
+  m_pMVCDemux = nullptr;
+
+  delete m_pMVCInput;
+  m_pMVCInput = nullptr;
+
+  m_pMVCClip = nullptr;
+  return true;
+}
+
+void CDVDInputStreamBluray::SetExtentionTimestampOffset(double offsetSeconds)
+{
+  if (auto* pMVCDemux = dynamic_cast<CDemuxMVC*>(m_pMVCDemux))
+    pMVCDemux->SetTimestampOffset(offsetSeconds);
 }
 
 int CDVDInputStreamBluray::Read(uint8_t* buf, int buf_size)

@@ -12,6 +12,8 @@ set(SOURCES DemuxMultiSource.cpp
             DVDDemuxFFmpeg.cpp
             DVDDemuxUtils.cpp
             DVDDemuxVobsub.cpp
+            DemuxMVC.cpp
+            DemuxStreamSSIF.cpp
             DVDFactoryDemuxer.cpp)
 
 set(HEADERS DemuxMultiSource.h
@@ -31,6 +33,8 @@ set(HEADERS DemuxMultiSource.h
             DVDDemuxFFmpeg.h
             DVDDemuxUtils.h
             DVDDemuxVobsub.h
+            DemuxMVC.h
+            DemuxStreamSSIF.h
             DVDFactoryDemuxer.h)
 
 core_add_library(dvddemuxers)

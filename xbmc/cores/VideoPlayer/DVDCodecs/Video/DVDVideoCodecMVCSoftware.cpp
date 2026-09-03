@@ -13,6 +13,7 @@
 #include "DVDCodecs/DVDFactoryCodec.h"
 #include "ServiceBroker.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecs.h"
+#include "cores/VideoPlayer/DVDDemuxers/DemuxStreamSSIF.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
@@ -86,6 +87,17 @@ bool CDVDVideoCodecMVCSoftware::DetectStereoHighProfile(const CDVDStreamInfo& hi
   // instead of splitting them off - without that, AddData() would only
   // ever see the base view regardless of what this function returns.
   if (hints.codec == AV_CODEC_ID_H264_MVC)
+    return true;
+
+  // BD-3D via a separate dependent-view clip demuxer (see
+  // CDVDInputStreamBluray's m_bMVCPlayback comment and DemuxStreamSSIF.h): the base view
+  // and dependent view are demuxed from two independent AVFormatContexts and merged into
+  // single access units at the Kodi packet level, so codec_id here legitimately stays
+  // plain AV_CODEC_ID_H264 the whole time (see CDVDDemuxFFmpeg::SetupMVCMerge() for
+  // exactly why retagging codec_id itself does not work for an MPEG-TS source - it gets
+  // silently reset by the demuxer's own repeated PMT parsing). codec_tag is the only
+  // signal available for this path.
+  if (hints.codec == AV_CODEC_ID_H264 && hints.codec_tag == BD3D_MVC_CODEC_TAG)
     return true;
 
   if (hints.codec != AV_CODEC_ID_H264)
@@ -191,8 +203,22 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   if (!m_bitstream.Open(AV_CODEC_ID_H264, hints.extradata.GetData(), hints.extradata.GetSize(),
                         true /* to_annexb */))
   {
-    CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::Open - bitstream converter init failed");
-    return false;
+    // Not fatal. This path was only ever verified against Matroska's avcC-formatted
+    // extradata (see DetectStereoHighProfile() above) - CBitstreamConverter::Open()
+    // requires extradata that starts with the avcC configurationVersion byte (0x01) and
+    // fails otherwise, which is exactly what happens for a BD/MPEG-TS elementary stream:
+    // those carry SPS/PPS in-band, repeated before every IDR, rather than in a
+    // container-level avcC record, so hints.extradata here is typically empty or already
+    // Annex-B. Either way, m_bitstream.Open() still runs its first two statements
+    // (m_to_annexb = true; m_codec = AV_CODEC_ID_H264;) before hitting that check, and its
+    // m_convert_bitstream flag defaults to false and is only ever set true inside the
+    // avcC branch we didn't take - which is exactly the internal state
+    // Convert()/GetConvertBuffer() need to pass Annex-B packets through unchanged instead
+    // of (wrongly) trying to convert them. A genuinely malformed stream would misbehave
+    // silently here rather than via this return value; not handled, matching the same
+    // unverified-edge-case scope already accepted by the avcC path above.
+    CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::Open - no avcC extradata, treating input "
+                         "as already-Annex-B (BD/MPEG-TS elementary stream)");
   }
 
   m_decoder = edge264_alloc(EDGE264_THREADS, &CDVDVideoCodecMVCSoftware::LogCb, this,

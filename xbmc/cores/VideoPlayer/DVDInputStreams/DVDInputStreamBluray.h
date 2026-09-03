@@ -21,6 +21,7 @@
 #include <list>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <string>
 
 extern "C"
@@ -50,6 +51,7 @@ extern "C"
 #define HDMV_PID_IG_LAST          0x141f
 
 class CDVDOverlayImage;
+class CDVDDemux;
 class IVideoPlayer;
 
 class CDVDInputStreamBluray
@@ -58,6 +60,7 @@ class CDVDInputStreamBluray
   , public CDVDInputStream::IChapter
   , public CDVDInputStream::IPosTime
   , public CDVDInputStream::IMenus
+  , public CDVDInputStream::IExtentionStream
 {
 public:
   CDVDInputStreamBluray() = delete;
@@ -178,6 +181,13 @@ public:
 
   void ProcessEvent();
 
+  /* CDVDInputStream::IExtentionStream - BD-3D dependent (MVC) view. See
+   * DemuxStreamSSIF.h/DemuxMVC.h for the overall design. */
+  CDVDDemux* GetExtentionDemux() override { return m_pMVCDemux; }
+  bool HasExtention() override { return m_bMVCPlayback; }
+  void SetExtentionTimestampOffset(double offsetSeconds) override;
+  bool OpenNextStream() override;
+
   void SaveCurrentState(const CStreamDetails& details) override;
   UpdateState UpdateItemFromSavedStates(CFileItem& item, double time, bool& closed) override;
   void UpdateStack(CFileItem& item) override;
@@ -198,6 +208,19 @@ protected:
   */
   bool AnythingVisible();
 
+  /*!
+   * \brief Open the dependent (MVC) view's own clip .m2ts as a second, independent
+   *        demuxer. See DemuxMVC.h for why the dependent view is a wholly separate
+   *        file rather than a second PID inside the base-view clip.
+   * \param playItem The play item index (as reported by BD_EVENT_PLAYITEM) whose
+   *        stereoscopic sub-path clip should be opened
+   * \return true if the dependent-view clip was found and opened
+   */
+  bool OpenMVCDemux(int playItem);
+
+  //! Tears down the dependent-view demuxer/input stream opened by OpenMVCDemux(), if any.
+  bool CloseMVCDemux();
+
   IVideoPlayer* m_player = nullptr;
   BLURAY* m_bd = nullptr;
   const BLURAY_TITLE* m_title = nullptr;
@@ -216,6 +239,32 @@ protected:
   std::chrono::steady_clock::time_point m_menuGoneAt{};
   bool m_navmode = false;
   int m_dispTimeBeforeRead = 0;
+
+  /*!
+   * BD-3D MVC dependent-view demuxing (see DemuxMVC.h/DemuxStreamSSIF.h). The dependent
+   * (right-eye) view is authored as its own clip with its own .m2ts, referenced from the
+   * playlist's stereoscopic sub-path (MPLS_PL::ext_sub_path, type 8) rather than the main
+   * play item list - so it needs a wholly separate, independent AVFormatContext
+   * (CDemuxMVC) opened alongside the base view's own, not a second PID inside it.
+   *
+   * That independence means CDemuxMVC resolves its own, independent zero point for
+   * container timestamps - which has to be continuously corrected to match the base
+   * view's own (see CDemuxMVC::SetTimestampOffset()'s own comment for why this can't be
+   * a one-time value set at Open()/OpenNextStream() time) for CDemuxStreamSSIF's
+   * pts/dts-based pairing between the two views to work at all.
+   */
+  CDVDDemux* m_pMVCDemux = nullptr;
+  CDVDInputStream* m_pMVCInput = nullptr;
+  bool m_bMVCPlayback = false;
+  int m_nMVCSubPathIndex = 0;
+  //! The clip (within m_titleInfo->clips) the dependent-view demuxer currently open in
+  //! m_pMVCDemux corresponds to, so a repeat BD_EVENT_PLAYITEM for the same clip doesn't
+  //! needlessly reopen it.
+  BLURAY_CLIP_INFO* m_pMVCClip = nullptr;
+  //! Play item indexes (as reported by BD_EVENT_PLAYITEM) awaiting a matching
+  //! OpenMVCDemux() call, so a fast run of clip changes doesn't outrun the dependent-view
+  //! demuxer being (re)opened for each one in turn.
+  std::queue<int> m_clipQueue;
 
   typedef std::shared_ptr<CDVDOverlayImage> SOverlay;
   typedef std::list<SOverlay> SOverlays;

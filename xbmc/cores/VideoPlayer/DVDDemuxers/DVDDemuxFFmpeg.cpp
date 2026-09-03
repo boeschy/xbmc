@@ -12,6 +12,7 @@
 #include "DVDInputStreams/DVDInputStream.h"
 #ifdef HAVE_LIBBLURAY
 #include "DVDInputStreams/DVDInputStreamBluray.h"
+#include "DemuxStreamSSIF.h"
 #endif
 #include "DVDInputStreams/DVDInputStreamFFmpeg.h"
 #include "ServiceBroker.h"
@@ -721,6 +722,11 @@ void CDVDDemuxFFmpeg::Dispose()
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
 
+#ifdef HAVE_LIBBLURAY
+  m_pSSIF.reset();
+  m_pExtentionStream.reset();
+#endif
+
 #ifdef HAVE_LIBDOVI
   // the queue owns its base-layer packets; teardown does not go through Flush()
   ClearDoviPending();
@@ -771,6 +777,11 @@ void CDVDDemuxFFmpeg::Flush()
 
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
+
+#ifdef HAVE_LIBBLURAY
+  if (m_pSSIF)
+    m_pSSIF->Flush();
+#endif
 
 #ifdef HAVE_LIBDOVI
   ClearDoviPending();
@@ -1389,6 +1400,23 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
 
     pPacket->iStreamId = stream->uniqueId;
     pPacket->demuxerId = GetDemuxerId();
+
+#ifdef HAVE_LIBBLURAY
+    if (m_pSSIF)
+    {
+      // Keep the dependent-view demuxer's timestamp offset continuously in sync with
+      // this (base) view's own resolved m_startTime - see CDemuxMVC::SetTimestampOffset()
+      // for why this can't just be done once. Cheap: a single double assignment when it
+      // hasn't changed.
+      if (m_pExtentionStream)
+        m_pExtentionStream->SetExtentionTimestampOffset(m_startTime);
+
+      // Merge this base-view packet with its dependent-view counterpart into one access
+      // unit, or buffer it until its counterpart shows up. See DemuxStreamSSIF.h. Every
+      // other stream id is handed back unchanged by AddPacket().
+      pPacket = m_pSSIF->AddPacket(pPacket);
+    }
+#endif
   }
   return pPacket;
 }
@@ -1691,6 +1719,16 @@ void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
 
   DisposeStreams();
 
+#ifdef HAVE_LIBBLURAY
+  // Reset the BD-3D MVC merge state; it is re-armed by SetupMVCMerge() below if this
+  // rebuild still finds a video stream and the input stream still reports a dependent
+  // view (IsProgramChange()-triggered rebuilds happen periodically for ordinary reasons
+  // on a plain BD .m2ts, unrelated to anything MVC-specific, so this needs to reliably
+  // re-fire every time, not just once at Open()).
+  m_pSSIF.reset();
+  m_pExtentionStream.reset();
+#endif
+
 #ifdef HAVE_LIBDOVI
   // Reset Dolby Vision profile 7 merge state; it is re-armed by SetupDoviProfile7Merge
   // if this program still carries a DV enhancement layer. This keeps m_dvP7ElIndex from
@@ -1756,6 +1794,10 @@ void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
     for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
       addStreamKeepingChanges(static_cast<int>(i));
   }
+
+#ifdef HAVE_LIBBLURAY
+  SetupMVCMerge();
+#endif
 }
 
 void CDVDDemuxFFmpeg::DisposeStreams()
@@ -2816,6 +2858,56 @@ StreamHdrType CDVDDemuxFFmpeg::DetermineHdrType(AVStream* pStream)
 }
 
 #ifdef HAVE_LIBDOVI
+#ifdef HAVE_LIBBLURAY
+void CDVDDemuxFFmpeg::SetupMVCMerge()
+{
+  // Does this input stream actually have a dependent (MVC) view demuxed alongside it
+  // right now (see CDVDInputStreamBluray::OpenMVCDemux(), fired off of the playlist's
+  // BD_EVENT_PLAYLIST event before this Open()/CreateStreams() call even starts probing
+  // the base-view clip)? Every CDVDInputStreamBluray implements IExtentionStream, 2D
+  // discs included, so the dynamic_pointer_cast alone proves nothing - HasExtention() is
+  // the real gate, and is checked again per-packet in CDemuxStreamSSIF::AddPacket() for
+  // the same reason: a disc can start on a 2D-only playlist and switch to a stereoscopic
+  // one later.
+  auto extStream = std::dynamic_pointer_cast<CDVDInputStream::IExtentionStream>(m_pInput);
+  if (!extStream || !extStream->HasExtention())
+    return;
+
+  CDemuxStream* baseView = nullptr;
+  for (const auto& elem : m_streams)
+  {
+    if (elem.second->type == StreamType::VIDEO)
+    {
+      baseView = elem.second;
+      break;
+    }
+  }
+
+  if (!baseView)
+  {
+    CLog::Log(LOGWARNING,
+              "CDVDDemuxFFmpeg::SetupMVCMerge - no video stream found, BD-3D MVC merge "
+              "disabled");
+    return;
+  }
+
+  // Route playback to CDVDVideoCodecMVCSoftware: its DetectStereoHighProfile() looks for
+  // exactly this tag on the base view. Deliberately not codec_id - see BD3D_MVC_CODEC_TAG's
+  // own comment in DemuxStreamSSIF.h for why codec_id itself does not survive an MPEG-TS
+  // source's own repeated PMT parsing.
+  baseView->codec_fourcc = BD3D_MVC_CODEC_TAG;
+
+  m_pSSIF = std::make_unique<CDemuxStreamSSIF>();
+  m_pSSIF->SetBluRay(extStream);
+  m_pSSIF->SetH264StreamId(baseView->uniqueId);
+  m_pExtentionStream = extStream;
+
+  CLog::Log(LOGINFO,
+            "CDVDDemuxFFmpeg::SetupMVCMerge - BD-3D MVC merge enabled (base-view stream {})",
+            baseView->uniqueId);
+}
+#endif
+
 void CDVDDemuxFFmpeg::SetupDoviProfile7Merge(int elStreamIndex)
 {
   // Gate on the user's "Convert Dolby Vision" setting: it doubles as the off switch for
