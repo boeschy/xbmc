@@ -138,6 +138,9 @@ public:
 
   void GetStreamInfo(int pid, std::string &language);
 
+  //! BD-3D: STN_table_SS ss_offset_sequence_id of a PG stream, -1 if the play item defines none
+  int GetSubtitlePlane(int pid) const;
+
   /*!
    * \brief Check whether a stream is the default of the playlist being played, ie. audio stream
    *        number 1 or presentation graphic stream number 1 of the current clip.

@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
+#include <cstring>
 #include <set>
 
 namespace
@@ -262,6 +263,8 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   // (smallest-first) once a frame actually comes out, not when it was
   // fed - see the m_ptsQueue comment in the header for why.
   m_ptsQueue.insert(m_ptsPending);
+  // Set per packet by CVideoPlayer::ProcessVideoData() from the playlist's STN_table_SS.
+  m_subtitlePlane = packet.subtitlePlane;
 
   const uint8_t* buf = m_bitstream.GetConvertBuffer();
   const uint8_t* end = buf + m_bitstream.GetConvertSize();
@@ -287,6 +290,8 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
     while (nal < end)
     {
       const uint8_t* nalEnd = edge264_find_start_code(nal, end, 0);
+      if ((nal[0] & 0x1f) == 6) // SEI: the dependent view carries the OFMD offset table here
+        ParseOfmd(nal, nalEnd);
 
       // edge264 uses plain (non-negated) errno-style return codes - 0 on
       // success, positive errno values (ENOBUFS, ENOTSUP, ...)
@@ -362,6 +367,8 @@ void CDVDVideoCodecMVCSoftware::Reset()
   m_pts = DVD_NOPTS_VALUE;
   m_ptsPending = DVD_NOPTS_VALUE;
   m_ptsQueue.clear();
+  m_ofmdQueue.clear();
+  m_ofmdFrame = 0;
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVideoPicture)
@@ -375,8 +382,88 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVi
   pVideoPicture->CopyRef(m_picture);
   pVideoPicture->pts = m_pts;
   pVideoPicture->dts = m_pts;
+
+  // BD-3D: subtitle depth of this frame from the current GOP's OFMD table
+  if (!m_ofmdQueue.empty())
+  {
+    // A GOP's table is consumed once all its displayed frames are out and its successor has arrived
+    while (m_ofmdQueue.size() > 1 && m_ofmdFrame >= m_ofmdQueue.front().frames)
+    {
+      m_ofmdQueue.pop_front();
+      m_ofmdFrame = 0;
+    }
+    const OfmdTable& table = m_ofmdQueue.front();
+    if (m_subtitlePlane >= 0 && static_cast<size_t>(m_subtitlePlane) < table.offsets.size())
+    {
+      pVideoPicture->m_3dSubtitleDepth =
+          table.offsets[m_subtitlePlane][std::min(m_ofmdFrame, table.frames - 1)];
+      pVideoPicture->m_3dSubtitleDepthAuthored = true;
+    }
+    m_ofmdFrame++;
+  }
   m_hasPicture = false;
   return VC_PICTURE;
+}
+
+void CDVDVideoCodecMVCSoftware::ParseOfmd(const uint8_t* nal, const uint8_t* end)
+{
+  // user_data_unregistered UUID that precedes the 'OFMD' signature
+  static const uint8_t uuid[16] = {0x17, 0xee, 0x8c, 0x60, 0xf8, 0x4d, 0x11, 0xd9,
+                                   0x8c, 0xd6, 0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66};
+
+  // Unescape first: an emulation-prevention byte inside the table would shift every value
+  std::vector<uint8_t> rbsp;
+  rbsp.reserve(static_cast<size_t>(end - nal));
+  for (const uint8_t* p = nal + 1; p < end; p++)
+  {
+    if (end - p >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 3)
+    {
+      rbsp.push_back(0);
+      rbsp.push_back(0);
+      p += 2;
+    }
+    else
+      rbsp.push_back(*p);
+  }
+
+  // Layout after the UUID: 'OFMD', byte 10 = sequences (6 bits), byte 11 = frames (7 bits),
+  // byte 14.. = sequences * frames values, sign in bit 7, magnitude in bits 0..6
+  for (size_t i = 0; i + sizeof(uuid) + 14 <= rbsp.size(); i++)
+  {
+    if (memcmp(rbsp.data() + i, uuid, sizeof(uuid)) != 0)
+      continue;
+
+    const uint8_t* o = rbsp.data() + i + sizeof(uuid);
+    const size_t avail = rbsp.size() - (i + sizeof(uuid));
+    if (memcmp(o, "OFMD", 4) != 0)
+      continue;
+
+    const size_t sequences = o[10] & 0x3f;
+    const size_t frames = o[11] & 0x7f;
+    if (!sequences || !frames || 14 + sequences * frames > avail)
+      return;
+
+    OfmdTable table;
+    table.frames = frames;
+    table.offsets.assign(sequences, std::vector<int8_t>(frames, 0));
+    for (size_t seq = 0; seq < sequences; seq++)
+    {
+      for (size_t f = 0; f < frames; f++)
+      {
+        const uint8_t v = o[14 + seq * frames + f];
+        table.offsets[seq][f] = static_cast<int8_t>((v & 0x80) ? -(v & 0x7f) : (v & 0x7f));
+      }
+    }
+
+    // Keep at most the emitting GOP and its successor; a longer backlog means frames were lost
+    if (m_ofmdQueue.size() >= 2)
+    {
+      m_ofmdQueue.pop_front();
+      m_ofmdFrame = 0;
+    }
+    m_ofmdQueue.push_back(std::move(table));
+    return;
+  }
 }
 
 bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPicture* pVideoPicture)

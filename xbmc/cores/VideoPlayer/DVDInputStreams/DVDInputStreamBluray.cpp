@@ -1403,6 +1403,26 @@ bool CDVDInputStreamBluray::IsDefaultStream(int pid) const
   return false;
 }
 
+int CDVDInputStreamBluray::GetSubtitlePlane(int pid) const
+{
+  if (!m_bMVCPlayback || !m_titleInfo || !m_clip)
+    return -1;
+
+  // 0xFF is libbluray's "no offset sequence" marker
+  MPLS_PL* pl = bd_get_title_mpls(m_bd);
+  const int playItem = static_cast<int>(m_clip - m_titleInfo->clips);
+  if (!pl || playItem < 0 || playItem >= pl->list_count)
+    return -1;
+
+  const MPLS_STN& stn = pl->play_item[playItem].stn;
+  for (int i = 0; i < stn.num_pg; i++)
+  {
+    if (stn.pg[i].pid == static_cast<uint16_t>(pid))
+      return stn.pg[i].ss_offset_sequence_id == 0xFF ? -1 : stn.pg[i].ss_offset_sequence_id;
+  }
+  return -1;
+}
+
 // Returns the 1-based STN stream number of the entry matching pid, or -1 if not found.
 static int find_stream_number(int pid, BLURAY_STREAM_INFO* info, int count)
 {

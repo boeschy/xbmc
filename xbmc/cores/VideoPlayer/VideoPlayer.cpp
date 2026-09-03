@@ -1976,6 +1976,18 @@ void CVideoPlayer::ProcessVideoData(CDemuxStream* pStream, DemuxPacket* pPacket)
   if (CheckSceneSkip(m_CurrentVideo))
     drop = true;
 
+#if defined(HAVE_LIBBLURAY)
+  // BD-3D: tell the MVC decoder which OFMD offset sequence the shown PG stream uses
+  if (m_CurrentSubtitle.id >= 0 && STREAM_SOURCE_MASK(m_CurrentSubtitle.source) == STREAM_SOURCE_DEMUX &&
+      m_pDemuxer && m_pInputStream && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY))
+  {
+    CDemuxStream* sub = m_pDemuxer->GetStream(m_CurrentSubtitle.demuxerId, m_CurrentSubtitle.id);
+    if (sub && sub->codec == AV_CODEC_ID_HDMV_PGS_SUBTITLE)
+      pPacket->subtitlePlane = std::static_pointer_cast<CDVDInputStreamBluray>(m_pInputStream)
+                                   ->GetSubtitlePlane(sub->dvdNavId);
+  }
+#endif
+
   m_VideoPlayerVideo->SendMessage(std::make_shared<CDVDMsgDemuxerPacket>(pPacket, drop));
 
   if (!drop)

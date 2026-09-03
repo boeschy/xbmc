@@ -43,6 +43,9 @@ extern "C"
 
     //! @brief PTS offset correction applied to the PTS and DTS.
     double m_ptsOffsetCorrection{0};
+
+    //! @brief BD-3D: OFMD offset sequence of the shown PG stream, -1 if none/unknown.
+    int subtitlePlane{-1};
   };
 
 #ifdef __cplusplus

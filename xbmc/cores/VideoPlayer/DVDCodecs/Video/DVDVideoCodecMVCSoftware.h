@@ -35,6 +35,7 @@
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "utils/BitstreamConverter.h"
 
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -78,6 +79,8 @@ protected:
   static bool DetectStereoHighProfile(const CDVDStreamInfo& hints);
 
   bool PackFrame(const Edge264Frame& frame, VideoPicture* pVideoPicture);
+  // Latches a BD-3D 'OFMD' subtitle offset table carried in an SEI NAL (one per GOP).
+  void ParseOfmd(const uint8_t* nal, const uint8_t* end);
 
   // Simple size-bucketed free-list pool backing AllocCb/FreeCb: edge264
   // requests/releases DPB slots continuously during decode, and for a
@@ -168,4 +171,15 @@ protected:
   std::multiset<double> m_ptsQueue;
 
   CDVDStreamInfo m_hints;
+
+  // BD-3D "1 plane + offset" table of one GOP: offsets[sequence][displayed frame], pixels on a 1920 wide plane
+  struct OfmdTable
+  {
+    size_t frames = 0;
+    std::vector<std::vector<int8_t>> offsets;
+  };
+  // Tables in decode order; the front one belongs to the GOP whose frames are being emitted
+  std::deque<OfmdTable> m_ofmdQueue;
+  size_t m_ofmdFrame = 0; // display-order frame index into m_ofmdQueue.front()
+  int m_subtitlePlane = -1; // offset sequence of the shown PG stream, -1 = none
 };
