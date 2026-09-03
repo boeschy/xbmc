@@ -221,6 +221,9 @@ protected:
   //! Tears down the dependent-view demuxer/input stream opened by OpenMVCDemux(), if any.
   bool CloseMVCDemux();
 
+  //! Positions the dependent-view demuxer on the title time the base view was just seeked to.
+  void SeekMVCDemux(uint64_t titleTime90k);
+
   IVideoPlayer* m_player = nullptr;
   BLURAY* m_bd = nullptr;
   const BLURAY_TITLE* m_title = nullptr;

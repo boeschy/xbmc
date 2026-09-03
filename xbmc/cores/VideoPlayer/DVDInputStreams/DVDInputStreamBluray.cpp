@@ -836,6 +836,30 @@ void CDVDInputStreamBluray::SetExtentionTimestampOffset(double offsetSeconds)
     pMVCDemux->SetTimestampOffset(offsetSeconds);
 }
 
+void CDVDInputStreamBluray::SeekMVCDemux(uint64_t titleTime90k)
+{
+  if (!m_bMVCPlayback || !m_titleInfo || !m_clip)
+    return;
+
+  // A seek into another clip only queues it in ProcessEvent(); switch right away.
+  if (m_pMVCClip != m_clip)
+  {
+    EMPTY_QUEUE(m_clipQueue);
+    CloseMVCDemux();
+    if (!OpenMVCDemux(static_cast<int>(m_clip - m_titleInfo->clips)))
+      return;
+  }
+
+  auto* pMVCDemux = dynamic_cast<CDemuxMVC*>(m_pMVCDemux);
+  if (!pMVCDemux)
+    return;
+
+  // Title time -> the clip's own pts, which both views' m2ts share.
+  const int64_t pts = static_cast<int64_t>(m_clip->in_time) +
+                      (static_cast<int64_t>(titleTime90k) - static_cast<int64_t>(m_clip->start_time));
+  pMVCDemux->SeekPts(pts);
+}
+
 int CDVDInputStreamBluray::Read(uint8_t* buf, int buf_size)
 {
   int result = 0;
@@ -1180,6 +1204,8 @@ bool CDVDInputStreamBluray::PosTime(int ms)
   while (bd_get_event(m_bd, &m_event))
     ProcessEvent();
 
+  SeekMVCDemux(bd_tell_time(m_bd));
+
   return true;
 }
 
@@ -1221,6 +1247,8 @@ bool CDVDInputStreamBluray::SeekChapter(int ch)
 
   while (bd_get_event(m_bd, &m_event))
     ProcessEvent();
+
+  SeekMVCDemux(bd_tell_time(m_bd));
 
   return true;
 }

@@ -46,6 +46,8 @@ public:
   void Flush() override;
   DemuxPacket* Read() override;
   bool SeekTime(double time, bool backwards = false, double* startpts = nullptr) override;
+  //! pts in the clip's own 90 kHz timeline (shared by both views' m2ts), unlike SeekTime().
+  bool SeekPts(int64_t pts);
   void SetSpeed(int iSpeed) override {}
   int GetStreamLength() override { return 0; }
   CDemuxStream* GetStream(int iStreamId) const override { return nullptr; }

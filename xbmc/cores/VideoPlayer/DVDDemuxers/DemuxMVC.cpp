@@ -25,12 +25,9 @@ extern "C"
 
 namespace
 {
-// Matches the equivalent window used by CDVDInputStreamBluray/CDVDDemuxFFmpeg for the
-// base-view clip: the dependent-view clip's own EP map is coarser than "exact", so back
-// off the requested seek target by this much and let the decoder's own GOP handling
-// (edge264's DPB) land on the right displayed frame from there. Purely experimental -
-// unturned, like the base-view seek path it mirrors.
-constexpr int64_t MVC_SEEK_TIME_WINDOW = 75000;
+// libbluray seeks the base view to an EP-map I-frame up to one GOP (normally <= 1 s) before
+// the target; the dependent view has to end up before that point (90 kHz ticks, 2 s).
+constexpr int64_t MVC_SEEK_TIME_WINDOW = 180000;
 } // namespace
 
 static int mvc_file_read(void* h, uint8_t* buf, int size)
@@ -185,25 +182,27 @@ DemuxPacket* CDemuxMVC::Read()
 
 bool CDemuxMVC::SeekTime(double time, bool backwards, double* startpts)
 {
-  if (!m_pInput || !m_pFormatContext)
+  // time is on the base view's normalized timeline; undo ConvertTimestamp()'s offset.
+  return SeekPts(static_cast<int64_t>((time / 1000.0 + m_timestampOffset) * 90000.0));
+}
+
+bool CDemuxMVC::SeekPts(int64_t pts)
+{
+  if (!m_pInput || !m_pFormatContext || m_nStreamIndex < 0)
     return false;
 
-  AVRational time_base = m_pFormatContext->streams[m_nStreamIndex]->time_base;
-  int64_t seek_pts =
-      av_rescale(DVD_MSEC_TO_TIME(time), time_base.den, static_cast<int64_t>(time_base.num) * AV_TIME_BASE);
+  const AVRational time_base = m_pFormatContext->streams[m_nStreamIndex]->time_base;
+  const AVRational clock{1, 90000};
+  int64_t seek_pts = av_rescale_q(pts, clock, time_base);
+  const int64_t window = av_rescale_q(MVC_SEEK_TIME_WINDOW, clock, time_base);
+  seek_pts = seek_pts > window ? seek_pts - window : 0;
 
-  // Correct for the same normalized-timeline offset ConvertTimestamp() applies, so a seek
-  // target expressed in the base view's timeline lands on the matching point here.
-  seek_pts += static_cast<int64_t>(m_timestampOffset * AV_TIME_BASE);
-
-  if (seek_pts < MVC_SEEK_TIME_WINDOW)
-    seek_pts = 0;
-  else
-    seek_pts -= MVC_SEEK_TIME_WINDOW;
-
-  av_seek_frame(m_pFormatContext, m_nStreamIndex, seek_pts, backwards ? AVSEEK_FLAG_BACKWARD : 0);
-
-  return true;
+  // Always land before the target: the SSIF drops a dependent view running ahead, but
+  // drops the base view when the dependent view lags.
+  const int ret = av_seek_frame(m_pFormatContext, m_nStreamIndex, seek_pts, AVSEEK_FLAG_BACKWARD);
+  if (ret < 0)
+    CLog::Log(LOGWARNING, "CDemuxMVC::SeekPts - seek to pts {} failed ({})", pts, ret);
+  return ret >= 0;
 }
 
 std::string CDemuxMVC::GetFileName()
