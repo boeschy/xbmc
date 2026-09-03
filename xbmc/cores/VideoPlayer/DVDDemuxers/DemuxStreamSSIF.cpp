@@ -16,6 +16,7 @@
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "utils/log.h"
 
+#include <cmath>
 #include <cstring>
 
 //#define DEBUG_VERBOSE
@@ -31,6 +32,9 @@ constexpr size_t MVC_QUEUE_SIZE = 100;
 // isn't coming (end of stream, or a disc where the two views' timestamps don't land on the
 // same tick despite the continuous offset sync - see the .h known limitations).
 constexpr size_t H264_QUEUE_LIMIT = 32;
+
+// Well below one 90 kHz tick; only absorbs double rounding, never a real offset.
+constexpr double MVC_PAIR_TOLERANCE = 1.0;
 } // namespace
 
 DemuxPacket* CDemuxStreamSSIF::AddPacket(DemuxPacket*& srcPkt)
@@ -111,7 +115,7 @@ DemuxPacket* CDemuxStreamSSIF::GetMVCPacket()
     DemuxPacket* mvcpkt = m_MVCqueue.front();
     double tsMVC = (mvcpkt->dts != DVD_NOPTS_VALUE ? mvcpkt->dts : mvcpkt->pts);
 
-    if (tsH264 == tsMVC)
+    if (std::fabs(tsH264 - tsMVC) <= MVC_PAIR_TOLERANCE)
     {
       m_H264queue.pop();
       m_MVCqueue.pop_front();

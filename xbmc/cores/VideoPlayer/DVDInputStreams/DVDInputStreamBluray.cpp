@@ -193,6 +193,11 @@ bool CDVDInputStreamBluray::Open()
   }
   else if (m_item.IsDiscImage())
   {
+    // Stream mode has no filesystem root; OpenMVCDemux() reads the dependent view via udf://.
+    CURL udf("udf://");
+    udf.SetHostName(m_item.GetDynPath());
+    root = udf.Get();
+
     if (!OpenStream(m_item))
       return false;
 
@@ -255,6 +260,7 @@ bool CDVDInputStreamBluray::Open()
 
   if (openStream)
   {
+    m_rootPath = root;
     if (!bd_open_stream(m_bd, this, read_blocks))
     {
       CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - failed to open {} in stream mode",
@@ -769,6 +775,7 @@ bool CDVDInputStreamBluray::OpenMVCDemux(int playItem)
     CLog::Log(LOGDEBUG,
               "CDVDInputStreamBluray::OpenMVCDemux - no root path available, 3D playback of "
               "this title's dependent view is not possible");
+    m_bMVCPlayback = false; // 2D fallback: HasExtention() must stop gating the base view
     return false;
   }
 
@@ -790,6 +797,7 @@ bool CDVDInputStreamBluray::OpenMVCDemux(int playItem)
   {
     CLog::Log(LOGWARNING, "CDVDInputStreamBluray::OpenMVCDemux - failed to open {}", strFileName);
     CloseMVCDemux();
+    m_bMVCPlayback = false;
     return false;
   }
 
@@ -802,6 +810,7 @@ bool CDVDInputStreamBluray::OpenMVCDemux(int playItem)
               "CDVDInputStreamBluray::OpenMVCDemux - no usable H.264/MVC stream in {}",
               strFileName);
     CloseMVCDemux();
+    m_bMVCPlayback = false;
     return false;
   }
 

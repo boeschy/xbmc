@@ -1058,6 +1058,21 @@ AVDictionary* CDVDDemuxFFmpeg::GetFFMpegOptionsFromInput()
   return options;
 }
 
+double CDVDDemuxFFmpeg::GetTimestampOrigin() const
+{
+  // Must match what CDemuxMVC subtracts: CDemuxStreamSSIF pairs both views on equal timestamps.
+  if (m_checkTransportStream)
+    return m_startTime;
+
+  const std::shared_ptr<CDVDInputStream::IMenus> menuInterface =
+      std::dynamic_pointer_cast<CDVDInputStream::IMenus>(m_pInput);
+  if ((!menuInterface || menuInterface->GetSupportedMenuType() != MenuType::NATIVE) &&
+      m_pFormatContext->start_time != static_cast<int64_t>(AV_NOPTS_VALUE))
+    return static_cast<double>(m_pFormatContext->start_time) / AV_TIME_BASE;
+
+  return 0.0;
+}
+
 double CDVDDemuxFFmpeg::ConvertTimestamp(int64_t pts, int den, int num)
 {
   if (pts == (int64_t)AV_NOPTS_VALUE)
@@ -1066,18 +1081,7 @@ double CDVDDemuxFFmpeg::ConvertTimestamp(int64_t pts, int den, int num)
   // do calculations in floats as they can easily overflow otherwise
   // we don't care for having a completely exact timestamp anyway
   double timestamp = (double)pts * num / den;
-  double starttime = 0.0;
-
-  const std::shared_ptr<CDVDInputStream::IMenus> menuInterface =
-      std::dynamic_pointer_cast<CDVDInputStream::IMenus>(m_pInput);
-  if ((!menuInterface || menuInterface->GetSupportedMenuType() != MenuType::NATIVE) &&
-      m_pFormatContext->start_time != static_cast<int64_t>(AV_NOPTS_VALUE))
-  {
-    starttime = static_cast<double>(m_pFormatContext->start_time) / AV_TIME_BASE;
-  }
-
-  if (m_checkTransportStream)
-    starttime = m_startTime;
+  const double starttime = GetTimestampOrigin();
 
   if (!m_bSup)
   {
@@ -1404,12 +1408,10 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
 #ifdef HAVE_LIBBLURAY
     if (m_pSSIF)
     {
-      // Keep the dependent-view demuxer's timestamp offset continuously in sync with
-      // this (base) view's own resolved m_startTime - see CDemuxMVC::SetTimestampOffset()
-      // for why this can't just be done once. Cheap: a single double assignment when it
-      // hasn't changed.
+      // Not m_startTime: it stays 0 on a Blu-ray (m_checkTransportStream is never set for
+      // DVDSTREAM_TYPE_BLURAY) while ConvertTimestamp() subtracts the container start_time.
       if (m_pExtentionStream)
-        m_pExtentionStream->SetExtentionTimestampOffset(m_startTime);
+        m_pExtentionStream->SetExtentionTimestampOffset(GetTimestampOrigin());
 
       // Merge this base-view packet with its dependent-view counterpart into one access
       // unit, or buffer it until its counterpart shows up. See DemuxStreamSSIF.h. Every
@@ -2857,7 +2859,6 @@ StreamHdrType CDVDDemuxFFmpeg::DetermineHdrType(AVStream* pStream)
   return hdrType;
 }
 
-#ifdef HAVE_LIBDOVI
 #ifdef HAVE_LIBBLURAY
 void CDVDDemuxFFmpeg::SetupMVCMerge()
 {
@@ -2896,6 +2897,9 @@ void CDVDDemuxFFmpeg::SetupMVCMerge()
   // own comment in DemuxStreamSSIF.h for why codec_id itself does not survive an MPEG-TS
   // source's own repeated PMT parsing.
   baseView->codec_fourcc = BD3D_MVC_CODEC_TAG;
+  // AddStream() rebuilds codec_fourcc from codecpar->codec_tag, so keep the tag there too.
+  if (auto* avStream = static_cast<AVStream*>(baseView->pPrivate))
+    avStream->codecpar->codec_tag = BD3D_MVC_CODEC_TAG;
 
   m_pSSIF = std::make_unique<CDemuxStreamSSIF>();
   m_pSSIF->SetBluRay(extStream);
@@ -2908,6 +2912,7 @@ void CDVDDemuxFFmpeg::SetupMVCMerge()
 }
 #endif
 
+#ifdef HAVE_LIBDOVI
 void CDVDDemuxFFmpeg::SetupDoviProfile7Merge(int elStreamIndex)
 {
   // Gate on the user's "Convert Dolby Vision" setting: it doubles as the off switch for

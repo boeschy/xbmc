@@ -141,6 +141,8 @@ protected:
   void ResetVideoStreams();
   AVDictionary* GetFFMpegOptionsFromInput();
   double ConvertTimestamp(int64_t pts, int den, int num);
+  // Zero point (seconds) ConvertTimestamp() subtracts; shared with the BD-3D dependent-view demuxer.
+  double GetTimestampOrigin() const;
   bool IsProgramChange();
   unsigned int HLSSelectProgram();
 
