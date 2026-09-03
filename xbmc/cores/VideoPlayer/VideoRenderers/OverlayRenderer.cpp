@@ -186,6 +186,9 @@ void CRenderer::GetRenderState(COverlay* o, SRenderState& state) const
   state.width = o->m_width;
   state.height = o->m_height;
 
+  // Image overlays are sized against the per-eye picture, not the packed half frame
+  const CRect rs = GetStereoSourceRect();
+
   COverlay::EPosition pos = o->m_pos;
   COverlay::EAlign align = o->m_align;
 
@@ -206,8 +209,8 @@ void CRenderer::GetRenderState(COverlay* o, SRenderState& state) const
     else if (align == COverlay::ALIGN_SCREEN_AR)
     {
       // Align to screen by keeping aspect ratio to fit into the screen area
-      float source_width = o->m_source_width > 0 ? o->m_source_width : m_rs.Width();
-      float source_height = o->m_source_height > 0 ? o->m_source_height : m_rs.Height();
+      float source_width = o->m_source_width > 0 ? o->m_source_width : rs.Width();
+      float source_height = o->m_source_height > 0 ? o->m_source_height : rs.Height();
       float ratio = std::min<float>(m_rv.Width() / source_width, m_rv.Height() / source_height);
       scale_x = m_rv.Width();
       scale_y = m_rv.Height();
@@ -216,8 +219,8 @@ void CRenderer::GetRenderState(COverlay* o, SRenderState& state) const
     }
     else if (align == COverlay::ALIGN_VIDEO)
     {
-      scale_x = m_rs.Width();
-      scale_y = m_rs.Height();
+      scale_x = rs.Width();
+      scale_y = rs.Height();
       scale_w = scale_x;
       scale_h = scale_y;
     }
@@ -249,8 +252,8 @@ void CRenderer::GetRenderState(COverlay* o, SRenderState& state) const
     }
     else if (align == COverlay::ALIGN_VIDEO)
     {
-      float scale_x = m_rd.Width() / m_rs.Width();
-      float scale_y = m_rd.Height() / m_rs.Height();
+      float scale_x = m_rd.Width() / rs.Width();
+      float scale_y = m_rd.Height() / rs.Height();
 
       state.x *= scale_x;
       state.y *= scale_y;
@@ -378,6 +381,18 @@ void CRenderer::OnViewChange()
 void CRenderer::SetStereoMode(const std::string &stereomode)
 {
   m_stereomode = stereomode;
+}
+
+CRect CRenderer::GetStereoSourceRect() const
+{
+  CRect rs = m_rs;
+  const float ratio = rs.Height() > 0.0f ? rs.Width() / rs.Height() : 0.0f;
+  // Same half-sbs/half-ou heuristics as the libass path in PrepareOverlays
+  if ((m_stereomode == "left_right" || m_stereomode == "right_left") && ratio < 1.2f)
+    rs.x2 = rs.x1 + rs.Width() * 2.0f;
+  else if ((m_stereomode == "top_bottom" || m_stereomode == "bottom_top") && ratio > 2.5f)
+    rs.y2 = rs.y1 + rs.Height() * 2.0f;
+  return rs;
 }
 
 void CRenderer::SetSubtitleVerticalPosition(const int value, bool save)
@@ -747,7 +762,9 @@ std::shared_ptr<COverlay> CRenderer::Convert(SElement& e)
   if (o.IsOverlayType(DVDOVERLAY_TYPE_IMAGE))
   {
     const CDVDOverlayImage& ovImage = static_cast<const CDVDOverlayImage&>(o);
-    r = COverlay::Create(ovImage, m_rs);
+    // Per-eye rect keeps BD-3D PGS on ALIGN_VIDEO instead of the ALIGN_SCREEN_AR fallback
+    CRect rs = GetStereoSourceRect();
+    r = COverlay::Create(ovImage, rs);
     if (r && o.IsBitmapSubtitle())
     {
       r->m_isBitmapSubtitle = true;

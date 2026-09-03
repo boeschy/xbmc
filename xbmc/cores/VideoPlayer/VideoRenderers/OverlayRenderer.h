@@ -197,6 +197,8 @@ namespace OVERLAY {
     };
 
     void GetRenderState(COverlay* o, SRenderState& state) const;
+    // Per-eye picture rect: m_rs stretched back to full size for half-SBS/half-OU sources
+    CRect GetStereoSourceRect() const;
     static CRect GetContentRect(const COverlay& o, const SRenderState& state);
     void RepositionBitmapSubtitles(std::vector<SRenderItem>& items) const;
     std::shared_ptr<COverlay> Convert(SElement& e);

@@ -15,6 +15,7 @@
 #include "DVDDemuxers/DVDDemuxUtils.h"
 #include "DVDDemuxers/DVDDemuxVobsub.h"
 #include "DVDDemuxers/DVDFactoryDemuxer.h"
+#include "DVDDemuxers/DemuxStreamSSIF.h"
 #include "DVDInputStreams/DVDFactoryInputStream.h"
 #include "DVDInputStreams/DVDInputStream.h"
 #include "network/NetworkFileItemClassify.h"
@@ -4247,6 +4248,11 @@ bool CVideoPlayer::OpenStream(CCurrentStream& current, int64_t demuxerId, int iS
       return false;
 
     hint.Assign(*stream, true);
+
+    // BD-3D PGS holds one eye per plane, so tag it to skip the duplicated-frame halving
+    if (current.type == StreamType::SUBTITLE && hint.codec == AV_CODEC_ID_HDMV_PGS_SUBTITLE &&
+        m_CurrentVideo.hint.codec_tag == BD3D_MVC_CODEC_TAG)
+      hint.codec_tag = BD3D_MVC_CODEC_TAG;
 
     if(m_pInputStream && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_DVD))
       hint.filename = "dvd";

@@ -12,6 +12,7 @@
 #include "DVDStreamInfo.h"
 #include "ServiceBroker.h"
 #include "cores/FFmpeg.h"
+#include "cores/VideoPlayer/DVDDemuxers/DemuxStreamSSIF.h"
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "utils/EndianSwap.h"
@@ -42,6 +43,9 @@ bool CDVDOverlayCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &optio
   // decoding of this kind of subs does not work reliable
   if (hints.codec == AV_CODEC_ID_EIA_608)
     return false;
+
+  // Tagged by CVideoPlayer::OpenStream for BD-3D PGS, which carries one eye per plane
+  m_singleEye = hints.codec_tag == BD3D_MVC_CODEC_TAG;
 
   const AVCodec* pCodec = avcodec_find_decoder(hints.codec);
   if (!pCodec)
@@ -250,7 +254,8 @@ std::shared_ptr<CDVDOverlay> CDVDOverlayCodecFFmpeg::GetOverlay()
 
     RenderStereoMode render_stereo_mode =
         CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
-    if (render_stereo_mode != RenderStereoMode::OFF &&
+    // BD-3D PGS is one eye per plane, so the duplicated-frame halving must not touch it
+    if (!m_singleEye && render_stereo_mode != RenderStereoMode::OFF &&
         render_stereo_mode != RenderStereoMode::HARDWAREBASED)
     {
       if (rect.h > m_height / 2)
