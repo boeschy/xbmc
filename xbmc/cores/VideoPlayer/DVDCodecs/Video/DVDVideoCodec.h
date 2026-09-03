@@ -59,6 +59,9 @@ public:
   AVColorTransferCharacteristic color_transfer;
   unsigned int colorBits = 8;
   std::string stereoMode;
+  // Authored subtitle depth of the 3D disc (OFMD), pixels at 1920 wide
+  int m_3dSubtitleDepth{0};
+  bool m_3dSubtitleDepthAuthored{false};
 
   int8_t* qp_table;                //< Quantization parameters, primarily used by filters
   int qstride;

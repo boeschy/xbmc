@@ -17,6 +17,9 @@
 #include "windowing/GraphicContext.h"
 #include "windowing/WinSystem.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace OVERLAY
 {
 
@@ -44,6 +47,39 @@ static uint32_t build_rgba(const int yuv[3], int alpha, bool mergealpha)
   return build_rgba(a, clamp(r), clamp(g), clamp(b), mergealpha);
 }
 #undef clamp
+
+SContentInset MeasureContentInset(const CDVDOverlayImage& o)
+{
+  SContentInset inset;
+  if (o.width <= 0 || o.height <= 0 || o.pixels.empty() || o.palette.empty())
+    return inset;
+
+  int minX = o.width;
+  int minY = o.height;
+  int maxX = -1;
+  int maxY = -1;
+  for (int row = 0; row < o.height; row++)
+  {
+    for (int col = 0; col < o.width; col++)
+    {
+      const uint8_t index = o.pixels[row * o.linesize + col];
+      if (index >= o.palette.size() || ((o.palette[index] >> PIXEL_ASHIFT) & 0xff) == 0)
+        continue;
+      minX = std::min(minX, col);
+      maxX = std::max(maxX, col);
+      minY = std::min(minY, row);
+      maxY = std::max(maxY, row);
+    }
+  }
+  if (maxX < 0)
+    return inset;
+
+  inset.left = static_cast<float>(minX) / o.width;
+  inset.top = static_cast<float>(minY) / o.height;
+  inset.right = static_cast<float>(o.width - 1 - maxX) / o.width;
+  inset.bottom = static_cast<float>(o.height - 1 - maxY) / o.height;
+  return inset;
+}
 
 void convert_rgba(const CDVDOverlayImage& o, bool mergealpha, std::vector<uint32_t>& rgba)
 {
@@ -272,14 +308,23 @@ bool convert_quad(ASS_Image* images, SQuads& quads, int max_x)
   return true;
 }
 
-int GetStereoscopicDepth()
+int GetStereoscopicDepth(bool isPgs, int subtitleDepth, bool authoredDepth)
 {
   int depth = 0;
 
   if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() != RenderStereoMode::MONO &&
       CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() != RenderStereoMode::OFF)
   {
-    depth  = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_SUBTITLES_STEREOSCOPICDEPTH);
+    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+    if (isPgs && authoredDepth)
+    {
+      // Authored offsets refer to a 1920 pixel wide frame
+      const float scale = CServiceBroker::GetWinSystem()->GetGfxContext().GetWidth() / 1920.0f;
+      depth = static_cast<int>(std::lround(subtitleDepth * scale)) +
+              settings->GetInt(CSettings::SETTING_SUBTITLES_STEREOSCOPICDEPTHADJUST);
+    }
+    else
+      depth = settings->GetInt(CSettings::SETTING_SUBTITLES_STEREOSCOPICDEPTH);
     depth *=
         (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView() == RenderStereoView::LEFT
              ? 1

@@ -488,6 +488,36 @@ bool CPlayerController::OnAction(const CAction &action)
         return true;
       }
 
+      case ACTION_SUBTITLE_BITMAP_ZOOM_IN:
+      case ACTION_SUBTITLE_BITMAP_ZOOM_OUT:
+      {
+        // Range mirrors subtitles.bitmapzoom in settings.xml
+        constexpr int zoomMin = 10;
+        constexpr int zoomMax = 200;
+        constexpr int zoomStep = 5;
+        const auto settings{CServiceBroker::GetSettingsComponent()->GetSettings()};
+        int zoom = settings->GetInt(CSettings::SETTING_SUBTITLES_BITMAPZOOM);
+        zoom += action.GetID() == ACTION_SUBTITLE_BITMAP_ZOOM_IN ? zoomStep : -zoomStep;
+        zoom = std::clamp(zoom, zoomMin, zoomMax);
+        settings->SetInt(CSettings::SETTING_SUBTITLES_BITMAPZOOM, zoom);
+        ShowSlider(action.GetID(), 39225, static_cast<float>(zoom), static_cast<float>(zoomMin),
+                   static_cast<float>(zoomStep), static_cast<float>(zoomMax));
+        return true;
+      }
+
+      case ACTION_SUBTITLE_BITMAP_POSITION:
+      {
+        const auto settings{CServiceBroker::GetSettingsComponent()->GetSettings()};
+        const bool enabled = !settings->GetBool(CSettings::SETTING_SUBTITLES_BITMAPPOSITION);
+        settings->SetBool(CSettings::SETTING_SUBTITLES_BITMAPPOSITION, enabled);
+        CGUIDialogKaiToast::QueueNotification(
+            CGUIDialogKaiToast::Info,
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(39227),
+            CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(enabled ? 305 : 13106),
+            TOAST_DISPLAY_TIME, false);
+        return true;
+      }
+
       case ACTION_SUBTITLE_ALIGN:
       {
         const auto settings{CServiceBroker::GetSettingsComponent()->GetSubtitlesSettings()};
@@ -648,6 +678,11 @@ void CPlayerController::OnSliderChange(void *data, CGUISliderControl *slider)
   {
     std::string strValue = StringUtils::Format("{:.0f}px", slider->GetFloatValue());
     slider->SetTextValue(strValue);
+  }
+  else if (m_sliderAction == ACTION_SUBTITLE_BITMAP_ZOOM_IN ||
+           m_sliderAction == ACTION_SUBTITLE_BITMAP_ZOOM_OUT)
+  {
+    slider->SetTextValue(StringUtils::Format("{:.0f}%", slider->GetFloatValue()));
   }
   else if (m_sliderAction == ACTION_VOLAMP_UP ||
           m_sliderAction == ACTION_VOLAMP_DOWN ||

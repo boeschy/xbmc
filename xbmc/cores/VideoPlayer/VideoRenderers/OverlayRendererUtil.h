@@ -36,6 +36,16 @@ struct SQuads
   std::vector<SQuad> quad;
 };
 
+// Transparent border of a bitmap overlay as fraction of its size
+struct SContentInset
+{
+  float left{0};
+  float top{0};
+  float right{0};
+  float bottom{0};
+};
+
+SContentInset MeasureContentInset(const CDVDOverlayImage& o);
 void convert_rgba(const CDVDOverlayImage& o, bool mergealpha, std::vector<uint32_t>& rgba);
 void convert_rgba(const CDVDOverlaySpu& o,
                   bool mergealpha,
@@ -45,6 +55,7 @@ void convert_rgba(const CDVDOverlaySpu& o,
                   int& max_y,
                   std::vector<uint32_t>& rgba);
 bool convert_quad(ASS_Image* images, SQuads& quads, int max_x);
-int GetStereoscopicDepth();
+// subtitleDepth: authored PGS offset in pixels at 1920 wide, valid if authoredDepth
+int GetStereoscopicDepth(bool isPgs = false, int subtitleDepth = 0, bool authoredDepth = false);
 
 } // namespace OVERLAY

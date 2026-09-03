@@ -42,6 +42,8 @@ void VideoPicture::Reset()
   color_transfer = AVCOL_TRC_UNSPECIFIED;
   colorBits = 8;
   stereoMode.clear();
+  m_3dSubtitleDepth = 0;
+  m_3dSubtitleDepthAuthored = false;
 
   qp_table = nullptr;
   qstride = 0;

@@ -771,6 +771,24 @@ static int SubtitleShiftDown(const std::vector<std::string>& params)
   return 0;
 }
 
+static int SubtitleBitmapZoomIn(const std::vector<std::string>& params)
+{
+  CPlayerController::GetInstance().OnAction(CAction{ACTION_SUBTITLE_BITMAP_ZOOM_IN});
+  return 0;
+}
+
+static int SubtitleBitmapZoomOut(const std::vector<std::string>& params)
+{
+  CPlayerController::GetInstance().OnAction(CAction{ACTION_SUBTITLE_BITMAP_ZOOM_OUT});
+  return 0;
+}
+
+static int SubtitleBitmapPosition(const std::vector<std::string>& params)
+{
+  CPlayerController::GetInstance().OnAction(CAction{ACTION_SUBTITLE_BITMAP_POSITION});
+  return 0;
+}
+
 // Note: For new Texts with comma add a "\" before!!! Is used for table text.
 //
 /// \page page_List_of_built_in_functions
@@ -888,6 +906,21 @@ static int SubtitleShiftDown(const std::vector<std::string>& params)
 ///     @param[in] save                  "save" to keep the change permanently (optional)
 ///   }
 ///   \table_row2_l{
+///     <b>`SubtitleBitmapZoomIn`</b>
+///     ,
+///     Enlarge bitmap subtitles (PGS / VobSub) by one step.
+///   }
+///   \table_row2_l{
+///     <b>`SubtitleBitmapZoomOut`</b>
+///     ,
+///     Shrink bitmap subtitles (PGS / VobSub) by one step.
+///   }
+///   \table_row2_l{
+///     <b>`SubtitleBitmapPosition`</b>
+///     ,
+///     Toggle applying the subtitle position to bitmap subtitles.
+///   }
+///   \table_row2_l{
 ///     <b>`Seek(seconds)`</b>
 ///     ,
 ///     Seeks to the specified relative amount of seconds within the current
@@ -934,6 +967,9 @@ CBuiltins::CommandMap CPlayerBuiltins::GetOperations() const
            {"seek",                {"Performs a seek in seconds on the current playing media file", 1, Seek}},
            {"subtitleshiftup",     {"Shift up the subtitle position", 0, SubtitleShiftUp}},
            {"subtitleshiftdown",   {"Shift down the subtitle position", 0, SubtitleShiftDown}},
+           {"subtitlebitmapzoomin",  {"Enlarge bitmap subtitles", 0, SubtitleBitmapZoomIn}},
+           {"subtitlebitmapzoomout", {"Shrink bitmap subtitles", 0, SubtitleBitmapZoomOut}},
+           {"subtitlebitmapposition", {"Toggle subtitle position for bitmap subtitles", 0, SubtitleBitmapPosition}},
          };
 }
 // clang-format on

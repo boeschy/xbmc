@@ -890,6 +890,9 @@ void CVideoPlayerVideo::ProcessOverlays(const VideoPicture* pSource, double pts)
     for(it = overlays.begin(); it != overlays.end(); ++it)
     {
       double pts2 = (*it)->bForced ? pts : pts - m_iSubtitleDelay;
+      // Depth metadata travels with the video frame, not the subtitle stream
+      (*it)->m_3dSubtitleDepth = pSource->m_3dSubtitleDepth;
+      (*it)->m_3dSubtitleDepthAuthored = pSource->m_3dSubtitleDepthAuthored;
       m_renderManager.AddOverlay(*it, pts2);
     }
   }

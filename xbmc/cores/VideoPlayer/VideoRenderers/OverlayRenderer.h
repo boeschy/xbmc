@@ -10,6 +10,7 @@
 #pragma once
 
 #include "BaseRenderer.h"
+#include "OverlayRendererUtil.h"
 #include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlay.h"
 #include "cores/VideoPlayer/DVDSubtitles/SubtitlesStyle.h"
 #include "settings/SubtitlesSettings.h"
@@ -88,6 +89,11 @@ namespace OVERLAY {
     float m_height{1.0f};
     float m_source_width{0}; // Video source width resolution used to calculate aspect ratio
     float m_source_height{0}; // Video source height resolution used to calculate aspect ratio
+    bool m_isBitmapSubtitle{false}; // PGS / VobSub, eligible for zoom and repositioning
+    bool m_pgsSubtitle{false};
+    int m_3dSubtitleDepth{0};
+    bool m_3dSubtitleDepthAuthored{false};
+    SContentInset m_contentInset;
 
   protected:
     /*!
@@ -184,7 +190,15 @@ namespace OVERLAY {
       float renderedFrameHeight{0.0f};
     };
 
-    void Render(COverlay* o);
+    struct SRenderItem
+    {
+      std::shared_ptr<COverlay> overlay;
+      SRenderState state;
+    };
+
+    void GetRenderState(COverlay* o, SRenderState& state) const;
+    static CRect GetContentRect(const COverlay& o, const SRenderState& state);
+    void RepositionBitmapSubtitles(std::vector<SRenderItem>& items) const;
     std::shared_ptr<COverlay> Convert(SElement& e);
     // Build a COverlay (cached or freshly created) from the libass output
     // already produced by PrepareOverlays. Does not call ass_render_frame.
@@ -200,6 +214,9 @@ namespace OVERLAY {
      * \brief Load and store settings locally
      */
     void LoadSettings();
+
+    // Apply calibration / shortcut position changes, saving them when requested
+    void SyncSubtitlePosition();
 
     enum PositonResInfoState
     {
@@ -225,6 +242,8 @@ namespace OVERLAY {
     KODI::SUBTITLES::HorizontalAlign m_subtitleHorizontalAlign{
         KODI::SUBTITLES::HorizontalAlign::CENTER};
     KODI::SUBTITLES::Align m_subtitleAlign{KODI::SUBTITLES::Align::BOTTOM_OUTSIDE};
+    int m_bitmapZoomPerc{100};
+    bool m_bitmapPosition{false};
 
     std::shared_ptr<struct KODI::SUBTITLES::STYLE::style> m_overlayStyle;
     std::atomic<bool> m_isSettingsChanged{false};

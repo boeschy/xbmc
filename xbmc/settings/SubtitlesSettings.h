@@ -202,6 +202,12 @@ public:
    */
   float GetVerticalMarginPerc() const;
 
+  //! Zoom of bitmap subtitles (PGS / VobSub) in %
+  int GetBitmapZoomPerc() const;
+
+  //! True if the subtitle position also applies to bitmap subtitles
+  bool IsBitmapPositionEnabled() const;
+
   static void SettingOptionsSubtitleFontsFiller(const std::shared_ptr<const CSetting>& setting,
                                                 std::vector<StringSettingOption>& list,
                                                 std::string& current);

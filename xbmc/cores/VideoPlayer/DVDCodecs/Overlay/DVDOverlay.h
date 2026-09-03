@@ -38,6 +38,8 @@ public:
     m_overlayContainerFlushable = true;
     m_setForcedMargins = false;
     m_isDiscMenuGraphic = false;
+    m_isBitmapSubtitle = false;
+    m_isPgsSubtitle = false;
   }
 
   CDVDOverlay(const CDVDOverlay& src) : std::enable_shared_from_this<CDVDOverlay>(src)
@@ -55,6 +57,10 @@ public:
     // CDVDOverlayImage crop constructor, which delegates here. Dropping it would
     // silently demote every redrawn menu region to a subtitle.
     m_isDiscMenuGraphic = src.m_isDiscMenuGraphic;
+    m_isBitmapSubtitle = src.m_isBitmapSubtitle;
+    m_isPgsSubtitle = src.m_isPgsSubtitle;
+    m_3dSubtitleDepth = src.m_3dSubtitleDepth;
+    m_3dSubtitleDepthAuthored = src.m_3dSubtitleDepthAuthored;
   }
 
   virtual ~CDVDOverlay() = default;
@@ -120,11 +126,19 @@ public:
    */
   bool IsDiscMenuGraphic() const { return m_isDiscMenuGraphic; }
 
+  void SetBitmapSubtitle(bool isBitmapSubtitle) { m_isBitmapSubtitle = isBitmapSubtitle; }
+  bool IsBitmapSubtitle() const { return m_isBitmapSubtitle; }
+  void SetPgsSubtitle(bool isPgsSubtitle) { m_isPgsSubtitle = isPgsSubtitle; }
+  bool IsPgsSubtitle() const { return m_isPgsSubtitle; }
+
   double iPTSStartTime;
   double iPTSStopTime;
   bool bForced; // display, no matter what
   bool replace; // replace by next nomatter what stoptime it has
   unsigned long m_textureid;
+  // Authored 3D offset (pixels at 1920 wide) copied from the video frame
+  int m_3dSubtitleDepth{0};
+  bool m_3dSubtitleDepthAuthored{false};
 
 protected:
   DVDOverlayType m_type;
@@ -132,6 +146,8 @@ protected:
   bool m_overlayContainerFlushable;
   bool m_setForcedMargins;
   bool m_isDiscMenuGraphic;
+  bool m_isBitmapSubtitle;
+  bool m_isPgsSubtitle;
 };
 
 using VecOverlays = std::vector<std::shared_ptr<CDVDOverlay>>;

@@ -24767,7 +24767,49 @@ msgctxt "#39224"
 msgid "Do not turn on subtitles that are in the same language as the audio being played. Forced subtitles are not affected."
 msgstr ""
 
-#empty strings from id 39225 to 39899
+#. Title of the setting to scale bitmap subtitles (PGS / VobSub)
+#: system/settings/settings.xml
+msgctxt "#39225"
+msgid "Bitmap subtitle zoom"
+msgstr ""
+
+#. Help text for setting "Bitmap subtitle zoom" of label #39225
+#: system/settings/settings.xml
+msgctxt "#39226"
+msgid "Scale image based subtitles (Blu-ray PGS, DVD / VobSub) around their bottom centre. 100% keeps the size authored on the disc."
+msgstr ""
+
+#. Title of the setting to apply the subtitle position to bitmap subtitles
+#: system/settings/settings.xml
+msgctxt "#39227"
+msgid "Apply position to bitmap subtitles"
+msgstr ""
+
+#. Help text for setting "Apply position to bitmap subtitles" of label #39227
+#: system/settings/settings.xml
+msgctxt "#39228"
+msgid "Move image based subtitles to the subtitle position set by calibration or shortcut. Only used with manual or bottom-outside alignment."
+msgstr ""
+
+#. Group label for image based subtitle settings
+#: system/settings/settings.xml
+msgctxt "#39229"
+msgid "Image based subtitles"
+msgstr ""
+
+#. Title of the setting to fine tune the authored 3D depth of disc subtitles
+#: system/settings/settings.xml
+msgctxt "#39230"
+msgid "Authored subtitle depth adjustment"
+msgstr ""
+
+#. Help text for setting "Authored subtitle depth adjustment" of label #39230
+#: system/settings/settings.xml
+msgctxt "#39231"
+msgid "Additional horizontal offset in pixels applied to 3D Blu-ray subtitles that carry an authored depth. Replaces the fixed stereoscopic depth for these subtitles."
+msgstr ""
+
+#empty strings from id 39232 to 39899
 
 #. List formatting: pattern used to join a list of exactly two items, e.g. "A and B"
 #. STR_LIST_AND_TWO

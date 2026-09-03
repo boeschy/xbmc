@@ -150,24 +150,37 @@ void CRenderer::Render(int idx, float depth)
 {
   std::unique_lock lock(m_section);
 
+  std::vector<SRenderItem> items;
   std::vector<SElement>& list = m_buffers[idx];
   for(std::vector<SElement>::iterator it = list.begin(); it != list.end(); ++it)
   {
-    if (it->overlay_dvd)
-    {
-      std::shared_ptr<COverlay> o = Convert(*it);
+    if (!it->overlay_dvd)
+      continue;
 
-      if (o)
-        Render(o.get());
-    }
+    std::shared_ptr<COverlay> o = Convert(*it);
+    if (!o)
+      continue;
+
+    // Depth arrives per video frame, so refresh it on every render
+    o->m_pgsSubtitle = it->overlay_dvd->IsPgsSubtitle();
+    o->m_3dSubtitleDepth = it->overlay_dvd->m_3dSubtitleDepth;
+    o->m_3dSubtitleDepthAuthored = it->overlay_dvd->m_3dSubtitleDepthAuthored;
+
+    SRenderItem item;
+    item.overlay = o;
+    GetRenderState(o.get(), item.state);
+    items.push_back(std::move(item));
   }
+
+  RepositionBitmapSubtitles(items);
+  for (auto& item : items)
+    item.overlay->Render(item.state);
 
   ReleaseUnused();
 }
 
-void CRenderer::Render(COverlay* o)
+void CRenderer::GetRenderState(COverlay* o, SRenderState& state) const
 {
-  SRenderState state;
   state.x = o->m_x;
   state.y = o->m_y;
   state.width = o->m_width;
@@ -249,9 +262,70 @@ void CRenderer::Render(COverlay* o)
     }
   }
 
-  state.x += GetStereoscopicDepth();
+  if (o->m_isBitmapSubtitle && m_bitmapZoomPerc != 100)
+  {
+    // Scale around the bottom centre of the visible content
+    const CRect before = GetContentRect(*o, state);
+    const float zoom = static_cast<float>(m_bitmapZoomPerc) / 100.0f;
+    state.width *= zoom;
+    state.height *= zoom;
+    const CRect after = GetContentRect(*o, state);
+    state.x += (before.x1 + before.x2 - after.x1 - after.x2) * 0.5f;
+    state.y += before.y2 - after.y2;
+  }
 
-  o->Render(state);
+  state.x += GetStereoscopicDepth(o->m_pgsSubtitle, o->m_3dSubtitleDepth,
+                                  o->m_3dSubtitleDepthAuthored);
+}
+
+CRect CRenderer::GetContentRect(const COverlay& o, const SRenderState& state)
+{
+  CRect rect;
+  if (o.m_pos == COverlay::POSITION_RELATIVE)
+    rect.SetRect(state.x - state.width * 0.5f, state.y - state.height * 0.5f,
+                 state.x + state.width * 0.5f, state.y + state.height * 0.5f);
+  else
+    rect.SetRect(state.x, state.y, state.x + state.width, state.y + state.height);
+
+  rect.x1 += state.width * o.m_contentInset.left;
+  rect.y1 += state.height * o.m_contentInset.top;
+  rect.x2 -= state.width * o.m_contentInset.right;
+  rect.y2 -= state.height * o.m_contentInset.bottom;
+  return rect;
+}
+
+void CRenderer::RepositionBitmapSubtitles(std::vector<SRenderItem>& items) const
+{
+  if (!m_bitmapPosition)
+    return;
+
+  // Only these alignments expose a user position (see ACTION_SUBTITLE_VSHIFT_*)
+  if (m_subtitleAlign != SUBTITLES::Align::MANUAL &&
+      m_subtitleAlign != SUBTITLES::Align::BOTTOM_OUTSIDE)
+    return;
+
+  // Move all bitmaps of the frame together to keep their layout
+  CRect content;
+  for (const auto& item : items)
+  {
+    if (item.overlay->m_isBitmapSubtitle)
+      content.Union(GetContentRect(*item.overlay, item.state));
+  }
+  if (content.IsEmpty())
+    return;
+
+  const RESOLUTION_INFO resInfo = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
+  float targetBottom = m_rv.y1 + static_cast<float>(m_subtitlePosition - resInfo.Overscan.top);
+  if (m_subtitleAlign == SUBTITLES::Align::BOTTOM_OUTSIDE)
+    targetBottom += static_cast<float>(m_subtitleVerticalMargin); // matches libass baseline
+  // Never push the content above the top of the frame
+  const float shift = std::max(targetBottom - content.y2, m_rv.y1 - content.y1);
+
+  for (auto& item : items)
+  {
+    if (item.overlay->m_isBitmapSubtitle)
+      item.state.y += shift;
+  }
 }
 
 bool CRenderer::HasVisibleOverlay(int idx) const
@@ -355,6 +429,24 @@ void CRenderer::ResetSubtitlePosition()
   appPlayer->SetSubtitleVerticalPosition(pos, false);
 }
 
+void CRenderer::SyncSubtitlePosition()
+{
+  RESOLUTION_INFO resInfo = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
+  // Changed by GUI calibration, window mode / resolution change or user shortcut
+  if (m_subtitlePosResInfo == resInfo.iSubtitles)
+    return;
+
+  if (m_subtitlePosResInfo == POSRESINFO_SAVE_CHANGES)
+  {
+    resInfo.iSubtitles = m_subtitlePosition + m_subtitleVerticalMargin;
+    CServiceBroker::GetWinSystem()->GetGfxContext().SetResInfo(
+        CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution(), resInfo);
+    m_subtitlePosResInfo = m_subtitlePosition + m_subtitleVerticalMargin;
+  }
+  else
+    ResetSubtitlePosition();
+}
+
 void CRenderer::CreateSubtitlesStyle()
 {
   m_overlayStyle = std::make_shared<SUBTITLES::STYLE::style>();
@@ -430,6 +522,20 @@ void CRenderer::PrepareOverlays(int idx)
 
   bool doMarkDirty = false;
   bool hasImageSpu = false;
+
+  // Bitmap subtitles need current settings and position too, not only libass
+  bool updateStyle = false;
+  if (!m_buffers[idx].empty())
+  {
+    updateStyle = !m_overlayStyle || m_isSettingsChanged;
+    if (updateStyle)
+    {
+      m_isSettingsChanged = false;
+      LoadSettings();
+      CreateSubtitlesStyle();
+    }
+    SyncSubtitlePosition();
+  }
   for (auto& e : m_buffers[idx])
   {
     // Clear last frame's cached output; libass may have invalidated the
@@ -462,14 +568,6 @@ void CRenderer::PrepareOverlays(int idx)
     if (!ovAss.GetLibassHandler())
       continue;
 
-    bool updateStyle = !m_overlayStyle || m_isSettingsChanged;
-    if (updateStyle)
-    {
-      m_isSettingsChanged = false;
-      LoadSettings();
-      CreateSubtitlesStyle();
-    }
-
     // rOpts setup moved from CRenderer::ConvertLibass; duplicated in CDebugRenderer::CRenderer::Render.
     SUBTITLES::STYLE::renderOpts rOpts;
 
@@ -499,23 +597,6 @@ void CRenderer::PrepareOverlays(int idx)
 
     // Set position of subtitles based on video calibration settings
     RESOLUTION_INFO resInfo = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
-    // Keep track of subtitle position value change,
-    // can be changed by GUI Calibration or by window mode/resolution change or
-    // by user manual change (e.g. keyboard shortcut)
-    if (m_subtitlePosResInfo != resInfo.iSubtitles)
-    {
-      if (m_subtitlePosResInfo == POSRESINFO_SAVE_CHANGES)
-      {
-        // m_subtitlePosition has been changed
-        // and has been requested to save the value to resInfo
-        resInfo.iSubtitles = m_subtitlePosition + m_subtitleVerticalMargin;
-        CServiceBroker::GetWinSystem()->GetGfxContext().SetResInfo(
-            CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution(), resInfo);
-        m_subtitlePosResInfo = m_subtitlePosition + m_subtitleVerticalMargin;
-      }
-      else
-        ResetSubtitlePosition();
-    }
 
     rOpts.m_par = resInfo.fPixelRatio;
 
@@ -664,7 +745,15 @@ std::shared_ptr<COverlay> CRenderer::Convert(SElement& e)
   }
 
   if (o.IsOverlayType(DVDOVERLAY_TYPE_IMAGE))
-    r = COverlay::Create(static_cast<CDVDOverlayImage&>(o), m_rs);
+  {
+    const CDVDOverlayImage& ovImage = static_cast<const CDVDOverlayImage&>(o);
+    r = COverlay::Create(ovImage, m_rs);
+    if (r && o.IsBitmapSubtitle())
+    {
+      r->m_isBitmapSubtitle = true;
+      r->m_contentInset = MeasureContentInset(ovImage);
+    }
+  }
   else if (o.IsOverlayType(DVDOVERLAY_TYPE_SPU))
     r = COverlay::Create(static_cast<CDVDOverlaySpu&>(o));
 
@@ -700,5 +789,7 @@ void CRenderer::LoadSettings()
   const auto settings{CServiceBroker::GetSettingsComponent()->GetSubtitlesSettings()};
   m_subtitleHorizontalAlign = settings->GetHorizontalAlignment();
   m_subtitleAlign = settings->GetAlignment();
+  m_bitmapZoomPerc = settings->GetBitmapZoomPerc();
+  m_bitmapPosition = settings->IsBitmapPositionEnabled();
   ResetSubtitlePosition();
 }
