@@ -216,9 +216,12 @@ void RemoveDuplicatePlaylists(std::vector<PlaylistInformation>& playlists)
           playlists[i].audioStreams == playlists[j].audioStreams &&
           playlists[i].pgStreams == playlists[j].pgStreams &&
           playlists[i].chapters == playlists[j].chapters &&
-          playlists[i].clips == playlists[j].clips)
+          playlists[i].clips == playlists[j].clips &&
+          playlists[i].hasStereoscopicVideo == playlists[j].hasStereoscopicVideo)
       {
-        duplicatePlaylists.emplace(std::max(playlists[i].playlist, playlists[j].playlist));
+        const unsigned int duplicate{std::max(playlists[i].playlist, playlists[j].playlist)};
+        if (duplicatePlaylists.emplace(duplicate).second)
+          CLog::LogF(LOGDEBUG, "Discarding playlist {} - duplicate", duplicate);
       }
     }
   }
