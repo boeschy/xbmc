@@ -29,6 +29,23 @@
   Welcome to Kodi Home Theater Software!
 </h1>
 
+This is a Kodi fork with the **[Fandangos Anroid Blu-Ray JRE menu patches](https://github.com/fandangos/Kodi-HDR-Edition)** and an **[edge264-mvc 3D software decoder](https://github.com/jens-duttke/edge264-mvc)** implementation for 3D Blu-Ray ISO and 3D MVC MKV playback. It is tested on my Nvidia Shield pro 2019, I can't tell if it works on other Android devices.
+
+## What works:
+- Blu-Ray JRE menus work (almost) perfectly. (THX2 Fandangos)
+- 3D MVC MKV files created with MakeMKV playback with SBS/TAB output (THX2 Jens Duttke for the MVC software decoder)
+- 3D BD ISO playback with SBS/TAB output (THX2 Jens Duttke for the MVC software decoder)
+- 3D BD subtitles have the correct depth like authored (THX2 cinema-ONE for the CoreELEC patches which I ported to Kodi)
+- Changing audio/subtitles with UI or hotkeys works with BD nav-mode now
+
+## What doesn't work:
+- 3D framepacked HDMI output (not supported by the underlying Android)
+- 3D display needs to be set to the correct 3D mode manually  (HDMI auto toggle not supported by the underlying Android)
+- Blu-Ray nav-mode in 3D (not implemented, doesn't work reliably with the current libbluray state anyways)
+- 3D BD skipping forward or backwards sometimes crashes Kodi or freezes the video, chapter skipping works though
+
+
+
 Kodi is an award-winning **free and open source** software media player and entertainment hub for digital media. Available as a native application for **Android, Linux, BSD, macOS, iOS, tvOS and Windows operating systems**, Kodi runs on most common processor architectures.
 
 Created in 2003 by a group of like minded programmers, Kodi is a non-profit project run by the XBMC Foundation and developed by volunteers located around the world. More than 500 software developers have contributed to Kodi to date, and 100-plus translators have worked to expand its reach, making it available in more than 70 languages.
