@@ -57,6 +57,7 @@ public:
   static bool Register();
 
   bool Open(CDVDStreamInfo& hints, CDVDCodecOptions& options) override;
+  bool Reconfigure(CDVDStreamInfo& hints) override;
   bool AddData(const DemuxPacket& packet) override;
   void Reset() override;
   VCReturn GetPicture(VideoPicture* pVideoPicture) override;
