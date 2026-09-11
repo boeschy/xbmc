@@ -100,7 +100,7 @@ bool CRenderManager::Configure(const VideoPicture& picture, float fps, unsigned 
 
     const bool liveHDRMetadata = m_pRenderer != nullptr && m_pRenderer->SupportsLiveHDRMetadata();
 
-    if (m_pRenderer != nullptr && m_picture.IsSameParams(picture, liveHDRMetadata) &&
+    if (m_pRenderer != nullptr && !m_reconfigure && m_picture.IsSameParams(picture, liveHDRMetadata) &&
         m_orientation == orientation && m_NumberBuffers == buffers &&
         !m_pRenderer->ConfigChanged(picture))
     {
@@ -184,6 +184,7 @@ bool CRenderManager::Configure(const VideoPicture& picture, float fps, unsigned 
   {
     std::unique_lock lock(m_statelock);
     m_picture.SetParams(picture);
+    m_reconfigure = false;
     m_fps = fps;
     m_orientation = orientation;
     m_NumberBuffers  = buffers;
@@ -907,6 +908,13 @@ void CRenderManager::TriggerUpdateResolution(float fps, int width, int height, s
 {
   if (width)
   {
+    std::unique_lock lock(m_statelock);
+    // The renderer keeps the previous stream's setup, so the next Configure() must not
+    // take a picture matching these primed values for one it was configured with
+    if (m_picture.iWidth != static_cast<unsigned int>(width) ||
+        m_picture.iHeight != static_cast<unsigned int>(height) ||
+        m_picture.stereoMode != stereomode)
+      m_reconfigure = true;
     m_fps = fps;
     m_picture.iWidth = width;
     m_picture.iHeight = height;
