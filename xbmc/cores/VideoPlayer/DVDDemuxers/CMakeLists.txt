@@ -44,3 +44,7 @@ if(TARGET ${APP_NAME_LC}::Bluray)
 endif()
 
 core_add_library(dvddemuxers)
+
+if(TARGET ${APP_NAME_LC}::Edge264-MVC)
+  target_link_libraries(dvddemuxers PRIVATE ${APP_NAME_LC}::Edge264-MVC)
+endif()
