@@ -60,6 +60,7 @@ public:
   bool AddData(const DemuxPacket& packet) override;
   void Reset() override;
   VCReturn GetPicture(VideoPicture* pVideoPicture) override;
+  void SetCodecControl(int flags) override { m_codecControlFlags = flags; }
   const char* GetName() override { return "mvc-sw-edge264"; }
   unsigned GetAllowedReferences() override { return 16; }
 
@@ -81,6 +82,11 @@ protected:
   bool PackFrame(const Edge264Frame& frame, VideoPicture* pVideoPicture);
   // Moves every frame edge264 has ready into m_pictures; returns how many
   int DrainFrames();
+  // Feeds one NAL, waiting out a full DPB instead of dropping it; returns
+  // edge264's errno-style code
+  int DecodeNal(const uint8_t* nal, const uint8_t* end);
+  // Makes edge264 release every frame it is holding back for reordering
+  void ForceOutput();
 
   // Simple size-bucketed free-list pool backing AllocCb/FreeCb: edge264
   // requests/releases DPB slots continuously during decode, and for a
@@ -151,6 +157,7 @@ protected:
   bool m_annexB = false; // input is Annex-B already, m_bitstream stays closed
   PackMode m_packMode = PackMode::SBS;
   bool m_baseViewIsRightEye = false;
+  int m_codecControlFlags = 0;
 
   unsigned int m_width = 0;
   unsigned int m_height = 0;
