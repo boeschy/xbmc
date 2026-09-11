@@ -35,6 +35,7 @@
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "utils/BitstreamConverter.h"
 
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -78,6 +79,8 @@ protected:
   static bool DetectStereoHighProfile(const CDVDStreamInfo& hints);
 
   bool PackFrame(const Edge264Frame& frame, VideoPicture* pVideoPicture);
+  // Moves every frame edge264 has ready into m_pictures; returns how many
+  int DrainFrames();
 
   // Simple size-bucketed free-list pool backing AllocCb/FreeCb: edge264
   // requests/releases DPB slots continuously during decode, and for a
@@ -145,14 +148,15 @@ protected:
 
   Edge264Decoder* m_decoder = nullptr;
   CBitstreamConverter m_bitstream;
+  bool m_annexB = false; // input is Annex-B already, m_bitstream stays closed
   PackMode m_packMode = PackMode::SBS;
+  bool m_baseViewIsRightEye = false;
 
   unsigned int m_width = 0;
   unsigned int m_height = 0;
 
-  bool m_hasPicture = false;
-  VideoPicture m_picture; // holds the ref-counted buffer built by PackFrame() until GetPicture() collects it
-  double m_pts = DVD_NOPTS_VALUE;
+  // Packed pictures waiting for GetPicture(), in display order
+  std::deque<std::unique_ptr<VideoPicture>> m_pictures;
   double m_ptsPending = DVD_NOPTS_VALUE;
   // edge264 decodes in bitstream/decode order but - per its own
   // documented guarantee - always emits frames via edge264_get_frame()
