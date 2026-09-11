@@ -16,13 +16,16 @@
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
+#include "threads/SystemClock.h"
 #include "utils/log.h"
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <set>
+#include <thread>
 
 namespace
 {
@@ -33,6 +36,10 @@ namespace
 // feasibility" question that needs measuring on actual hardware before
 // this codec is anything more than a PoC.
 constexpr int EDGE264_THREADS = 4;
+
+// How long a NAL waits for the worker threads to free a DPB slot before the
+// frames edge264 is holding back are forced out
+constexpr auto ENOBUFS_TIMEOUT = std::chrono::milliseconds(500);
 } // namespace
 
 CDVDVideoCodecMVCSoftware::CDVDVideoCodecMVCSoftware(CProcessInfo& processInfo)
@@ -256,11 +263,8 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
       const uint8_t* nalEnd = edge264_find_start_code(nal, end, 0);
 
       // edge264 returns plain positive errno values, 0 on success
-      int ret = edge264_decode_NAL(m_decoder, nal, nalEnd, nullptr, nullptr);
-      // ENOBUFS: the DPB is full; taking frames out makes room for the same NAL
-      if (ret == ENOBUFS && DrainFrames() > 0)
-        ret = edge264_decode_NAL(m_decoder, nal, nalEnd, nullptr, nullptr);
-      if (ret != 0 && ret != ENOBUFS)
+      const int ret = DecodeNal(nal, nalEnd);
+      if (ret != 0)
       {
         CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264_decode_NAL returned {}",
                   ret);
@@ -275,6 +279,47 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   DrainFrames();
 
   return true;
+}
+
+int CDVDVideoCodecMVCSoftware::DecodeNal(const uint8_t* nal, const uint8_t* end)
+{
+  int ret = edge264_decode_NAL(m_decoder, nal, end, nullptr, nullptr);
+  if (ret != ENOBUFS)
+    return ret;
+
+  // ENOBUFS leaves the NAL unconsumed. The DPB is full of frames the workers have
+  // not finished yet, so wait for them: dropping the NAL loses a slice, and in a
+  // merged access unit that is the dependent view's, which comes last
+  XbmcThreads::EndTime<> timeout(ENOBUFS_TIMEOUT);
+  bool forced = false;
+  while (ret == ENOBUFS)
+  {
+    if (DrainFrames() == 0)
+    {
+      if (!timeout.IsTimePast())
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      else if (!forced)
+      {
+        forced = true;
+        ForceOutput();
+      }
+      else
+      {
+        CLog::Log(LOGWARNING,
+                  "CDVDVideoCodecMVCSoftware::DecodeNal - DPB stalled, dropping a NAL");
+        break;
+      }
+    }
+    ret = edge264_decode_NAL(m_decoder, nal, end, nullptr, nullptr);
+  }
+  return ret;
+}
+
+void CDVDVideoCodecMVCSoftware::ForceOutput()
+{
+  // buf >= end makes edge264 release every frame it is holding back
+  static constexpr uint8_t END_MARKER = 0;
+  edge264_decode_NAL(m_decoder, &END_MARKER, &END_MARKER, nullptr, nullptr);
 }
 
 int CDVDVideoCodecMVCSoftware::DrainFrames()
@@ -320,6 +365,13 @@ void CDVDVideoCodecMVCSoftware::Reset()
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVideoPicture)
 {
+  // Draining: nothing more is coming to push the held frames out
+  if (m_pictures.empty() && m_decoder && (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
+  {
+    ForceOutput();
+    DrainFrames();
+  }
+
   if (m_pictures.empty())
     return VC_BUFFER;
 
