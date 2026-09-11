@@ -304,10 +304,26 @@ float CRenderer::SubtitlePlaneOffset() const
   // The plane is drawn over the video and the offset is in the video's pixels, so the two
   // scale alike. Shifting the left eye's copy right and the right eye's left is what puts
   // the subtitle in front of the screen.
-  const float scale{m_rd.Width() / m_rs.Width()};
+  const float scale{m_rd.Width() / FrameSourceRect().Width()};
 
   return (view == RenderStereoView::LEFT ? 1.0f : -1.0f) *
          static_cast<float>(m_subtitlePlaneOffset) * scale;
+}
+
+CRect CRenderer::FrameSourceRect() const
+{
+  CRect source{m_rs};
+  if (source.Height() <= 0.0f)
+    return source;
+
+  // Same thresholds as the libass path: only a half packing changes the eye's shape
+  const float ratio{source.Width() / source.Height()};
+  if ((m_stereomode == "left_right" || m_stereomode == "right_left") && ratio < 1.2f)
+    source.x2 = source.x1 + source.Width() * 2.0f;
+  else if ((m_stereomode == "top_bottom" || m_stereomode == "bottom_top") && ratio > 2.5f)
+    source.y2 = source.y1 + source.Height() * 2.0f;
+
+  return source;
 }
 
 bool CRenderer::HasVisibleOverlay(int idx) const
@@ -734,7 +750,12 @@ std::shared_ptr<COverlay> CRenderer::Convert(SElement& e)
   }
 
   if (o.IsOverlayType(DVDOVERLAY_TYPE_IMAGE))
-    r = COverlay::Create(static_cast<CDVDOverlayImage&>(o), m_rs);
+  {
+    // Judged against the whole frame: a half-packed eye is the wrong shape for any
+    // plane, and the alignment would otherwise depend on the eye a piece was first drawn in
+    CRect source{FrameSourceRect()};
+    r = COverlay::Create(static_cast<CDVDOverlayImage&>(o), source);
+  }
   else if (o.IsOverlayType(DVDOVERLAY_TYPE_SPU))
     r = COverlay::Create(static_cast<CDVDOverlaySpu&>(o));
 
