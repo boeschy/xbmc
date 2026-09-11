@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
+#include <cstring>
 #include <set>
 
 namespace
@@ -90,6 +91,10 @@ bool CDVDVideoCodecMVCSoftware::DetectStereoHighProfile(const CDVDStreamInfo& hi
 
   if (hints.codec != AV_CODEC_ID_H264)
     return false;
+
+  // CDVDDemuxBluray3D merges both views into one access unit and flags the stream
+  if (hints.multiview)
+    return true;
 
   // MKV path (the actual demuxer path for this PoC's test files): the
   // Matroska demuxer patch (009-ffmpeg-mkv-mvcc-block-addition.patch,
@@ -180,16 +185,14 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   // TODO: expose as a video setting; top-bottom halves vertical
   // resolution instead of horizontal and may suit some panels better.
   m_packMode = PackMode::SBS;
+  // A Blu-ray playlist may code the right eye as the base view
+  m_baseViewIsRightEye = hints.stereo_mode == "right_left" || hints.stereo_mode == "block_rl";
 
-  // CBitstreamConverter's internal NAL/avcC-to-Annex-B logic switches
-  // strictly on AV_CODEC_ID_H264 (see utils/BitstreamConverter.cpp) and
-  // doesn't know AV_CODEC_ID_H264_MVC - it doesn't need to, since avcC
-  // parsing and length-prefix-to-startcode rewriting are identical
-  // regardless of the container-level MVC tagging. Passing the plain id
-  // through avoids having to patch BitstreamConverter.cpp for something
-  // it was already correct about.
-  if (!m_bitstream.Open(AV_CODEC_ID_H264, hints.extradata.GetData(), hints.extradata.GetSize(),
-                        true /* to_annexb */))
+  // Only avcC needs rewriting; MPEG-TS (Blu-ray) packets and extradata are Annex-B already
+  m_annexB = !(hints.extradata && hints.extradata.GetSize() >= 7 &&
+               hints.extradata.GetData()[0] == 1);
+  if (!m_annexB && !m_bitstream.Open(AV_CODEC_ID_H264, hints.extradata.GetData(),
+                                     hints.extradata.GetSize(), true /* to_annexb */))
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::Open - bitstream converter init failed");
     return false;
@@ -225,49 +228,38 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   if (packet.pData == nullptr || packet.iSize == 0)
     return true;
 
-  if (!m_bitstream.Convert(packet.pData, packet.iSize))
+  const uint8_t* buf = packet.pData;
+  const uint8_t* end = buf + packet.iSize;
+  if (!m_annexB)
   {
-    CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::AddData - bitstream conversion failed");
-    return true;
+    if (!m_bitstream.Convert(packet.pData, packet.iSize))
+    {
+      CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::AddData - bitstream conversion failed");
+      return true;
+    }
+    buf = m_bitstream.GetConvertBuffer();
+    end = buf + m_bitstream.GetConvertSize();
   }
 
   m_ptsPending = packet.pts != DVD_NOPTS_VALUE ? packet.pts : packet.dts;
-  // Queue every fed access unit's pts in decode order; consumed below
-  // (smallest-first) once a frame actually comes out, not when it was
-  // fed - see the m_ptsQueue comment in the header for why.
+  // Consumed smallest-first as frames come out - see m_ptsQueue in the header
   m_ptsQueue.insert(m_ptsPending);
 
-  const uint8_t* buf = m_bitstream.GetConvertBuffer();
-  const uint8_t* end = buf + m_bitstream.GetConvertSize();
-
-  // Feed every NAL of this access unit to the decoder. edge264 expects
-  // Annex-B start codes, which is why we ran the bitstream converter
-  // above (mirrors how CDVDVideoCodecAndroidMediaCodec handles MPEG2/VC1
-  // elsewhere in this codebase).
-  //
-  // edge264_find_start_code() returns a pointer to the start of the
-  // "00 00 01"/"00 00 00 01" delimiter itself, NOT past it - passing
-  // that pointer straight to edge264_decode_NAL() (as an earlier version
-  // of this function did) feeds it the delimiter's leading zero byte as
-  // if it were the NAL header, which decodes to nal_unit_type 0
-  // ("Unknown") and an ENOTSUP from every single NAL. The delimiter has
-  // to be skipped manually first - "nal[2] == 0" distinguishes a 3-byte
-  // (00 00 01) from a 4-byte (00 00 00 01) delimiter, exactly matching
-  // the reference decode loop in edge264-mvc's own src/edge264_test.c.
-  const uint8_t* nal = edge264_find_start_code(buf, end, 1);
+  // edge264_find_start_code() points at the "00 00 01" itself; a 4-byte start
+  // code is found by its last three bytes, so skipping 3 is right for both
+  const uint8_t* nal = edge264_find_start_code(buf, end, 0);
   if (nal < end)
   {
-    nal += 3 + (nal[2] == 0);
+    nal += 3;
     while (nal < end)
     {
       const uint8_t* nalEnd = edge264_find_start_code(nal, end, 0);
 
-      // edge264 uses plain (non-negated) errno-style return codes - 0 on
-      // success, positive errno values (ENOBUFS, ENOTSUP, ...)
-      // otherwise - unlike FFmpeg's negative-errno convention. ENOBUFS
-      // just means the DPB is temporarily full and is expected during
-      // normal decode, not an error worth logging.
+      // edge264 returns plain positive errno values, 0 on success
       int ret = edge264_decode_NAL(m_decoder, nal, nalEnd, nullptr, nullptr);
+      // ENOBUFS: the DPB is full; taking frames out makes room for the same NAL
+      if (ret == ENOBUFS && DrainFrames() > 0)
+        ret = edge264_decode_NAL(m_decoder, nal, nalEnd, nullptr, nullptr);
       if (ret != 0 && ret != ENOBUFS)
       {
         CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264_decode_NAL returned {}",
@@ -276,80 +268,63 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
 
       if (nalEnd >= end)
         break;
-      nal = nalEnd + 3 + (nalEnd[2] == 0);
+      nal = nalEnd + 3;
     }
   }
 
-  // Pull at most one frame per AddData call; GetPicture() drives further
-  // draining. A production version should decouple decode and drain more
-  // carefully around edge264's internal reordering/DPB behaviour.
-  if (!m_hasPicture)
+  DrainFrames();
+
+  return true;
+}
+
+int CDVDVideoCodecMVCSoftware::DrainFrames()
+{
+  int count = 0;
+  Edge264Frame frame{};
+  // borrow=1: workers keep decoding meanwhile, so the slot must stay reserved
+  // until PackFrame() has copied every plane out of it
+  while (edge264_get_frame(m_decoder, &frame, 1) == 0)
   {
-    Edge264Frame frame{};
-    // borrow=1: with borrow=0, edge264_get_frame() immediately clears the
-    // DPB slot's "still owned by caller" bit *inside the call itself*,
-    // before PackFrame() below has copied a single pixel out of
-    // frame.samples/samples_mvc - and edge264's n_threads=4 worker pool
-    // keeps decoding in the background the whole time (visibly, in
-    // practice: workers are often already multiple frames ahead by the
-    // time this runs), so that freed buffer can get reused and
-    // overwritten by a worker thread mid-copy. That's a genuine data
-    // race, not a hypothetical one - it explains a decode that runs
-    // cleanly for a while (pure thread-timing luck) and then corrupts/
-    // crashes once a worker catches up at the wrong moment. borrow=1
-    // keeps the slot reserved until we explicitly release it below.
-    if (edge264_get_frame(m_decoder, &frame, 1) == 0 && frame.samples[0] && frame.samples_mvc[0])
+    if (frame.samples[0])
     {
-      m_picture.Reset();
-      if (PackFrame(frame, &m_picture))
+      auto picture = std::make_unique<VideoPicture>();
+      if (PackFrame(frame, picture.get()))
       {
-        m_hasPicture = true;
-        // Pop the smallest still-pending pts, not m_ptsPending (decode
-        // order) - see m_ptsQueue's declaration for why. Guard against an
-        // empty queue defensively; it should be impossible (one insert
-        // per AddData() call, one erase per frame out) but a stray/odd
-        // stream is not worth a crash over.
         if (!m_ptsQueue.empty())
         {
-          m_pts = *m_ptsQueue.begin();
+          picture->pts = *m_ptsQueue.begin();
           m_ptsQueue.erase(m_ptsQueue.begin());
         }
         else
         {
-          m_pts = m_ptsPending;
+          picture->pts = m_ptsPending;
         }
+        picture->dts = picture->pts;
+        m_pictures.push_back(std::move(picture));
+        count++;
       }
-      // Only safe to give the slot back now that PackFrame() has
-      // finished copying every plane out of it.
-      edge264_return_frame(m_decoder, frame.return_arg);
     }
+    edge264_return_frame(m_decoder, frame.return_arg);
   }
-
-  return true;
+  return count;
 }
 
 void CDVDVideoCodecMVCSoftware::Reset()
 {
   if (m_decoder)
     edge264_flush(m_decoder);
-  m_hasPicture = false;
-  m_pts = DVD_NOPTS_VALUE;
+  m_pictures.clear();
   m_ptsPending = DVD_NOPTS_VALUE;
   m_ptsQueue.clear();
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVideoPicture)
 {
-  if (!m_hasPicture)
+  if (m_pictures.empty())
     return VC_BUFFER;
 
-  // m_picture was built by PackFrame() in AddData(); hand its buffer
-  // reference to the caller. Ownership/reuse pooling and pacing against
-  // DVD_CODEC_CTRL_DROP flags are unaddressed in this PoC.
-  pVideoPicture->CopyRef(m_picture);
-  pVideoPicture->pts = m_pts;
-  pVideoPicture->dts = m_pts;
-  m_hasPicture = false;
+  pVideoPicture->CopyRef(*m_pictures.front());
+  m_pictures.pop_front();
   return VC_PICTURE;
 }
 
@@ -401,6 +376,8 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
   // the source resolution and matches the layout Kodi's
   // stereoMode="left_right"/"top_bottom" renderer path already expects
   // for half-SBS/half-TAB files - no renderer changes needed.
+  // Idents, menus and the run-up after a seek carry no dependent view
+  const bool stereo = frame.samples_mvc[0] != nullptr;
   for (int plane = 0; plane < 3; plane++)
   {
     const uint8_t* srcL = frame.samples[plane];
@@ -411,6 +388,14 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
 
     uint8_t* dst = planes[plane];
     int dstStride = strides[plane];
+
+    if (!stereo)
+    {
+      for (int y = 0; y < srcH; y++)
+        memcpy(dst + static_cast<size_t>(y) * dstStride,
+               srcL + static_cast<size_t>(y) * srcStride, srcW);
+      continue;
+    }
 
     if (m_packMode == PackMode::SBS)
     {
@@ -468,7 +453,12 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
   pVideoPicture->iHeight = packedHeight;
   pVideoPicture->iDisplayWidth = packedWidth;
   pVideoPicture->iDisplayHeight = packedHeight;
-  pVideoPicture->stereoMode = m_packMode == PackMode::SBS ? "left_right" : "top_bottom";
+  if (!stereo)
+    pVideoPicture->stereoMode = "mono";
+  else if (m_packMode == PackMode::SBS)
+    pVideoPicture->stereoMode = m_baseViewIsRightEye ? "right_left" : "left_right";
+  else
+    pVideoPicture->stereoMode = m_baseViewIsRightEye ? "bottom_top" : "top_bottom";
   pVideoPicture->iFlags = 0;
   pVideoPicture->color_range = 0;
   pVideoPicture->colorBits = 8;
