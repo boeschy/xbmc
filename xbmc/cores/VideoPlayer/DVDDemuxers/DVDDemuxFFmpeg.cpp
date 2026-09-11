@@ -2762,6 +2762,12 @@ std::string CDVDDemuxFFmpeg::GetStereoModeFromSideData(const AVStream* pStream, 
 
 bool CDVDDemuxFFmpeg::SupportsMultiviewDecode(AVCodecID codecId)
 {
+#if defined(HAS_EDGE264MVC)
+  // edge264-mvc decodes the dependent view without any help from ffmpeg
+  if (codecId == AV_CODEC_ID_H264)
+    return true;
+#endif
+
   const AVCodec* codec = avcodec_find_decoder(codecId);
   if (!codec || !codec->priv_class)
     return false;
