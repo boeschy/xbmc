@@ -200,6 +200,8 @@ protected:
   CCriticalSection m_presentlock;
   CCriticalSection m_datalock;
   bool m_bTriggerUpdateResolution = false;
+  //! m_picture was primed from stream hints and no longer describes the renderer's setup
+  bool m_reconfigure = false;
   bool m_bRenderGUI = true;
   bool m_renderedDebugOverlay = false;
   bool m_renderDebug = false;
