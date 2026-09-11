@@ -92,6 +92,12 @@ static const struct StereoModeConversionMap WmvToInternalStereoModeMap[] =
 
 namespace
 {
+// ffmpeg's mpegts demuxer hands over a PES payload larger than this in pieces, with the
+// timestamps on the first piece only. A parser puts the pieces back together, so an
+// unparsed stream has to be given room for a whole access unit: the H.264 level 4.1 CPB,
+// which no Blu-ray access unit can exceed. The default of 200 KiB is smaller than an I frame.
+constexpr int64_t UNPARSED_MAX_PACKET_SIZE = 62500 * 1200 / 8;
+
 #ifdef HAVE_LIBDOVI
 // The two layers of one frame always share a timestamp; their ARRIVAL order is not
 // guaranteed. Prefer pts, fall back to dts, and report NOPTS when neither is usable so
@@ -272,6 +278,12 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
 
   m_pInput = pInput;
   strFile = m_pInput->GetFileName();
+
+  // Some callers hand us an elementary stream the parsers cannot frame. The MVC dependent
+  // view of a 3D Blu-ray codes its slices as NAL 20, which the H.264 parser does not treat
+  // as a picture start, so it would never find a frame boundary. Fall back to the container
+  // framing, which on a Blu-ray is one access unit per PES packet.
+  const bool noParse = pInput->GetProperty("noparse").asBoolean(false);
 
   if (!m_pInput->GetContent().empty())
   {
@@ -454,6 +466,9 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
       av_dict_set(&options, "scan_all_pmts", "1", 0);
     }
 
+    if (noParse && iformat->name && strcmp(iformat->name, "mpegts") == 0)
+      av_dict_set_int(&options, "max_packet_size", UNPARSED_MAX_PACKET_SIZE, 0);
+
     if (iformat->name && (strcmp(iformat->name, "mp3") == 0 || strcmp(iformat->name, "mp2") == 0))
     {
       CLog::Log(LOGDEBUG, "{} - setting usetoc to 0 for accurate VBR MP3 seek", __FUNCTION__);
@@ -494,11 +509,6 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   if (iformat && (strcmp(iformat->name, "mjpeg") == 0) && m_ioContext->seekable == 0)
     av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
 
-  // Some callers hand us an elementary stream the parsers cannot frame. The MVC dependent
-  // view of a 3D Blu-ray codes its slices as NAL 20, which the H.264 parser does not treat
-  // as a picture start, so it would never find a frame boundary. Fall back to the container
-  // framing, which on a Blu-ray is one access unit per PES packet.
-  const bool noParse = pInput->GetProperty("noparse").asBoolean(false);
   if (noParse)
   {
     m_pFormatContext->flags |= AVFMT_FLAG_NOPARSE | AVFMT_FLAG_NOFILLIN;
@@ -2893,6 +2903,11 @@ std::string CDVDDemuxFFmpeg::ConvertCodecToInternalStereoMode(const std::string 
 
 void CDVDDemuxFFmpeg::ParsePacket(AVPacket* pkt)
 {
+  // Nothing to frame, and a stream ffmpeg has no decoder for - the MVC dependent view -
+  // would log an error on every packet
+  if (m_pFormatContext->flags & AVFMT_FLAG_NOPARSE)
+    return;
+
   AVStream* st = m_pFormatContext->streams[pkt->stream_index];
 
   if (st && st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
