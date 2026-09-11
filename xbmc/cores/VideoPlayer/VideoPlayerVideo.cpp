@@ -224,6 +224,13 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
     if (!codec)
     {
       m_processInfo.ResetVideoCodecInfo();
+
+      // The pictures will carry this mode (see ProcessDecoderOutput), so announce it now
+      // rather than leave the stream change the audio side raises meanwhile to read an
+      // empty one and take the title for 2D
+      if (!hint.stereo_mode.empty() && hint.stereo_mode != "mono")
+        m_processInfo.SetVideoStereoMode(hint.stereo_mode);
+
       codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
     }
     if (!codec)
