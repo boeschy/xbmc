@@ -229,6 +229,49 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   return true;
 }
 
+bool CDVDVideoCodecMVCSoftware::Reconfigure(CDVDStreamInfo& hints)
+{
+  // Carries the decoder over a clip change of a disc, so that the player does not rebuild
+  // it - and with it the stereo mode it has announced, which would read as a 2D title
+  // for the moment it takes the first picture to arrive, and switch the display twice.
+  if (!m_decoder || !DetectStereoHighProfile(hints))
+    return false;
+
+  const bool annexB = !(hints.extradata && hints.extradata.GetSize() >= 7 &&
+                        hints.extradata.GetData()[0] == 1);
+  if (!annexB)
+    return false;
+
+  // A clip handed over before it is parsed has no size yet; one that has differs or not
+  const bool sized = hints.width > 0 && hints.height > 0;
+  if (sized && (static_cast<unsigned int>(hints.width) != m_width ||
+                static_cast<unsigned int>(hints.height) != m_height))
+  {
+    CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::Reconfigure - {}x{} does not fit {}x{}",
+              hints.width, hints.height, m_width, m_height);
+    return false;
+  }
+
+  const bool baseViewIsRightEye =
+      hints.stereo_mode == "right_left" || hints.stereo_mode == "block_rl";
+  if (baseViewIsRightEye != m_baseViewIsRightEye)
+    return false;
+
+  if (!sized)
+  {
+    hints.width = static_cast<int>(m_width);
+    hints.height = static_cast<int>(m_height);
+  }
+  m_hints = hints;
+
+  // The clips join at an access unit boundary and the last one was drained on close, so
+  // nothing is lost by starting the new one clean
+  Reset();
+
+  CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::Reconfigure - carrying on with the next clip");
+  return true;
+}
+
 bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
 {
   if (!m_decoder)
