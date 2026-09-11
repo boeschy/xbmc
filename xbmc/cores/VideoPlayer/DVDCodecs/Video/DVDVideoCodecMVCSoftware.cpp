@@ -26,6 +26,8 @@
 #include <cstring>
 #include <set>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -252,6 +254,21 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   // Consumed smallest-first as frames come out - see m_ptsQueue in the header
   m_ptsQueue.insert(m_ptsPending);
 
+  auto decode = [this](const uint8_t* start, const uint8_t* stop)
+  {
+    // edge264 returns plain positive errno values, 0 on success
+    const int ret = DecodeNal(start, stop);
+    if (ret != 0)
+    {
+      CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264_decode_NAL returned {}",
+                ret);
+    }
+  };
+
+  // The base view's end_of_seq/end_of_stream precedes the dependent view's slices in
+  // a merged access unit, and edge264 clears its parameter sets on it - feed it last
+  std::vector<std::pair<const uint8_t*, const uint8_t*>> trailing;
+
   // edge264_find_start_code() points at the "00 00 01" itself; a 4-byte start
   // code is found by its last three bytes, so skipping 3 is right for both
   const uint8_t* nal = edge264_find_start_code(buf, end, 0);
@@ -262,19 +279,20 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
     {
       const uint8_t* nalEnd = edge264_find_start_code(nal, end, 0);
 
-      // edge264 returns plain positive errno values, 0 on success
-      const int ret = DecodeNal(nal, nalEnd);
-      if (ret != 0)
-      {
-        CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264_decode_NAL returned {}",
-                  ret);
-      }
+      const uint8_t nalType = nal[0] & 0x1f;
+      if (nalType == 10 || nalType == 11)
+        trailing.emplace_back(nal, nalEnd);
+      else
+        decode(nal, nalEnd);
 
       if (nalEnd >= end)
         break;
       nal = nalEnd + 3;
     }
   }
+
+  for (const auto& [start, stop] : trailing)
+    decode(start, stop);
 
   DrainFrames();
 
@@ -428,26 +446,19 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
   // the source resolution and matches the layout Kodi's
   // stereoMode="left_right"/"top_bottom" renderer path already expects
   // for half-SBS/half-TAB files - no renderer changes needed.
-  // Idents, menus and the run-up after a seek carry no dependent view
+  // Idents, menus and the run-up after a seek carry no dependent view: show the base
+  // view to both eyes rather than drop to 2D, which would cost a stereo mode switch
   const bool stereo = frame.samples_mvc[0] != nullptr;
   for (int plane = 0; plane < 3; plane++)
   {
     const uint8_t* srcL = frame.samples[plane];
-    const uint8_t* srcR = frame.samples_mvc[plane];
+    const uint8_t* srcR = stereo ? frame.samples_mvc[plane] : srcL;
     int srcStride = plane == 0 ? frame.stride_Y : frame.stride_C;
     int srcW = plane == 0 ? frame.width_Y : frame.width_C;
     int srcH = plane == 0 ? frame.height_Y : frame.height_C;
 
     uint8_t* dst = planes[plane];
     int dstStride = strides[plane];
-
-    if (!stereo)
-    {
-      for (int y = 0; y < srcH; y++)
-        memcpy(dst + static_cast<size_t>(y) * dstStride,
-               srcL + static_cast<size_t>(y) * srcStride, srcW);
-      continue;
-    }
 
     if (m_packMode == PackMode::SBS)
     {
@@ -505,9 +516,7 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
   pVideoPicture->iHeight = packedHeight;
   pVideoPicture->iDisplayWidth = packedWidth;
   pVideoPicture->iDisplayHeight = packedHeight;
-  if (!stereo)
-    pVideoPicture->stereoMode = "mono";
-  else if (m_packMode == PackMode::SBS)
+  if (m_packMode == PackMode::SBS)
     pVideoPicture->stereoMode = m_baseViewIsRightEye ? "right_left" : "left_right";
   else
     pVideoPicture->stereoMode = m_baseViewIsRightEye ? "bottom_top" : "top_bottom";
