@@ -89,7 +89,13 @@ private:
   //! \brief Find the base view's video stream in the base demuxer's stream list.
   bool FindBaseVideoStream();
 
-  //! \brief Tell the decoder the base view stream carries a second view to unpack.
+  /*!
+   * \brief Flag the base view stream stereoscopic, so that the decoder packs both eyes.
+   *
+   * Done whether or not the play item has a dependent view, so that a title keeps its
+   * stereo mode across the 2D it plays, and again whenever the base demuxer rebuilds
+   * the stream and the flag with it.
+   */
   void MarkBaseViewStereoscopic();
 
   //! \brief Work out the fixed difference between the two views' timestamps.
@@ -169,6 +175,9 @@ private:
 
   //! Whether the title has been said to carry plane offsets, which is said once.
   bool m_loggedOffsetMetadata{false};
+
+  //! Whether a dependent view packet without a timestamp has been reported, which is done once.
+  bool m_loggedUntimedDependent{false};
 
   //! Dependent view packet held back because it is ahead of the base view.
   DemuxPacket* m_pendingDependent{nullptr};

@@ -118,6 +118,7 @@ bool CDVDDemuxBluray3D::Open(const std::shared_ptr<CDVDInputStream>& input)
   // is looked for now and again whenever the streams change, and its absence is an
   // ordinary state rather than a reason to give up on the title.
   OpenDependentView();
+  MarkBaseViewStereoscopic();
 
   return true;
 }
@@ -241,9 +242,26 @@ void CDVDDemuxBluray3D::MarkBaseViewStereoscopic()
   if (!stream)
     return;
 
+  // A 3D title has 2D in it as well - idents, text cards, a menu, the still it may open on -
+  // and each change between the two would switch the display's stereo mode, with a
+  // notification every time. So the stream stays stereoscopic for as long as the title is,
+  // and the decoder shows a picture that has no second view to both eyes. Only progressive
+  // H.264 can be shown that way, which is all a dependent view ever accompanies.
+  if (!m_dependent)
+  {
+    const bool stereoscopicTitle{m_bluray->IsStereoscopic() ||
+                                 m_bluray->GetSupportedMenuType() == MenuType::NATIVE};
+    if (!stereoscopicTitle || stream->codec != AV_CODEC_ID_H264 || stream->interlaced)
+      return;
+  }
+
   // The base view is the left eye unless the playlist says the eyes are swapped.
   const bool baseViewIsRightEye{m_bluray->IsBaseViewRightEye()};
-  stream->stereo_mode = baseViewIsRightEye ? "right_left" : "left_right";
+  const char* stereoMode{baseViewIsRightEye ? "right_left" : "left_right"};
+  if (stream->multiview && stream->stereo_mode == stereoMode)
+    return;
+
+  stream->stereo_mode = stereoMode;
   stream->multiview = true;
 
   CLog::Log(LOGDEBUG, "CDVDDemuxBluray3D - the playlist says the base view is the {} eye ({})",
@@ -325,12 +343,22 @@ DemuxPacket* CDVDDemuxBluray3D::ReadDependent()
       return nullptr;
     }
 
-    // Without a timestamp an access unit cannot be paired with anything, so there is no
-    // point keeping it.
-    if (packet->iStreamId == m_dependentVideoStreamId && packet->iSize > 0 &&
-        packet->pts != DVD_NOPTS_VALUE)
+    if (packet->iStreamId == m_dependentVideoStreamId && packet->iSize > 0)
     {
-      return packet;
+      if (packet->pts != DVD_NOPTS_VALUE)
+        return packet;
+
+      // Without a timestamp an access unit cannot be paired with anything, so there is no
+      // point keeping it. Nor should there be one: ffmpeg hands over an access unit it has
+      // split in pieces with the timestamp on the first piece only, and losing the rest
+      // leaves an undecoded band across the bottom of the dependent view (see
+      // max_packet_size in CDVDDemuxFFmpeg::Open()).
+      if (!m_loggedUntimedDependent)
+      {
+        m_loggedUntimedDependent = true;
+        CLog::LogF(LOGWARNING, "dropping a dependent view packet of {} bytes without a timestamp",
+                   packet->iSize);
+      }
     }
 
     CDVDDemuxUtils::FreeDemuxPacket(packet);
@@ -365,13 +393,12 @@ DemuxPacket* CDVDDemuxBluray3D::Read()
 
   if (packet->iStreamId == DMX_SPECIALID_STREAMCHANGE)
   {
-    // The stream list was rebuilt, so find the base view in it again and put the multiview
-    // flag back if the play item still has a second eye. The play item may have changed as
-    // well, and CheckDependentView() reopens the clip only if it has.
+    // The stream list was rebuilt, so find the base view in it again and flag it again. The
+    // play item may have changed as well, and CheckDependentView() reopens the clip only if
+    // it has.
     FindBaseVideoStream();
     CheckDependentView();
-    if (m_dependent)
-      MarkBaseViewStereoscopic();
+    MarkBaseViewStereoscopic();
     return packet;
   }
 
@@ -379,6 +406,9 @@ DemuxPacket* CDVDDemuxBluray3D::Read()
     return packet;
 
   CheckDependentView();
+
+  // The base demuxer replaces the stream, flag and all, when the clip's parameters change
+  MarkBaseViewStereoscopic();
 
   if (!m_dependent || packet->pts == DVD_NOPTS_VALUE)
     return packet;
@@ -560,6 +590,7 @@ bool CDVDDemuxBluray3D::Reset()
   CloseDependentView();
   FlushDependent();
   CheckDependentView();
+  MarkBaseViewStereoscopic();
 
   return true;
 }
