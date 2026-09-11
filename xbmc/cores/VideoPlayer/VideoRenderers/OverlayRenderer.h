@@ -202,6 +202,11 @@ namespace OVERLAY {
      * overlay itself is, and it is signed by the eye being drawn.
      */
     float SubtitlePlaneOffset() const;
+    /*!
+     * \brief The source rect with a half packing's eye crop undone, so a plane is measured
+     *        against the frame it was authored for rather than the eye being drawn
+     */
+    CRect FrameSourceRect() const;
     std::shared_ptr<COverlay> Convert(SElement& e);
     // Build a COverlay (cached or freshly created) from the libass output
     // already produced by PrepareOverlays. Does not call ass_render_frame.
