@@ -1317,7 +1317,9 @@ bool CDVDInputStreamBluray::IsStereoscopicDisc() const
   return m_stereoscopicDisc;
 }
 
-bool CDVDInputStreamBluray::GetStereoscopicClip(unsigned int& clip, std::string& codec) const
+bool CDVDInputStreamBluray::GetStereoscopicClip(unsigned int& clip,
+                                                std::string& codec,
+                                                std::chrono::milliseconds& inTime) const
 {
   if (!IsStereoscopic())
     return false;
@@ -1339,6 +1341,7 @@ bool CDVDInputStreamBluray::GetStereoscopicClip(unsigned int& clip, std::string&
 
   clip = it->clips.front().clip;
   codec = it->clips.front().codec;
+  inTime = it->inTime;
 
   return true;
 }
