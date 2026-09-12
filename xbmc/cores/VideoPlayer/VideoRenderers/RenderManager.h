@@ -96,6 +96,10 @@ public:
    * until then a resolution search would be answered for the title that has gone.
    */
   void ResetPictureInfo();
+
+  //! \brief Choose display modes for a 3D title even while it plays a 2D picture.
+  void SetStereoscopicTitle(bool stereoscopic);
+
   void SetViewMode(int iViewMode);
   void PreInit();
   void UnInit();
@@ -200,6 +204,10 @@ protected:
   CCriticalSection m_presentlock;
   CCriticalSection m_datalock;
   bool m_bTriggerUpdateResolution = false;
+  bool m_stereoscopicTitle = false;
+
+  //! Whether the display mode is to be chosen for a stereoscopic source
+  bool IsStereoscopic() const { return m_stereoscopicTitle || !m_picture.stereoMode.empty(); }
   //! m_picture was primed from stream hints and no longer describes the renderer's setup
   bool m_reconfigure = false;
   bool m_bRenderGUI = true;

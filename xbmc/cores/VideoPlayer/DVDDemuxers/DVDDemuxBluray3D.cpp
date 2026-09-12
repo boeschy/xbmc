@@ -239,21 +239,8 @@ void CDVDDemuxBluray3D::CloseDependentView()
 void CDVDDemuxBluray3D::MarkBaseViewStereoscopic()
 {
   auto* stream{dynamic_cast<CDemuxStreamVideo*>(m_base->GetStream(m_baseVideoStreamId))};
-  if (!stream)
+  if (!stream || !m_dependent)
     return;
-
-  // A 3D title has 2D in it as well - idents, text cards, a menu, the still it may open on -
-  // and each change between the two would switch the display's stereo mode, with a
-  // notification every time. So the stream stays stereoscopic for as long as the title is,
-  // and the decoder shows a picture that has no second view to both eyes. Only progressive
-  // H.264 can be shown that way, which is all a dependent view ever accompanies.
-  if (!m_dependent)
-  {
-    const bool stereoscopicTitle{m_bluray->IsStereoscopic() ||
-                                 m_bluray->GetSupportedMenuType() == MenuType::NATIVE};
-    if (!stereoscopicTitle || stream->codec != AV_CODEC_ID_H264 || stream->interlaced)
-      return;
-  }
 
   // The base view is the left eye unless the playlist says the eyes are swapped.
   const bool baseViewIsRightEye{m_bluray->IsBaseViewRightEye()};

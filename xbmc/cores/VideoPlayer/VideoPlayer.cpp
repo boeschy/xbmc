@@ -912,6 +912,25 @@ bool CVideoPlayer::OpenInputStream()
     return false;
   }
 
+  // A 3D disc plays 2D between its stereoscopic clips - idents, text cards, the still it may
+  // open on - each of which would otherwise switch the display out of its 3D mode and back,
+  // with a notification every time. Report one stereo mode for the whole title instead and
+  // leave 2D pictures to be shown to both eyes. The software MVC decoder packs the eyes side
+  // by side, and the mode follows what its pictures say should that ever differ.
+  std::string titleStereoMode;
+#if defined(HAVE_LIBBLURAY)
+  if (const auto bluray = std::dynamic_pointer_cast<CDVDInputStreamBluray>(m_pInputStream);
+      bluray && bluray->IsStereoscopicDisc() &&
+      CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+          CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE) !=
+          STEREOSCOPIC_PLAYBACK_MODE_MONO)
+  {
+    titleStereoMode = "left_right";
+  }
+#endif
+  m_processInfo->SetVideoStereoModeTitle(titleStereoMode);
+  m_renderManager.SetStereoscopicTitle(!titleStereoMode.empty());
+
   // find any available external subtitles for non dvd files
   if (!m_pInputStream->IsStreamType(DVDSTREAM_TYPE_DVD) &&
       !m_pInputStream->IsStreamType(DVDSTREAM_TYPE_PVRMANAGER))
@@ -3068,6 +3087,7 @@ void CVideoPlayer::HandleMessages()
       // picks up its stereoscopic mode that way, and the display is put into a 3D mode
       // for it.
       m_processInfo->ResetVideoCodecInfo();
+      m_processInfo->SetVideoStereoModeTitle({});
       m_renderManager.ResetPictureInfo();
 
       m_pDemuxer.reset();
@@ -4475,7 +4495,10 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
       // instead and let the next OpenStream, with real parameters, set it.
       if (framerate >= 5.0 && framerate <= 120.0)
       {
-        RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
+        const bool stereoscopic{!hint.stereo_mode.empty() ||
+                                !m_processInfo->GetVideoStereoModeTitle().empty()};
+        RESOLUTION res = CResolutionUtils::ChooseBestResolution(
+            static_cast<float>(framerate), hint.width, hint.height, stereoscopic);
         CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
         m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode);
       }

@@ -92,9 +92,8 @@ private:
   /*!
    * \brief Flag the base view stream stereoscopic, so that the decoder packs both eyes.
    *
-   * Done whether or not the play item has a dependent view, so that a title keeps its
-   * stereo mode across the 2D it plays, and again whenever the base demuxer rebuilds
-   * the stream and the flag with it.
+   * Nothing to flag without a dependent view. Done again whenever the base demuxer
+   * rebuilds the stream, and the flag with it.
    */
   void MarkBaseViewStereoscopic();
 

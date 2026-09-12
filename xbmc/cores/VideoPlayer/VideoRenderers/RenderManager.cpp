@@ -608,7 +608,7 @@ RESOLUTION CRenderManager::GetResolution()
 
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
     res = CResolutionUtils::ChooseBestResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
-                                                 !m_picture.stereoMode.empty());
+                                                 IsStereoscopic());
 
   return res;
 }
@@ -821,7 +821,7 @@ void CRenderManager::UpdateResolution()
           m_fps >= 5.0f && m_fps <= 120.0f)
       {
         RESOLUTION res = CResolutionUtils::ChooseBestResolution(
-            m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty());
+            m_fps, m_picture.iWidth, m_picture.iHeight, IsStereoscopic());
         CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
         UpdateLatencyTweak();
         if (m_pRenderer)
@@ -840,6 +840,13 @@ void CRenderManager::ResetPictureInfo()
   m_picture.Reset();
   m_fps = 0.0f;
   m_bTriggerUpdateResolution = false;
+  m_stereoscopicTitle = false;
+}
+
+void CRenderManager::SetStereoscopicTitle(bool stereoscopic)
+{
+  std::unique_lock lock(m_statelock);
+  m_stereoscopicTitle = stereoscopic;
 }
 
 void CRenderManager::TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode)
