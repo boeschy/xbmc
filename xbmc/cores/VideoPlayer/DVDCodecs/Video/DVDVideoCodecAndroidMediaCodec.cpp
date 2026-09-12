@@ -365,6 +365,17 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
       hints.profile, hints.ptsinvalid, hints.codec_tag, hints.extradata.GetSize());
 
   m_render_surface = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEMEDIACODECSURFACE);
+
+  // The video view is one layer under the GUI and cannot be drawn once per eye, so a 2D clip
+  // of a 3D title would fill the whole split screen; the texture path renders it to both eyes
+  if (m_render_surface && !m_processInfo.GetVideoStereoModeTitle().empty())
+  {
+    CLog::Log(LOGINFO,
+              "CDVDVideoCodecAndroidMediaCodec::Open - stereoscopic title, rendering through "
+              "a texture rather than the video surface");
+    m_render_surface = false;
+  }
+
   m_state = MEDIACODEC_STATE_UNINITIALIZED;
   m_codecControlFlags = 0;
   m_hints = hints;
