@@ -92,7 +92,7 @@ void CProcessInfo::ResetVideoCodecInfo()
     m_dataCache->SetVideoFps(m_videoFPS);
     m_dataCache->SetVideoDAR(m_videoDAR);
     m_dataCache->SetStateSeeking(m_stateSeeking);
-    m_dataCache->SetVideoStereoMode(m_videoStereoMode);
+    m_dataCache->SetVideoStereoMode(ReportedVideoStereoMode());
     m_dataCache->SetVideoLiveBitRate(m_videoLiveBitRate);
     m_dataCache->SetVideoQueueLevel(m_videoQueueLevel);
     m_dataCache->SetVideoQueueDataLevel(m_videoQueueDataLevel);
@@ -164,14 +164,43 @@ void CProcessInfo::SetVideoStereoMode(const std::string &mode)
 
   m_videoStereoMode = mode;
 
+  // the title follows the arrangement its stereoscopic pictures actually use
+  if (!m_videoStereoModeTitle.empty() && !mode.empty() && mode != "mono")
+    m_videoStereoModeTitle = mode;
+
   if (m_dataCache)
-    m_dataCache->SetVideoStereoMode(m_videoStereoMode);
+    m_dataCache->SetVideoStereoMode(ReportedVideoStereoMode());
 }
 
 std::string CProcessInfo::GetVideoStereoMode()
 {
   std::unique_lock lock(m_videoCodecSection);
 
+  return m_videoStereoMode;
+}
+
+void CProcessInfo::SetVideoStereoModeTitle(const std::string& mode)
+{
+  std::unique_lock lock(m_videoCodecSection);
+
+  m_videoStereoModeTitle = mode;
+
+  if (m_dataCache)
+    m_dataCache->SetVideoStereoMode(ReportedVideoStereoMode());
+}
+
+std::string CProcessInfo::GetVideoStereoModeTitle()
+{
+  std::unique_lock lock(m_videoCodecSection);
+
+  return m_videoStereoModeTitle;
+}
+
+std::string CProcessInfo::ReportedVideoStereoMode() const
+{
+  if ((m_videoStereoMode.empty() || m_videoStereoMode == "mono") &&
+      !m_videoStereoModeTitle.empty())
+    return m_videoStereoModeTitle;
   return m_videoStereoMode;
 }
 
