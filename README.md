@@ -29,6 +29,19 @@
   Welcome to Kodi Home Theater Software!
 </h1>
 
+This is a Kodi fork with the **[Fandangos Anroid Blu-Ray JRE menu patches](https://github.com/fandangos/Kodi-HDR-Edition)**, spiced up with the **[popcornmix patches](https://github.com/popcornmix/xbmc)** for proper 3D Blu-Ray menu handling and an implementation of the **[edge264-mvc 3D software decoder](https://github.com/jens-duttke/edge264-mvc)** for 3D Blu-Ray ISO and 3D MVC MKV playback on Android devices without a 3D MVC hardware decoder. Claude Fable helped me to make it work. It is tested on my Nvidia Shield pro 2019, I can't tell if it works on other Android devices.
+
+## What works:
+- Blu-Ray JRE menus work (almost) perfectly (THX2 Fandangos), even with 3D Blu-Rays (THX2 popcornmix)
+- 3D MVC MKV files created with MakeMKV playback with SBS/TAB output (THX2 Jens Duttke for the MVC software decoder)
+- 3D BD ISO playback with SBS/TAB output (THX2 Jens Duttke for the MVC software decoder)
+- 3D BD subtitles have the correct depth like authored (THX2 popcornmix/cinema-ONE)
+- Changing audio/subtitles with UI or hotkeys works in BD nav-mode now
+
+## What doesn't work:
+- 3D framepacked HDMI output (not supported by the underlying Android)
+- 3D display needs to be set to the correct 3D mode manually, because HDMI auto toggle is not supported by the underlying Android. But all content of a 3D Blu-Ray, 2D and 3D, is shown in the configured 3D output mode to avoid having to toggle the display between 2D and 3D several times.
+
 Kodi is an award-winning **free and open source** software media player and entertainment hub for digital media. Available as a native application for **Android, Linux, BSD, macOS, iOS, tvOS and Windows operating systems**, Kodi runs on most common processor architectures.
 
 Created in 2003 by a group of like minded programmers, Kodi is a non-profit project run by the XBMC Foundation and developed by volunteers located around the world. More than 500 software developers have contributed to Kodi to date, and 100-plus translators have worked to expand its reach, making it available in more than 70 languages.
