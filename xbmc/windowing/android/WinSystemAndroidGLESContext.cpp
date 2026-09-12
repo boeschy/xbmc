@@ -240,25 +240,14 @@ bool CWinSystemAndroidGLESContext::SetHDR(const VideoPicture* videoPicture)
   if (m_hasHDRConfig && m_hasEGL_BT2020_PQ_Colorspace_Extension && m_hasEGL_ST2086_Extension)
   {
     HDRColorSpace = EGL_NONE;
-    // The colorspace decision is driven purely by the picture's primaries/transfer, NOT by the
-    // presence of mastering metadata. This lets a caller request a BT2020-PQ surface that carries
-    // NO SMPTE2086 metadata (the Android disc-menu GUI/overlay surface): attaching a mastering
-    // volume there would advertise an HDR envelope that conflicts with the separate video
-    // surface's own metadata, so the HDMI HDR infoframe changes whenever the overlay becomes
-    // visible (e.g. the OSD) and the TV re-syncs. Metadata is attached below only when the source
-    // actually supplies it (real video HDR passthrough), leaving that path unchanged.
-    if (videoPicture)
+    // Like CWinSystemGbm::SetHDR: HDR is decided by the transfer curve (PQ/HLG/DoVi), not by
+    // mastering metadata (a PQ GUI surface may legitimately carry none) and not by the colour
+    // matrix (BT.709 is the matrix of every SDR stream).
+    if (videoPicture && (videoPicture->color_transfer == AVCOL_TRC_SMPTE2084 ||
+                         videoPicture->color_transfer == AVCOL_TRC_ARIB_STD_B67 ||
+                         videoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION))
     {
-      switch (videoPicture->color_space)
-      {
-      case AVCOL_SPC_BT2020_NCL:
-      case AVCOL_SPC_BT2020_CL:
-      case AVCOL_SPC_BT709:
-        HDRColorSpace = EGL_GL_COLORSPACE_BT2020_PQ_EXT;
-        break;
-      default:
-        break;
-      }
+      HDRColorSpace = EGL_GL_COLORSPACE_BT2020_PQ_EXT;
     }
 
     if (HDRColorSpace != m_HDRColorSpace)
