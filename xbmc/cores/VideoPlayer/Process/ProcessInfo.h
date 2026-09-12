@@ -42,6 +42,14 @@ public:
   std::string GetVideoPixelFormat();
   void SetVideoStereoMode(const std::string &mode);
   std::string GetVideoStereoMode();
+  /*!
+   * \brief Stereo mode reported for the title whenever its pictures carry none.
+   *
+   * A 3D disc plays 2D between its stereoscopic clips - idents, text cards, stills - and
+   * the display is to stay in its 3D mode across them. Empty for a title that is not 3D.
+   */
+  void SetVideoStereoModeTitle(const std::string& mode);
+  std::string GetVideoStereoModeTitle();
   void SetVideoDimensions(int width, int height);
   void GetVideoDimensions(int &width, int &height);
   void SetVideoFps(float fps);
@@ -143,12 +151,15 @@ protected:
   static std::map<std::string, CreateProcessControl> m_processControls;
   CDataCacheCore *m_dataCache = nullptr;
 
+  std::string ReportedVideoStereoMode() const;
+
   // player video info
   bool m_videoIsHWDecoder;
   std::string m_videoDecoderName;
   std::string m_videoDeintMethod;
   std::string m_videoPixelFormat;
   std::string m_videoStereoMode;
+  std::string m_videoStereoModeTitle;
   int m_videoWidth;
   int m_videoHeight;
   float m_videoFPS;
