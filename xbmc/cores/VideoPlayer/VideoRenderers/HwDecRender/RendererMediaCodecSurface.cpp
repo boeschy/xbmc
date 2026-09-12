@@ -105,13 +105,9 @@ bool CRendererMediaCodecSurface::Configure(const VideoPicture &picture, float fp
       // latches its mode from an intermediate state and Dolby Vision does not re-engage.
       // Rebuilding the surface before the link drops is what keeps the negotiation clean.
       VideoPicture hdrPicture;
-      // Always ask for BT2020. SetHDR derives the surface colorspace from color_space and only
-      // takes its PQ branch for BT2020/BT709; anything else (an m2ts clip that carries no VUI
-      // colour description reaches us as AVCOL_SPC_UNSPECIFIED, which is common on Blu-ray menu
-      // clips and on the Dolby Vision base layer) made it silently leave the surface sRGB - and,
-      // because it then compared EGL_NONE against EGL_NONE, still report success. The GUI surface
-      // is ours, not a passthrough of the video's matrix: an HDR picture always wants BT2020-PQ.
-      hdrPicture.color_space = AVCOL_SPC_BT2020_NCL;
+      // SetHDR decides by transfer curve / hdrType, so hand it the video's own
+      hdrPicture.color_transfer = picture.color_transfer;
+      hdrPicture.hdrType = picture.hdrType;
       hdrPicture.hasDisplayMetadata = picture.hasDisplayMetadata;
       hdrPicture.displayMetadata = picture.displayMetadata;
       hdrPicture.hasLightMetadata = picture.hasLightMetadata;
