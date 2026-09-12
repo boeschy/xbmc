@@ -1,15 +1,34 @@
-<h1 align="center">Kodi — Blu-ray Menu Edition</h1>
+<a href="https://play.google.com/store/apps/details?id=org.xbmc.kodi" target="_blank">
+  <img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png" height="80"/>
+</a>
 
-<p align="center">
-  <strong>Blu-ray and 4K Blu-ray discs with their own BD-J menus, on Android.</strong>
-</p>
+<h1 align="center">
+  Welcome to Kodi Home Theater Software!
+</h1>
 
-<p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Android%20%C2%B7%20Shield-blue?style=flat-square">
-  <img alt="Base" src="https://img.shields.io/badge/based%20on-Kodi%2022%20Piers-blue?style=flat-square">
-  <a href="https://github.com/fandangos/Kodi-HDR-Edition/releases/tag/android-bluray-menu-2026-v4"><img alt="Latest" src="https://img.shields.io/badge/latest-v4-brightgreen?style=flat-square"></a>
-  <a href="https://forum.kodi.tv/showthread.php?tid=360250"><img alt="Forum" src="https://img.shields.io/badge/support-forum%20thread-orange?style=flat-square"></a>
-</p>
+This is a Kodi fork with the **[Fandangos Anroid Blu-Ray JRE menu patches](https://github.com/fandangos/Kodi-HDR-Edition)**, spiced up with the **[popcornmix patches](https://github.com/popcornmix/xbmc)** for proper 3D Blu-Ray menu handling and an implementation of the **[edge264-mvc 3D software decoder](https://github.com/jens-duttke/edge264-mvc)** for 3D Blu-Ray ISO and 3D MVC MKV playback on Android devices without a 3D MVC hardware decoder. Claude Fable helped me to make it work. It is tested on my Nvidia Shield pro 2019, I can't tell if it works on other Android devices.
+
+## What works:
+- Blu-Ray JRE menus work (almost) perfectly (THX2 Fandangos), even with 3D Blu-Rays (THX2 popcornmix)
+- 3D MVC MKV files created with MakeMKV playback with SBS/TAB output (THX2 Jens Duttke for the MVC software decoder)
+- 3D BD ISO playback with SBS/TAB output (THX2 Jens Duttke for the MVC software decoder)
+- 3D BD subtitles have the correct depth like authored (THX2 popcornmix/cinema-ONE)
+- Changing audio/subtitles with UI or hotkeys works in BD nav-mode now
+
+## What doesn't work:
+- 3D framepacked HDMI output (not supported by the underlying Android)
+- 3D display needs to be set to the correct 3D mode manually, because HDMI auto toggle is not supported by the underlying Android. But all content of a 3D Blu-Ray, 2D and 3D, is shown in the configured 3D output mode to avoid having to toggle the display between 2D and 3D several times.
+
+Kodi is an award-winning **free and open source** software media player and entertainment hub for digital media. Available as a native application for **Android, Linux, BSD, macOS, iOS, tvOS and Windows operating systems**, Kodi runs on most common processor architectures.
+
+Created in 2003 by a group of like minded programmers, Kodi is a non-profit project run by the XBMC Foundation and developed by volunteers located around the world. More than 500 software developers have contributed to Kodi to date, and 100-plus translators have worked to expand its reach, making it available in more than 70 languages.
+
+While Kodi functions very well as a standard media player application for your computer, it has been designed to be the perfect companion for your HTPC. With its **beautiful interface and powerful skinning engine**, Kodi feels very natural to use from the couch with a remote control and is the ideal solution for your home theater.
+
+## Give your media the love it deserves
+Kodi can be used to play almost all popular audio and video formats around. It was designed for network playback, so you can stream your multimedia from anywhere in the house or directly from the internet using practically any protocol available.
+
+Point Kodi to your media and watch it **scan and automagically create a personalized library** complete with box covers, descriptions, and fanart. There are playlist and slideshow functions, a weather forecast feature and many audio visualizations. Once installed, your computer or HTPC will become a fully functional multimedia jukebox.
 
 <p align="center">
   <a href="https://github.com/fandangos/Kodi-HDR-Edition/releases/tag/android-bluray-menu-2026-v4"><strong>⬇ Download the APK</strong></a>
