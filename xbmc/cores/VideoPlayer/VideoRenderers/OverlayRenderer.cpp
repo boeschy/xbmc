@@ -176,6 +176,8 @@ void CRenderer::Render(int idx, float depth)
     }
   }
 
+  m_lastDrawnPlaneOffset = m_subtitlePlaneOffset;
+
   ReleaseUnused();
 }
 
@@ -518,6 +520,7 @@ void CRenderer::PrepareOverlays(int idx)
   bool hasImageSpu = false;
   bool hasLibassImages = false;
   std::vector<const CDVDOverlay*> imageSpu;
+  bool hasVisible = false;
   for (auto& e : m_buffers[idx])
   {
     // Clear last frame's cached output; libass may have invalidated the
@@ -539,6 +542,7 @@ void CRenderer::PrepareOverlays(int idx)
     {
       hasImageSpu = true;
       imageSpu.push_back(&o);
+      hasVisible = true;
       if (o.m_textureid == 0)
         doMarkDirty = true;
       continue;
@@ -576,6 +580,7 @@ void CRenderer::PrepareOverlays(int idx)
         ovAss.GetLibassHandler()->RenderImage(assPts, rOpts, m_overlayStyle, &currentChange);
     if (e.renderedImages)
       hasLibassImages = true;
+      hasVisible = true;
     if (currentChange > 0)
     {
       // Persist on the overlay so a skipped GUI render does not drop the change.
@@ -601,6 +606,12 @@ void CRenderer::PrepareOverlays(int idx)
     doMarkDirty = true;
     m_prevImageSpu = std::move(imageSpu);
   }
+
+  // A title may vary the plane offset every frame, moving the subtitle in depth without
+  // touching its bitmap, which nothing else here would notice. Compared against what was
+  // drawn rather than what was last seen, so a skipped GUI walk keeps asking.
+  if (hasVisible && m_subtitlePlaneOffset != m_lastDrawnPlaneOffset)
+    doMarkDirty = true;
 
   if (doMarkDirty)
     MarkDirty();
