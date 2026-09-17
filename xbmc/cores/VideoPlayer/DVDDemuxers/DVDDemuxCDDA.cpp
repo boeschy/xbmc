@@ -12,6 +12,7 @@
 #include "DVDInputStreams/DVDInputStream.h"
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 
+// CDDA audio demuxer based on AirTunes audio Demuxer.
 
 class CDemuxStreamAudioCDDA
   : public CDemuxStreamAudio
