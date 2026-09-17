@@ -533,7 +533,7 @@ void CRenderer::PrepareOverlays(int idx)
   UpdateSubtitlePosition(resolution);
 
   bool doMarkDirty = false;
-  bool hasImageSpu = false;
+  std::vector<std::shared_ptr<CDVDOverlay>> imageSpuOverlays;
   bool hasLibassImages = false;
   bool hasVisible = false;
   for (auto& e : m_buffers[idx])
@@ -548,14 +548,9 @@ void CRenderer::PrepareOverlays(int idx)
 
     CDVDOverlay& o = *e.overlay_dvd;
 
-    // PGS/DVB and DVD SPU: only added to m_buffers at their visible PTS,
-    // so finding one means it is on screen now. m_textureid == 0 is the
-    // "new arrival" signal (also true every frame for animated PGS where
-    // each frame is a fresh CDVDOverlay). Disappearance is caught after
-    // the loop by the hasImageSpu vs m_prevHadImageSpu check.
     if (o.IsOverlayType(DVDOVERLAY_TYPE_IMAGE) || o.IsOverlayType(DVDOVERLAY_TYPE_SPU))
     {
-      hasImageSpu = true;
+      imageSpuOverlays.push_back(e.overlay_dvd);
       hasVisible = true;
       if (o.m_textureid == 0)
         doMarkDirty = true;
@@ -609,10 +604,10 @@ void CRenderer::PrepareOverlays(int idx)
   // the loop above. Without this, a PGS subtitle ending leaves its
   // cached bitmap on the GUI plane until something else dirties.
   // Likewise libass output once its overlay is no longer added.
-  if (hasImageSpu != m_prevHadImageSpu || hasLibassImages != m_prevHadLibassImages)
+  if (imageSpuOverlays != m_prevImageSpuOverlays || hasLibassImages != m_prevHadLibassImages)
     doMarkDirty = true;
 
-  m_prevHadImageSpu = hasImageSpu;
+  m_prevImageSpuOverlays = std::move(imageSpuOverlays);
   m_prevHadLibassImages = hasLibassImages;
 
   // A title may vary the plane offset every frame, moving the subtitle in depth without
