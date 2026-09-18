@@ -1,6 +1,7 @@
 set(SOURCES BlurayOffsetMetadata.cpp
             DemuxMultiSource.cpp
             DVDDemux.cpp
+            DVDDemuxBXA.cpp
             DVDDemuxCC.cpp
             DVDDemuxCC/CCBitstreamParserFactory.cpp
             DVDDemuxCC/H264AnnexBBitstreamParser.cpp
@@ -21,6 +22,7 @@ endif()
 set(HEADERS BlurayOffsetMetadata.h
             DemuxMultiSource.h
             DVDDemux.h
+            DVDDemuxBXA.h
             DVDDemuxCC.h
             DVDDemuxCC/Bitstream.h
             DVDDemuxCC/CaptionBlock.h

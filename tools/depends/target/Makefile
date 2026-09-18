@@ -23,6 +23,7 @@ DEPENDS = \
   libjpeg-turbo \
   libplist \
   libpng \
+  libshairplay \
   libusb \
   libxml2 \
   nettle \
@@ -44,7 +45,7 @@ endif
 ifeq ($(OS),darwin_embedded)
   EXCLUDED_DEPENDS = libusb libcdio libcdio-gplv3
   ifeq ($(findstring appletv,$(TARGET_PLATFORM)),appletv)
-    EXCLUDED_DEPENDS += libplist
+    EXCLUDED_DEPENDS += libshairplay libplist
   endif
   DEPENDS += darwin-embedded-entitlements
 endif
