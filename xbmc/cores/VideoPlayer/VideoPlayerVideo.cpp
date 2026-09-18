@@ -132,10 +132,51 @@ double CVideoPlayerVideo::GetOutputDelay()
   return time;
 }
 
+void CVideoPlayerVideo::DropParkedCodec()
+{
+  if (!m_parkedVideoCodec)
+    return;
+
+  // A park is only ever meant to bridge one CloseStream()/OpenStream() pair. If this
+  // open fails the stream is disabled, CVideoPlayer::CloseStream() then early-returns
+  // on the negative stream id, and the park would survive to be adopted by whatever
+  // opens next - possibly a different title, on a timeline hours away. The decoder
+  // still holds the previous clip's decoded pictures (TakeParkedCodec deliberately
+  // does not flush), so those stale timestamps would drive PLAYER_STARTED and take
+  // the master clock with them. Let it go instead.
+  CLog::Log(LOGINFO, "CVideoPlayerVideo::OpenStream - dropping the parked video codec");
+  m_parkedVideoCodec.reset();
+}
+
+std::unique_ptr<CDVDVideoCodec> CVideoPlayerVideo::TakeParkedCodec(CDVDStreamInfo& hint)
+{
+  if (!m_parkedVideoCodec)
+    return nullptr;
+
+  std::unique_ptr<CDVDVideoCodec> codec;
+
+  if (m_parkedVideoCodec->Reconfigure(hint))
+  {
+    CLog::Log(LOGINFO, "CVideoPlayerVideo::OpenStream - adopting the parked video codec");
+    // no Reset() here on purpose - the decoder is carrying on with the next clip,
+    // and the flush it would do is exactly what we are avoiding
+    codec = std::move(m_parkedVideoCodec);
+  }
+  else
+    CLog::Log(LOGINFO,
+              "CVideoPlayerVideo::OpenStream - parked video codec does not fit the new stream");
+
+  m_parkedVideoCodec.reset();
+  return codec;
+}
+
 bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
 {
   if (hint.flags & AV_DISPOSITION_ATTACHED_PIC)
+  {
+    DropParkedCodec();
     return false;
+  }
   if (!hint.extradata)
   {
     // codecs which require extradata
@@ -150,6 +191,7 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
         hint.codec == AV_CODEC_ID_VC1)
     {
       CLog::LogF(LOGERROR, "Codec id {} require extradata.", hint.codec);
+      DropParkedCodec();
       return false;
     }
     // clang-format on
@@ -164,7 +206,9 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
       hint.codecOptions |= CODEC_ALLOW_FALLBACK;
     }
 
-    std::unique_ptr<CDVDVideoCodec> codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
+    std::unique_ptr<CDVDVideoCodec> codec = TakeParkedCodec(hint);
+    if (!codec)
+      codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
     if (!codec)
     {
       CLog::Log(LOGINFO, "CVideoPlayerVideo::OpenStream - could not open video codec");
@@ -174,10 +218,14 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
   }
   else
   {
-    m_processInfo.ResetVideoCodecInfo();
     hint.codecOptions |= CODEC_ALLOW_FALLBACK;
 
-    std::unique_ptr<CDVDVideoCodec> codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
+    std::unique_ptr<CDVDVideoCodec> codec = TakeParkedCodec(hint);
+    if (!codec)
+    {
+      m_processInfo.ResetVideoCodecInfo();
+      codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
+    }
     if (!codec)
     {
       CLog::Log(LOGERROR, "CVideoPlayerVideo::OpenStream - could not open video codec");
@@ -292,7 +340,17 @@ void CVideoPlayerVideo::CloseStream(bool bWaitForBuffers)
 
   m_messageQueue.End();
 
-  CLog::Log(LOGINFO, "deleting video codec");
+  if (m_keepCodecOnClose && m_pVideoCodec)
+  {
+    CLog::Log(LOGINFO, "parking video codec for the next stream");
+    m_parkedVideoCodec = std::move(m_pVideoCodec);
+  }
+  else
+  {
+    CLog::Log(LOGINFO, "deleting video codec");
+    m_parkedVideoCodec.reset();
+  }
+  m_keepCodecOnClose = false;
   m_pVideoCodec.reset();
 
   if (m_picture.videoBuffer)

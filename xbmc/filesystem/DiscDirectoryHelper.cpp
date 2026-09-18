@@ -3174,7 +3174,11 @@ bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(const CFileItem& item,
         {
           // Don't overwrite streamdetails that came from an nfo
           if (selectedItem.GetVideoInfoTag()->HasStreamDetails() && !tag->HasNFOStreamDetails())
-            tag->m_streamDetails = selectedItem.GetVideoInfoTag()->m_streamDetails;
+            // The "Menu" entry is a pseudo item without a video info tag
+            if (const CVideoInfoTag* sourceTag{selectedItem.GetVideoInfoTag()})
+              tag->m_streamDetails = sourceTag->m_streamDetails;
+            else
+              tag->m_streamDetails = CStreamDetails{};
 
           // Episode bookmarks
           if (const CBookmark& bookmark{selectedItem.GetVideoInfoTag()->m_EpBookmark};

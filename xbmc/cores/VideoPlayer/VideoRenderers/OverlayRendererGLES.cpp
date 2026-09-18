@@ -20,9 +20,12 @@
 #include "rendering/GLExtensions.h"
 #include "rendering/MatrixGL.h"
 #include "rendering/gles/RenderSystemGLES.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/GLUtils.h"
 #include "utils/MathUtils.h"
 #include "utils/log.h"
+#include "windowing/GraphicContext.h"
 #include "windowing/WinSystem.h"
 
 #include <cmath>
@@ -33,6 +36,36 @@
 #define USE_PREMULTIPLIED_ALPHA 1
 
 using namespace OVERLAY;
+
+namespace
+{
+// When the GUI surface is BT2020-PQ (Android MediaCodec disc-menu HDR path), the overlay shaders
+// PQ-scale each texel by m_sdrPeak. An overlay sits over full-brightness HDR video, so override
+// m_sdrPeak from a brightness slider to push it brighter than the OSD. Read every frame, so the
+// slider adjusts the live overlay in real time. No-op unless PQ active.
+//
+// Disc menus and subtitles both reach this as CDVDOverlayImage but want different levels - a menu
+// competes with the whole frame, a subtitle only has to be readable - so each has its own slider.
+void ApplyOverlayHdrCompensation(CRenderSystemGLES* renderSystem, bool isDiscMenuGraphic)
+{
+  if (!CServiceBroker::GetWinSystem()->GetGfxContext().IsTransferPQ())
+    return;
+
+  const GLint loc = renderSystem->GUIShaderGetSdrPeak();
+  if (loc < 0)
+    return;
+
+  const char* setting = isDiscMenuGraphic ? CSettings::SETTING_DISC_MENUOVERLAYPEAKLUMINANCE
+                                          : CSettings::SETTING_DISC_SUBTITLEPEAKLUMINANCE;
+  const int fallback = isDiscMenuGraphic ? 700 : 500;
+
+  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  const int level = settings ? settings->GetInt(setting) : fallback;
+  // Slider 0..1000 maps linearly to a PQ peak scale of 0..2.0, so 500 matches the GUI's own
+  // maximum (m_sdrPeak == 1.0) and values above push the overlay brighter than the OSD.
+  glUniform1f(loc, static_cast<float>(level) / 500.0f);
+}
+} // namespace
 
 static void LoadTexture(GLenum target,
                         GLsizei width,
@@ -146,6 +179,7 @@ std::shared_ptr<COverlay> COverlay::Create(const CDVDOverlayImage& o, CRect& rSo
 COverlayTextureGLES::COverlayTextureGLES(const CDVDOverlayImage& o, CRect& rSource)
 {
   m_isHDROverlay = o.m_isHDROverlay;
+  m_isDiscMenuGraphic = o.IsDiscMenuGraphic();
 
   glGenTextures(1, &m_texture);
   glBindTexture(GL_TEXTURE_2D, m_texture);
@@ -407,6 +441,10 @@ void COverlayGlyphGLES::Render(SRenderState& state)
       dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
 
   renderSystem->EnableGUIShader(ShaderMethodGLES::SM_FONTS);
+  // Glyph overlays (ASS/SRT text subtitles) deliberately stay on the disc menu slider: text
+  // subtitles are already covered by Kodi's own subtitle appearance settings, and glyph overlays
+  // in practice mean external subtitle files rather than disc subtitles. Not an oversight.
+  ApplyOverlayHdrCompensation(renderSystem, true);
   GLint posLoc = renderSystem->GUIShaderGetPos();
   GLint colLoc = renderSystem->GUIShaderGetCol();
   GLint tex0Loc = renderSystem->GUIShaderGetCoord0();
@@ -493,6 +531,7 @@ void COverlayTextureGLES::Render(SRenderState& state)
   CRenderSystemGLES* renderSystem =
       dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
   renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE_NOBLEND);
+  ApplyOverlayHdrCompensation(renderSystem, m_isDiscMenuGraphic);
   GLint posLoc = renderSystem->GUIShaderGetPos();
   GLint tex0Loc = renderSystem->GUIShaderGetCoord0();
   GLint depthLoc = renderSystem->GUIShaderGetDepth();
