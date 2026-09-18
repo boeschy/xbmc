@@ -53,6 +53,9 @@ constexpr auto componentMap = make_map<int, ComponentInfo>({
 #endif
   {LOGJSONRPC,      {"jsonrpc",     675}},
   {LOGAUDIO,        {"audio",       676}},
+#ifdef HAS_AIRTUNES
+  {LOGAIRTUNES,     {"airtunes",    677}},
+#endif
 #ifdef HAS_UPNP
   {LOGUPNP,         {"upnp",        678}},
 #endif
