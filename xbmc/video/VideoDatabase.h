@@ -734,6 +734,17 @@ public:
    */
   bool SetResumePoint(const std::string& file, double position, double total);
 
+  /*!
+   \brief Get the resume point stored for a disc, which belongs to one of its playlists
+          rather than to the disc itself.
+   \param discPath path of the disc image or BDMV folder
+   \param bookmark filled with the resume point found
+   \param playlistPath filled with the bluray:// path of the playlist it belongs to
+   \return true if the disc has a resume point
+   */
+  bool GetDiscResumeBookMark(const std::string& discPath,
+                             CBookmark& bookmark,
+                             std::string& playlistPath);
   void DeleteResumeBookMark(const CFileItem& item);
   void ClearBookMarkOfFile(const std::string& strFilenameAndPath,
                            const CBookmark& bookmark,
