@@ -1241,14 +1241,87 @@ void CDVDVideoCodecAndroidMediaCodec::Reset()
 
 bool CDVDVideoCodecAndroidMediaCodec::Reconfigure(CDVDStreamInfo &hints)
 {
-  if (m_hints.Equal(hints, CDVDStreamInfo::COMPARE_ALL &
-                               ~(CDVDStreamInfo::COMPARE_ID | CDVDStreamInfo::COMPARE_EXTRADATA)))
+  constexpr int compare =
+      CDVDStreamInfo::COMPARE_ALL &
+      ~(CDVDStreamInfo::COMPARE_ID | CDVDStreamInfo::COMPARE_EXTRADATA);
+
+  if (m_hints.Equal(hints, compare))
   {
     CLog::Log(LOGDEBUG, "CDVDVideoCodecAndroidMediaCodec::Reconfigure: true");
     m_hints = hints;
     return true;
   }
-  CLog::Log(LOGDEBUG, "CDVDVideoCodecAndroidMediaCodec::Reconfigure: false");
+
+  // A disc hands us the next clip before ffmpeg has parsed it, so the hints turn
+  // up carrying placeholders rather than the stream's real parameters: unknown
+  // profile and level, the 90kHz mpegts timebase in place of a frame rate,
+  // unspecified colour and a defaulted bit depth. None of that describes a change
+  // in the stream, and rebuilding the decoder over it costs a MediaCodec configure
+  // - the expensive, and on Dolby Vision the risky, part of a clip change.
+  //
+  // So fill the unknowns back in from what we are already configured with and
+  // compare again. A clip that genuinely differs still differs, and still forces
+  // the rebuild.
+  CDVDStreamInfo probe(hints);
+
+  // set from IsInMenu(), describes where playback is rather than the stream, and
+  // never reaches the decoder
+  probe.stills = m_hints.stills;
+
+  if (probe.profile == AV_PROFILE_UNKNOWN)
+  {
+    probe.profile = m_hints.profile;
+    probe.level = m_hints.level;
+    probe.bitdepth = m_hints.bitdepth;
+    probe.fpsrate = m_hints.fpsrate;
+    probe.fpsscale = m_hints.fpsscale;
+  }
+  if (probe.colorSpace == AVCOL_SPC_UNSPECIFIED)
+    probe.colorSpace = m_hints.colorSpace;
+  if (probe.colorRange == AVCOL_RANGE_UNSPECIFIED)
+    probe.colorRange = m_hints.colorRange;
+  if (probe.colorPrimaries == AVCOL_PRI_UNSPECIFIED)
+    probe.colorPrimaries = m_hints.colorPrimaries;
+  if (probe.colorTransferCharacteristic == AVCOL_TRC_UNSPECIFIED)
+    probe.colorTransferCharacteristic = m_hints.colorTransferCharacteristic;
+
+  if (m_hints.Equal(probe, compare))
+  {
+    CLog::Log(LOGDEBUG,
+              "CDVDVideoCodecAndroidMediaCodec::Reconfigure: true, keeping the parameters we are "
+              "configured with over the new clip's unparsed ones");
+    // hand the real parameters back to the player, so the placeholders do not
+    // reach the frame rate calculation either
+    hints = probe;
+    m_hints = probe;
+
+    // Carry the decoder straight over the clip join. Deliberately no flush(): a
+    // flush recycles the vendor's Dolby Vision frame-metadata pool, and the
+    // compositor segfaults if that happens under a frame it is still scanning
+    // out. Only the per-stream bookkeeping is reset.
+    m_videobuffer.pts = DVD_NOPTS_VALUE;
+    m_dtsShift = DVD_NOPTS_VALUE;
+    if (m_bitstream)
+      m_bitstream->ResetStartDecode();
+
+    return true;
+  }
+
+  CLog::Log(LOGDEBUG,
+            "CDVDVideoCodecAndroidMediaCodec::Reconfigure: false\n"
+            "  old: {}x{} fps {}/{} level {} profile {} tag {} flags {} bitdepth {} "
+            "hdr {} cs {} cr {} cp {} ct {} interlaced {} stills {} ptsinvalid {} vfr {}\n"
+            "  new: {}x{} fps {}/{} level {} profile {} tag {} flags {} bitdepth {} "
+            "hdr {} cs {} cr {} cp {} ct {} interlaced {} stills {} ptsinvalid {} vfr {}",
+            m_hints.width, m_hints.height, m_hints.fpsrate, m_hints.fpsscale, m_hints.level,
+            m_hints.profile, m_hints.codec_tag, m_hints.flags, m_hints.bitdepth,
+            static_cast<int>(m_hints.hdrType), m_hints.colorSpace, m_hints.colorRange,
+            m_hints.colorPrimaries, m_hints.colorTransferCharacteristic, m_hints.interlaced,
+            m_hints.stills, m_hints.ptsinvalid, m_hints.vfr, hints.width, hints.height,
+            hints.fpsrate, hints.fpsscale, hints.level, hints.profile, hints.codec_tag, hints.flags,
+            hints.bitdepth, static_cast<int>(hints.hdrType), hints.colorSpace, hints.colorRange,
+            hints.colorPrimaries, hints.colorTransferCharacteristic, hints.interlaced, hints.stills,
+            hints.ptsinvalid, hints.vfr);
   return false;
 }
 
@@ -1813,6 +1886,18 @@ void CDVDVideoCodecAndroidMediaCodec::ConfigureOutputFormat(CJNIMediaFormat& med
   m_videobuffer.color_space = m_hints.colorSpace;
   m_videobuffer.color_primaries = m_hints.colorPrimaries;
   m_videobuffer.color_transfer = m_hints.colorTransferCharacteristic;
+
+  // Propagate the stream's HDR10 mastering-display / content-light metadata onto the picture.
+  // The video plane already signals exactly these values to the display as HDR static info
+  // (see GetHDRStaticMetadata), so carrying them here lets the HDR GUI/overlay surface advertise
+  // the identical HDR envelope - otherwise the GUI layer's differing (or absent) metadata makes
+  // the compositor re-derive the HDMI HDR infoframe whenever the GUI redraws and the TV re-syncs.
+  m_videobuffer.hasDisplayMetadata = static_cast<bool>(m_hints.masteringMetadata);
+  if (m_videobuffer.hasDisplayMetadata)
+    m_videobuffer.displayMetadata = *m_hints.masteringMetadata;
+  m_videobuffer.hasLightMetadata = static_cast<bool>(m_hints.contentLightMetadata);
+  if (m_videobuffer.hasLightMetadata)
+    m_videobuffer.lightMetadata = *m_hints.contentLightMetadata;
 }
 
 void CDVDVideoCodecAndroidMediaCodec::CallbackInitSurfaceTexture(void *userdata)

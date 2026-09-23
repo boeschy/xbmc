@@ -238,8 +238,16 @@ bool CDVDInputStreamBluray::Open()
   // root should not have trailing slash
   URIUtils::RemoveSlashAtEnd(root);
 
+  // Start every disc from a cold cache. Both roots are scratch - the disc's persistent storage is
+  // a separate one and is untouched - and leaving either populated between discs would serve one
+  // disc's files to the next and make the asset cache impossible to measure.
+  CBlurayDiscAssetCache::Purge();
+
   bd_set_debug_handler(CBlurayCallback::bluray_logger);
-  bd_set_debug_mask(DBG_CRIT | DBG_BLURAY | DBG_NAV);
+  // DBG_BDJ carries the BD-J side: Xlet lifecycle, the graphics plane, and persistent storage.
+  // Without it only BD-J *errors* arrive (through DBG_CRIT), so a disc whose Xlet stalls rather
+  // than fails logs nothing at all at the point of interest.
+  bd_set_debug_mask(DBG_CRIT | DBG_BLURAY | DBG_NAV | DBG_BDJ);
 
   m_bd = bd_init();
 
@@ -277,6 +285,7 @@ bool CDVDInputStreamBluray::Open()
   else
   {
     m_rootPath = root;
+    m_discAccess.basePath = root;
 
 #if defined(HAS_UDFREAD)
     // Only in files mode does libbluray reach the disc through Kodi's filesystem, opening a dozen
@@ -286,7 +295,13 @@ bool CDVDInputStreamBluray::Open()
     m_udfMount.emplace(root);
 #endif
 
-    if (!bd_open_files(m_bd, &m_rootPath, CBlurayCallback::dir_open, CBlurayCallback::file_open))
+    // Only files mode reaches the disc through the callbacks the mirror hooks into, so it is the
+    // only mode it can help. Started before bd_open_files so the copying overlaps the opening
+    // rather than following it; anything not mirrored yet is read from the disc as usual.
+    if (m_assetCache.Start(root))
+      m_discAccess.cache = &m_assetCache;
+
+    if (!bd_open_files(m_bd, &m_discAccess, CBlurayCallback::dir_open, CBlurayCallback::file_open))
     {
       CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - failed to open {} in files mode",
                 CURL::GetRedacted(root));
@@ -450,6 +465,11 @@ void CDVDInputStreamBluray::Close()
   m_bd = nullptr;
   m_pstream.reset();
   m_rootPath.clear();
+
+  // After bd_close(), so nothing is reading from the mirror when it is deleted
+  m_discAccess.cache = nullptr;
+  m_discAccess.basePath.clear();
+  m_assetCache.Stop();
 
 #if defined(HAS_UDFREAD)
   // Released last, as the files opened from the volume are closed above
@@ -816,6 +836,7 @@ void CDVDInputStreamBluray::OverlayClose()
   group->SetOverlayContainerFlushable(false);
   m_player->OnDiscNavResult(static_cast<void*>(&group), BD_EVENT_MENU_OVERLAY);
   m_hasOverlay = false;
+  m_menuGoneAt = {}; // an explicit close is not a flicker, take it immediately
 #endif
 }
 
@@ -888,7 +909,25 @@ void CDVDInputStreamBluray::OverlayFlush(int64_t pts)
   }
 
   m_player->OnDiscNavResult(static_cast<void*>(&group), BD_EVENT_MENU_OVERLAY);
-  m_hasOverlay = true;
+
+  // Honest menu-on-screen detection (replaces the old "any overlay == a menu"). Believe a
+  // menu the instant a pixel is opaque; let a menu that has gone blank hold for MENU_GONE_AFTER,
+  // because animated menus empty their plane between frames and would otherwise flicker
+  // dozens of times a second - which flaps the keymap window and the seek guard.
+  constexpr auto MENU_GONE_AFTER = std::chrono::milliseconds(500);
+  if (AnythingVisible())
+  {
+    m_hasOverlay = true;
+    m_menuGoneAt = {};
+  }
+  else if (m_hasOverlay)
+  {
+    const auto now = std::chrono::steady_clock::now();
+    if (m_menuGoneAt == std::chrono::steady_clock::time_point{})
+      m_menuGoneAt = now;
+    else if (now - m_menuGoneAt >= MENU_GONE_AFTER)
+      m_hasOverlay = false;
+  }
 #endif
 }
 
@@ -928,6 +967,9 @@ void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)
   if (ov->img && ov->cmd == BD_OVERLAY_DRAW)
   {
     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
+    // The disc's own HDMV graphics plane, not a subtitle - so it follows the disc
+    // menu brightness setting rather than the subtitle one.
+    overlay->SetDiscMenuGraphic(true);
 
     if (ov->palette)
     {
@@ -991,6 +1033,9 @@ void CDVDInputStreamBluray::OverlayCallbackARGB(const struct bd_argb_overlay_s *
   if (ov->argb && ov->cmd == BD_ARGB_OVERLAY_DRAW)
   {
     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
+    // The disc's own BD-J ARGB graphics plane, not a subtitle - so it follows the
+    // disc menu brightness setting rather than the subtitle one.
+    overlay->SetDiscMenuGraphic(true);
 
     overlay->palette.clear();
     size_t bytes = static_cast<size_t>(ov->stride * ov->h * 4);
@@ -1481,17 +1526,48 @@ bool CDVDInputStreamBluray::OnMenu()
   return true;
 }
 
+bool CDVDInputStreamBluray::AnythingVisible()
+{
+  // The disc keeps its graphics plane up for the whole feature and simply empties the pixels,
+  // so "an overlay is registered" is not the same as "a menu is visible". Ask the honest
+  // question: is any sampled pixel opaque? Sample every 8th pixel in x and y (a 64th of the
+  // plane - a button is far larger than an 8x8 block) and treat alpha < 8 as invisible.
+  // Handles BD-J (ARGB, palette empty, 4 bytes/pixel) and HDMV (paletted, 1 byte/pixel).
+  for (const SPlane& plane : m_planes)
+  {
+    for (const SOverlay& overlay : plane.o)
+    {
+      if (!overlay || overlay->pixels.empty())
+        continue;
+
+      const bool paletted = !overlay->palette.empty();
+      for (int y = 0; y < overlay->height; y += 8)
+      {
+        const uint8_t* row =
+            overlay->pixels.data() + static_cast<size_t>(y) * overlay->linesize;
+        for (int x = 0; x < overlay->width; x += 8)
+        {
+          const uint32_t argb =
+              paletted ? overlay->palette[row[x]] : reinterpret_cast<const uint32_t*>(row)[x];
+          if (((argb >> PIXEL_ASHIFT) & 0xff) >= 8)
+            return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 bool CDVDInputStreamBluray::IsInMenu()
 {
   if(m_bd == nullptr || !m_navmode)
     return false;
 
-  // since there is no way to tell in a BD-J blu-ray when a popup menu actually is visible,
-  // we have to assume that the blu-ray is in menu/navigation mode when there is an overlay
-  // on screen, even if it might be invisible (which is impossible to detect)
-  if(m_menu || m_hasOverlay)
-    return true;
-  return false;
+  // m_hasOverlay is now an honest, debounced "a menu is actually on screen" flag maintained in
+  // OverlayFlush()/OverlayClose() via AnythingVisible(). m_menu (libbluray's BD_EVENT_MENU) is
+  // deliberately NOT consulted: some discs fire it once when the title loads and never clear
+  // it, which pins the player "in a menu" for the whole feature and disables seeking.
+  return m_hasOverlay;
 }
 
 void CDVDInputStreamBluray::SkipStill()
