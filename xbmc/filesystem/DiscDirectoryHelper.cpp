@@ -94,6 +94,7 @@ void CDiscDirectoryHelper::Reset()
   m_isSpecial = IsSpecial::EPISODE;
   m_numEpisodes = 0;
   m_numSpecials = 0;
+  m_multipleSpecials = false;
   m_playAllPlaylists.clear();
   m_playAllPlaylistsMap.clear();
   m_playAllPlaylistEpisodeMap.clear();
@@ -1949,6 +1950,13 @@ void CDiscDirectoryHelper::FindSpecials(const PlaylistMap& playlists)
   if (m_numSpecials == 0)
     return;
 
+  // Nothing on the disc tells one special from another, so all candidates are offered
+  if (m_isSpecial == IsSpecial::SPECIAL && m_numSpecials > 1)
+  {
+    CLog::LogF(LOGDEBUG, "Disc holds {} specials and nothing to tell them apart", m_numSpecials);
+    m_multipleSpecials = true;
+  }
+
   // Specials
   //
   // These are more difficult - as there may only be one per disc and we can't make assumptions about playlists.
@@ -2190,6 +2198,9 @@ void CDiscDirectoryHelper::PopulateEpisodeFileItems(const CURL& url,
       }
 
       AddStreamDetails(m_getStreamDetails, allTitles, playlist, *newItem);
+
+      if (m_multipleSpecials)
+        newItem->SetProperty(MULTIPLE_SPECIALS_PROPERTY, true);
 
       items.Add(newItem);
     }
@@ -2437,16 +2448,15 @@ void LogMoviePlaylists(std::string_view prefix, const std::vector<PlaylistInform
     LogMoviePlaylist(prefix, playlist);
 }
 
-/*!
- * \brief Removes the playlists matching shouldRemove, logging each removal and the reason for it.
- */
+//! \brief Removes the playlists matching shouldRemove, logging each removal and the reason for it
 template<typename Predicate>
 void RemovePlaylists(std::vector<PlaylistInformation>& playlists,
                      std::string_view reason,
                      Predicate shouldRemove)
 {
-  for (const auto& playlist : playlists | std::views::filter(shouldRemove))
-    LogMoviePlaylist(StringUtils::Format("Rejected ({}) -", reason), playlist);
+  if (CServiceBroker::GetLogging().CanLogComponent(LOGBLURAY))
+    for (const auto& playlist : playlists | std::views::filter(shouldRemove))
+      LogMoviePlaylist(StringUtils::Format("Rejected ({}) -", reason), playlist);
 
   std::erase_if(playlists, shouldRemove);
 }
@@ -3011,6 +3021,134 @@ std::vector<CVideoInfoTag> CDiscDirectoryHelper::GetEpisodesOnDisc(const CURL& u
   return episodesOnDisc;
 }
 
+namespace
+{
+//! \brief Show which playlists are already allocated (and to what)
+void LabelUsedPlaylists(CFileItemList& items,
+                        const std::vector<CVideoDatabase::PlaylistInfo>& usedPlaylists)
+{
+  for (const auto& item : items)
+  {
+    const int playlist{item->GetProperty("bluray_playlist").asInteger32(-1)};
+    if (playlist < 0)
+      continue;
+
+    // Several episodes can share one playlist, and choosing it detaches all of them, so all of
+    // them are named
+    auto owners{usedPlaylists |
+                std::views::filter([playlist](const CVideoDatabase::PlaylistInfo& used)
+                                   { return used.playlist == playlist; })};
+    if (std::ranges::distance(owners) == 0)
+      continue;
+
+    const CLocalizeStrings& strings{CServiceBroker::GetResourcesComponent().GetLocalizeStrings()};
+
+    // An episode names itself, where a movie's asset is one of a known few and is named here so
+    // that it can be translated as a whole phrase
+    std::string label;
+    if (const CVideoDatabase::PlaylistInfo & first{*owners.begin()};
+        first.mediaType == VideoDbContentType::MOVIES)
+    {
+      if (first.itemType == VideoAssetType::EXTRA)
+        label = strings.Get(25023);
+      else
+        label = strings.Get(25022);
+    }
+    else
+    {
+      std::vector<std::string> titles;
+      for (const CVideoDatabase::PlaylistInfo& owner : owners)
+        titles.emplace_back(owner.title);
+      std::ranges::sort(titles);
+      label = StringUtils::Format(strings.Get(25021), StringUtils::Join(titles, ", "));
+    }
+
+    const std::string& existing{item->GetLabel()};
+    item->SetLabel(existing.empty() ? label : StringUtils::Format("{} ({})", existing, label));
+  }
+}
+
+// A <playlist> element in an nfo names the playlist the details belong to, which need not be the
+// one already stored
+int PlaylistFromNfo(const CFileItem& item, int storedPlaylist)
+{
+  const int playlist{item.GetProperty("bluray_playlist").asInteger32(-1)};
+  return playlist > -1 ? playlist : storedPlaylist;
+}
+
+// A removable disc may not be in the drive, and reading its playlists would mean waiting on it
+bool IsRemovableDisc(const std::string& path)
+{
+  return path.starts_with("bluray://removable");
+}
+
+// Whether the playlist's duration is known to be the item's own. It is not when an episode could
+// not be matched against the disc, as the playlist may hold other episodes too.
+enum class PlaylistDuration : bool
+{
+  WHOLE_PLAYLIST,
+  ITEM
+};
+
+void ApplyPlaylistDetails(CFileItem& item,
+                          const CFileItem& playlistItem,
+                          PlaylistDuration playlistDuration = PlaylistDuration::ITEM)
+{
+  item.SetDynPath(playlistItem.GetDynPath());
+  const auto tag{item.GetVideoInfoTag()};
+  tag->SetFileNameAndPath(playlistItem.GetDynPath());
+  if (playlistItem.HasVideoInfoTag())
+  {
+    const CVideoInfoTag* playlistTag{playlistItem.GetVideoInfoTag()};
+
+    // The duration of the playlist, or of the episode's part of it where several share one, is
+    // measured from the disc and so is preferred over the scraper's.
+    // Loose sanity check that the scraper and found durations are similar, to avoid a
+    // mis-identified playlist from overwriting the episode's duration and affecting future
+    // playlist identification.
+    static constexpr int SCRAPED_DURATION_TOLERANCE_PERCENT{50};
+    const unsigned int scrapedDuration{tag->GetStaticDuration()};
+    const unsigned int discDuration{playlistTag->GetDuration()};
+    const bool discDurationDescribesItem{
+        discDuration > 0 &&
+        (scrapedDuration == 0
+             // With nothing to compare against, the disc is trusted only where it is already known
+             // to describe the item
+             ? playlistDuration == PlaylistDuration::ITEM
+             : CheckDurationsWithinTolerance(scrapedDuration * 1000ms, discDuration * 1000ms,
+                                             SCRAPED_DURATION_TOLERANCE_PERCENT))};
+
+    // Don't overwrite streamdetails that came from an nfo
+    if (playlistTag->HasStreamDetails() && !tag->HasNFOStreamDetails())
+    {
+      tag->m_streamDetails = playlistTag->m_streamDetails;
+
+      // An unmatched episode may be one of several in the playlist. CVideoInfoTag::GetDuration()
+      // prefers the streamdetails duration, so a playlist duration that cannot be the episode's
+      // has to be replaced there too, not just left out of the one set below.
+      if (playlistDuration == PlaylistDuration::WHOLE_PLAYLIST && !discDurationDescribesItem)
+        tag->m_streamDetails.SetVideoDuration(0, static_cast<int>(scrapedDuration));
+    }
+
+    // Episode bookmarks. One already set was given explicitly - by an nfo, or by the user - where
+    // this one is derived from the disc, so only an absent one is filled in. CBookmark records no
+    // source of its own, unlike the streamdetails above.
+    if (const CBookmark & bookmark{playlistTag->m_EpBookmark};
+        bookmark.IsSet() && !tag->m_EpBookmark.IsSet())
+      tag->m_EpBookmark = bookmark;
+
+    if (discDurationDescribesItem)
+      tag->SetDuration(static_cast<int>(discDuration));
+  }
+
+  if (tag->GetAssetInfo().GetTitle().empty())
+    tag->GetAssetInfo().SetTitle(
+        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(VIDEO_VERSION_ID_DEFAULT));
+  if (playlistItem.HasProperty("bluray_playlist"))
+    item.SetProperty("bluray_playlist", playlistItem.GetProperty("bluray_playlist"));
+}
+} // unnamed namespace
+
 bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(const CFileItem& item,
                                                       CFileItemList& items,
                                                       MenuDecision playback)
@@ -3122,24 +3260,24 @@ bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(const CFileItem& item,
       usedPlaylists =
           database.GetPlaylistsByPath(URIUtils::GetBlurayPlaylistPath(item.GetDynPath()));
 
-      // If replacing existing playlist (FORCE_PLAYLIST_SELECTION), remove it from exclude list
-      // as user could choose the same playlist again
-      if (item.GetProperty("force_playlist_selection").asBoolean(false))
+      // The playlist this item already uses is labelled like any other, but choosing it again
+      // is no change and must not go through the reassignment
+      std::vector<CVideoDatabase::PlaylistInfo> reusablePlaylists{usedPlaylists};
+      if (CRegExp regex{true, CRegExp::autoUtf8, R"(\/(\d{5}).mpls$)"};
+          regex.RegFind(item.GetDynPath()) != -1)
       {
-        CRegExp regex{true, CRegExp::autoUtf8, R"(\/(\d{5}).mpls$)"};
-        if (regex.RegFind(item.GetDynPath()) != -1)
-        {
-          const int playlist{std::stoi(regex.GetMatch(1))};
-          std::erase_if(usedPlaylists, [&playlist](const CVideoDatabase::PlaylistInfo& p)
-                        { return p.playlist == playlist; });
-        }
+        const int playlist{std::stoi(regex.GetMatch(1))};
+        std::erase_if(reusablePlaylists, [&playlist](const CVideoDatabase::PlaylistInfo& p)
+                      { return p.playlist == playlist; });
       }
 
       // Use simple menu dialog to select playlist
       while (true)
       {
+        LabelUsedPlaylists(sourceItems, usedPlaylists);
+
         if (!CGUIDialogSimpleMenu::ShowPlaylistSelection(item, selectedItem, sourceItems,
-                                                         usedPlaylists))
+                                                         reusablePlaylists))
           return false;
 
         // If a non-folder item is selected, we're done
@@ -3155,6 +3293,14 @@ bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(const CFileItem& item,
   else
   {
     // Silent
+    // A scan must not store a guess, or later playback would use it without asking
+    if (sourceItems[0]->GetProperty(MULTIPLE_SPECIALS_PROPERTY).asBoolean(false))
+    {
+      CLog::LogF(LOGDEBUG, "Not choosing between the {} specials offered for {}",
+                 sourceItems.Size(), CURL::GetRedacted(directory));
+      return false;
+    }
+
     if (sourceItems.Size() > 1 && !returnMultipleItems)
     {
       CLog::LogF(LOGDEBUG, "Automatically selected playlist {} of the {} offered for {}",
@@ -3163,54 +3309,19 @@ bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(const CFileItem& item,
     }
   }
 
-  auto GenerateItem{
-      [](const CFileItem& originalItem, const CFileItem& selectedItem, const CFileItem& item)
-      {
-        auto newItem{std::make_shared<CFileItem>(originalItem)};
-        newItem->SetDynPath(selectedItem.GetDynPath());
-        const auto tag{newItem->GetVideoInfoTag()};
-        tag->SetFileNameAndPath(selectedItem.GetDynPath());
-        if (selectedItem.HasVideoInfoTag())
-        {
-          // Don't overwrite streamdetails that came from an nfo
-          if (selectedItem.GetVideoInfoTag()->HasStreamDetails() && !tag->HasNFOStreamDetails())
-            tag->m_streamDetails = selectedItem.GetVideoInfoTag()->m_streamDetails;
-
-          // Episode bookmarks
-          if (const CBookmark& bookmark{selectedItem.GetVideoInfoTag()->m_EpBookmark};
-              bookmark.IsSet())
-            tag->m_EpBookmark = bookmark;
-
-          // The duration of the playlist, or of the episode's part of it where several share one, is
-          // measured from the disc and so is preferred over the scraper's.
-          // Loose sanity check that the scraper and found durations are similar, to avoid a
-          // mis-identified playlist from overwriting the episode's duration and affecting future
-          // playlist identification.
-          static constexpr int SCRAPED_DURATION_TOLERANCE_PERCENT{50};
-          const unsigned int scrapedDuration{tag->GetStaticDuration()};
-          if (const unsigned int discDuration{selectedItem.GetVideoInfoTag()->GetDuration()};
-              discDuration > 0 &&
-              (scrapedDuration == 0 ||
-               CheckDurationsWithinTolerance(scrapedDuration * 1000ms, discDuration * 1000ms,
-                                             SCRAPED_DURATION_TOLERANCE_PERCENT)))
-            tag->SetDuration(static_cast<int>(discDuration));
-        }
-
-        if (tag->GetAssetInfo().GetTitle().empty())
-          tag->GetAssetInfo().SetTitle(
-              CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
-                  VIDEO_VERSION_ID_DEFAULT));
-        if (selectedItem.HasProperty("bluray_playlist"))
-          newItem->SetProperty("bluray_playlist", selectedItem.GetProperty("bluray_playlist"));
-        newItem->SetProperty("original_listitem_url", item.GetDynPath());
-        return newItem;
-      }};
+  auto GenerateItem{[](const CFileItem& originalItem, const CFileItem& selectedItem)
+                    {
+                      auto newItem{std::make_shared<CFileItem>(originalItem)};
+                      ApplyPlaylistDetails(*newItem, selectedItem);
+                      newItem->SetProperty("original_listitem_url", originalItem.GetDynPath());
+                      return newItem;
+                    }};
 
   items.Clear();
   if (!selectedItem.GetPath().empty())
   {
     // If SelectedItem is not empty then we have a user selected playlist, so return it
-    const auto newItem{GenerateItem(item, selectedItem, item)};
+    const auto newItem{GenerateItem(item, selectedItem)};
 
     // GenerateItem points the paths in the tag at the newly selected playlist
     // Flag so CSaveFileStateJob can tell playlist has changed
@@ -3221,14 +3332,101 @@ bool CDiscDirectoryHelper::GetOrShowPlaylistSelection(const CFileItem& item,
   }
   else if (!returnMultipleItems)
     // Return single item
-    items.Add(GenerateItem(item, *sourceItems[0], item));
+    items.Add(GenerateItem(item, *sourceItems[0]));
   else
   {
     // Return all items
     for (const auto& sourceItem : sourceItems)
-      items.Add(GenerateItem(item, *sourceItem, item));
+      items.Add(GenerateItem(item, *sourceItem));
   }
 
+  return true;
+}
+
+bool CDiscDirectoryHelper::ReadResolvedPlaylist(CFileItem& item)
+{
+  const std::string path{item.GetDynPath()};
+  const int playlist{URIUtils::GetBlurayPlaylistFromPath(path)};
+  if (playlist < 0 || IsRemovableDisc(path))
+    return false;
+
+  // The nfo's choice wins over the stored path. Reading the stored playlist first would overwrite
+  // the nfo's with its own and leave nothing for AddVideo() to redirect.
+  const int wanted{PlaylistFromNfo(item, playlist)};
+  const std::string wantedPath{wanted == playlist ? path
+                                                  : URIUtils::GetBlurayPlaylistPath(path, wanted)};
+
+  CFileItemList playlistItems;
+  if (!GetItems(playlistItems, wantedPath, true))
+    return false;
+
+  ApplyPlaylistDetails(item, *playlistItems[0]);
+  CLog::LogF(LOGDEBUG, "Read the details of playlist {} for {}", wanted,
+             CURL::GetRedacted(wantedPath));
+  return true;
+}
+
+bool CDiscDirectoryHelper::ReadEpisodePlaylist(CFileItem& item)
+{
+  const std::string path{item.GetDynPath()};
+  const int playlist{URIUtils::GetBlurayPlaylistFromPath(path)};
+  if (playlist < 0 || IsRemovableDisc(path))
+    return false;
+
+  const CVideoInfoTag* tag{item.GetVideoInfoTag()};
+  const int season{tag->m_iSeason};
+  const int episode{tag->m_iEpisode};
+  std::string directory{URIUtils::GetBlurayEpisodePath(path, season, episode)};
+  if (!directory.empty())
+  {
+    // CBlurayDirectory needs the duration to tell apart episodes sharing a playlist
+    if (const unsigned int duration{tag->GetDuration()}; duration > 0)
+    {
+      CURL url{directory};
+      url.SetOption("duration", std::to_string(duration));
+      directory = url.Get();
+    }
+
+    // An episode can be found on more than one playlist (eg. alternative language variants), so
+    // the assigned one is looked for among them all before the match is rejected
+    CFileItemList episodeItems;
+    if (GetItems(episodeItems, directory, true))
+    {
+      const CFileItem* matched{nullptr};
+      for (const auto& candidate : episodeItems)
+      {
+        if (URIUtils::GetBlurayPlaylistFromPath(candidate->GetDynPath()) == playlist)
+        {
+          matched = candidate.get();
+          break;
+        }
+      }
+
+      if (matched)
+      {
+        ApplyPlaylistDetails(item, *matched);
+        CLog::LogF(LOGDEBUG, "Season {} episode {} matched playlist {} again", season, episode,
+                   playlist);
+        return true;
+      }
+
+      CLog::LogF(LOGDEBUG,
+                 "Season {} episode {} matched {} other playlist(s), so assigned playlist {} is "
+                 "kept",
+                 season, episode, episodeItems.Size(), playlist);
+    }
+  }
+
+  CFileItemList playlistItems;
+  if (!GetItems(playlistItems, path, true))
+    return false;
+
+  ApplyPlaylistDetails(item, *playlistItems[0], PlaylistDuration::WHOLE_PLAYLIST);
+  CLog::LogF(
+      LOGDEBUG,
+      "Season {} episode {} was not matched on the disc, so the details of assigned playlist "
+      "{} are used, its duration only if it could be the episode's",
+      season, episode, playlist);
   return true;
 }
 

@@ -20,6 +20,8 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
+#include <string>
 #include <vector>
 
 class CFileItem;
@@ -46,6 +48,7 @@ public:
 
   void Initialize();
   void Stop();
+  void ScanForPresentMedia();
 
   void LoadSources();
   bool SaveSources();
@@ -113,9 +116,21 @@ public:
   void SetHasOpticalDrive(bool bstatus);
 
   bool Eject(const std::string& mountpath);
-  void EjectTray( const bool bEject=true, const char cDriveLetter='\0' );
-  void CloseTray(const char cDriveLetter='\0');
-  void ToggleTray(const char cDriveLetter='\0');
+  /*! \brief Eject or close the tray of an optical drive
+   * \param bEject True to eject the tray, false to close it
+   * \param devicePath Path of the drive, empty for the first available optical drive
+   */
+  void EjectTray(bool bEject = true, const std::string& devicePath = "");
+
+  /*! \brief Close the tray of an optical drive
+   * \param devicePath Path of the drive, empty for the first available optical drive
+   */
+  void CloseTray(const std::string& devicePath = "");
+
+  /*! \brief Eject the tray of an optical drive, or close it when already open
+   * \param devicePath Path of the drive, empty for the first available optical drive
+   */
+  void ToggleTray(const std::string& devicePath = "");
 
   void ProcessEvents();
 
@@ -204,6 +219,12 @@ private:
   DiscInfoCacheEntry GetCachedDiscInfo(const std::string& mediaPath);
   /*! Disc identity per drive, read from the disc itself - see GetDiskLabel */
   std::map<std::string, DiscInfoCacheEntry> m_mapDiscInfo;
+  /*! Removable drives at the last storage change, so a drive that has since gone can be forgotten */
+  std::set<std::string> m_removableDrivePaths;
+#ifndef TARGET_WINDOWS
+  //! The caller holds m_CritSecStorageProvider
+  std::set<std::string> GetRemovableDrivePaths() const;
+#endif
   uint64_t m_discInfoGeneration{0};
   CCriticalSection m_discInfoSection;
 #if defined(TARGET_WINDOWS) && defined(HAS_OPTICAL_DRIVE)

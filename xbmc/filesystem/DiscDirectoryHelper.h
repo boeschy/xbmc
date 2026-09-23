@@ -31,6 +31,10 @@ using namespace std::chrono_literals;
 
 static constexpr int ALL_PLAYLISTS{-1};
 
+//! Property set on each returned special (S00) title when the disc holds several specials and
+//! nothing distinguishes them, so a library scan does not store a guess
+static constexpr const char* MULTIPLE_SPECIALS_PROPERTY{"bluray_multiple_specials"};
+
 enum class GetTitle : uint8_t
 {
   SINGLE,
@@ -351,6 +355,24 @@ public:
                                          CFileItemList& items,
                                          MenuDecision playback);
 
+  /*!
+   * \brief Re-read the details the disc holds for an item whose playlist has already been chosen.
+   * Stream details cannot be extracted from a bluray:// path, so they have to be read from the disc
+   * again whenever the library entry is refreshed.
+   * \param item item with a bluray:// playlist path, updated in place.
+   * \return true if the playlist was read.
+   */
+  static bool ReadResolvedPlaylist(CFileItem& item);
+
+  /*!
+   * \brief Re-read the details the disc holds for an episode whose playlist has already been
+   * chosen. Matching the episode against the disc again recovers its own duration and its
+   * bookmark within a multi-episode playlist.
+   * \param item episode with a bluray:// playlist path, updated in place.
+   * \return true if the playlist was read.
+   */
+  static bool ReadEpisodePlaylist(CFileItem& item);
+
 protected:
   static bool GetDirectoryItems(const std::string& path,
                                 CFileItemList& items,
@@ -428,6 +450,7 @@ private:
   IsSpecial m_isSpecial{IsSpecial::EPISODE};
   unsigned int m_numEpisodes{0};
   unsigned int m_numSpecials{0};
+  bool m_multipleSpecials{false};
 
   struct Compare
   {
