@@ -182,6 +182,8 @@ bool CRenderManager::Configure()
 
   if (m_pRenderer)
   {
+    // The renderer is only being replaced by one for the new stream, playback continues.
+    m_pRenderer->SetTransientRelease(true);
     DeleteRenderer();
   }
 
@@ -803,7 +805,11 @@ void CRenderManager::UpdateResolution()
   {
     if (CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenVideo() && CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenRoot())
     {
-      if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF && m_fps > 0.0f)
+      // m_fps > 0 is not enough of a test: a disc clip that ffmpeg has not parsed yet reports the
+      // 90kHz mpegts timebase as its frame rate, and driving a display mode change from that asks
+      // the display for a rate the video does not have. Same sane range Kodi uses elsewhere.
+      if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF &&
+          m_fps >= 5.0f && m_fps <= 120.0f)
       {
         RESOLUTION res = CResolutionUtils::ChooseBestResolution(
             m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty());

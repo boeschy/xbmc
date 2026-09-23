@@ -10,6 +10,8 @@
 
 #include "BlurayStateSerializer.h"
 #include "DVDInputStream.h"
+#include "filesystem/BlurayCallback.h"
+#include "filesystem/BlurayDiscAssetCache.h"
 #include "threads/CriticalSection.h"
 #if defined(HAS_UDFREAD)
 #include "filesystem/UDFContext.h"
@@ -164,6 +166,14 @@ protected:
   static void OverlayClear(SPlane& plane, int x, int y, int w, int h);
   static void OverlayInit (SPlane& plane, int w, int h);
 
+  /*! \brief Is any overlay pixel actually opaque right now?
+  *
+  * BD-J discs keep their graphics plane registered for the whole feature and merely empty the
+  * pixels, so "an overlay exists" is not "a menu is visible". This samples the overlay alpha
+  * and answers the honest question. \return true if a menu is really on screen.
+  */
+  bool AnythingVisible();
+
   IVideoPlayer* m_player = nullptr;
   BLURAY* m_bd = nullptr;
   const BLURAY_TITLE* m_title = nullptr;
@@ -177,7 +187,9 @@ protected:
   uint32_t m_angle = 0;
   bool m_menu = false;
   bool m_isInMainMenu = false;
-  bool m_hasOverlay = false;
+  bool m_hasOverlay = false; //!< honest "a menu is visible" flag, debounced (see OverlayFlush)
+  //! When the visible menu first went blank; used to hold m_hasOverlay across animation gaps.
+  std::chrono::steady_clock::time_point m_menuGoneAt{};
   bool m_navmode = false;
   int m_dispTimeBeforeRead = 0;
 
@@ -234,6 +246,13 @@ protected:
     bool GetClipStreamLanguage(int pid, std::string& language) const;
     std::unique_ptr<CDVDInputStreamFile> m_pstream;
     std::string m_rootPath;
+
+    /*! Where libbluray reads the disc from, and the local mirror it may read instead */
+    BlurayDiscAccess m_discAccess;
+
+    /*! Background copy of the disc's menu assets to local storage. Files mode only - the other
+        modes do not reach the disc through the file callbacks it hooks into. */
+    CBlurayDiscAssetCache m_assetCache;
 
 #if defined(HAS_UDFREAD)
     // Keeps a disc image's UDF volume mounted for as long as the disc is open

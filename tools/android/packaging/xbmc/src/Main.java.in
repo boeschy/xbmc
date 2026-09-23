@@ -6,6 +6,7 @@ import static android.content.pm.PackageManager.FEATURE_LEANBACK;
 
 import android.app.NativeActivity;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ResolveInfo;
 import android.graphics.Rect;
 import android.hardware.input.InputManager;
@@ -123,6 +124,24 @@ public class Main extends NativeActivity implements Choreographer.FrameCallback
     // Kodi's main rendering window does not host an Android text editor. Prevent controller
     // motion events from being dispatched to the IME before NativeActivity.
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+
+    // Request a persistent HDR-capable window color mode. The Blu-ray disc-menu overlay feature
+    // presents the GUI as BT2020-PQ buffers over HDR video; declaring the whole window HDR once
+    // lets SurfaceFlinger keep a stable HDR output for it, instead of re-deriving the display's
+    // HDR mode every time an individual GUI buffer is tagged HDR - the latter makes the Shield
+    // renegotiate the HDMI HDR infoframe on every GUI redraw and the TV briefly re-syncs. Harmless
+    // for SDR content (it is only a capability hint; the display enters HDR only for HDR buffers).
+    if (Build.VERSION.SDK_INT >= VERSION_CODES.O)
+    {
+      try
+      {
+        getWindow().setColorMode(ActivityInfo.COLOR_MODE_HDR);
+      }
+      catch (Exception e)
+      {
+        Log.w(TAG, "setColorMode(COLOR_MODE_HDR) failed: " + e.toString());
+      }
+    }
 
     setContentView(R.layout.activity_main);
     setVolumeControlStream(AudioManager.STREAM_MUSIC);

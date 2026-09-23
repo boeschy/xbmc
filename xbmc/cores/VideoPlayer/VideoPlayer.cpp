@@ -66,6 +66,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -920,7 +921,15 @@ bool CVideoPlayer::OpenInputStream()
 
     if (!URIUtils::IsUPnP(m_item.GetPath()) &&
         !m_item.GetProperty("no-ext-subs-scan").asBoolean(false))
-      CUtil::ScanForExternalSubtitles(m_item.GetDynPath(), filenames);
+    {
+      // A disc is played through a bluray:// URL whose name (a playlist, or "menu"
+      // for the disc's own menus) is not what its subtitle files are named after,
+      // so the disc gets the disc-aware scan
+      if (URIUtils::IsBlurayPath(m_item.GetDynPath()))
+        CUtil::ScanForBlurayExternalSubtitles(m_item.GetDynPath(), filenames);
+      else
+        CUtil::ScanForExternalSubtitles(m_item.GetDynPath(), filenames);
+    }
 
     // load any subtitles from file item
     std::string key("subtitle:1");
@@ -1732,7 +1741,15 @@ void CVideoPlayer::Process()
         SetCaching(CACHESTATE_DONE);
         CLog::Log(LOGINFO, "VideoPlayer: next stream, wait for old streams to be finished");
         CloseStream(m_CurrentAudio, true);
+
+        // The clips of a disc almost always share one video format, so hold on to
+        // the decoder here: the OpenStream() for the next clip can then adopt it
+        // rather than build and configure a new one. Beyond being faster, that
+        // matters on Android, where every fresh Dolby Vision MediaCodec configure
+        // is a chance to take the vendor display pipeline down with it.
+        m_VideoPlayerVideo->SetKeepCodecOnClose(true);
         CloseStream(m_CurrentVideo, true);
+        m_VideoPlayerVideo->SetKeepCodecOnClose(false);
 
         m_CurrentAudio.Clear();
         m_CurrentVideo.Clear();
@@ -2285,7 +2302,19 @@ void CVideoPlayer::HandlePlaySpeed()
         else
           clock = m_CurrentAudio.starttime - m_CurrentAudio.cachetime;
 
-        if (m_CurrentVideo.starttime != DVD_NOPTS_VALUE && (m_CurrentVideo.packets > 0))
+        // A video start time that sits a long way from the audio one cannot be an A/V
+        // start offset of the same clip - it is a leftover picture carrying a previous
+        // clip's timeline. Taking it would strand the master clock there, with nothing
+        // ever presented again. Start on audio alone and let the stale pictures drop.
+        const bool videoStartTimeSane =
+            std::abs(m_CurrentVideo.starttime - m_CurrentAudio.starttime) < DVD_SEC_TO_TIME(10);
+        if (m_CurrentVideo.starttime != DVD_NOPTS_VALUE && !videoStartTimeSane)
+          CLog::Log(LOGWARNING,
+                    "VideoPlayer::Sync - ignoring out of range video start time {:f} (audio {:f})",
+                    m_CurrentVideo.starttime, m_CurrentAudio.starttime);
+
+        if (m_CurrentVideo.starttime != DVD_NOPTS_VALUE && (m_CurrentVideo.packets > 0) &&
+            videoStartTimeSane)
         {
           if (m_CurrentVideo.starttime - m_CurrentVideo.cachetotal < clock)
           {
@@ -4375,9 +4404,30 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
                                                    (double)DVD_TIME_BASE * hint.fpsscale /
                                                    (hint.fpsrate * (hint.interlaced ? 2 : 1)));
 
-      RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
-      CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
-      m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode);
+      // A disc hands us the next clip before ffmpeg has parsed it, so the hints can arrive
+      // carrying the 90kHz mpegts timebase in place of a frame rate (fpsrate 90000, fpsscale 1).
+      // That passes the fpsrate != 0 test above but describes nothing, and this code runs at
+      // every clip change, not just playback start - m_CurrentVideo.Clear() on NEXTSTREAM_OPEN
+      // puts the id back to -1.
+      //
+      // Choosing a display mode from it is worse than doing nothing: the whitelist cannot match
+      // 90000 fps, so with "adjust refresh rate" on start/stop it silently falls back to the
+      // current mode, and on "always" it is free to switch the display for a rate the video does
+      // not have - a mode change driven by a placeholder, in the middle of a clip transition.
+      // Kodi already treats this range as the sane one for a frame rate (see
+      // CVideoPlayerVideo::OpenStream, which forces 25fps outside it); leave the display alone
+      // instead and let the next OpenStream, with real parameters, set it.
+      if (framerate >= 5.0 && framerate <= 120.0)
+      {
+        RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
+        CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
+        m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode);
+      }
+      else
+        CLog::Log(LOGDEBUG,
+                  "CVideoPlayer::OpenStream - not changing the display mode for an implausible "
+                  "frame rate ({:0.3f}, from fpsrate {} / fpsscale {}); the clip is not parsed yet",
+                  framerate, hint.fpsrate, hint.fpsscale);
     }
   }
 

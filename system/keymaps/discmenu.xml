@@ -1,0 +1,40 @@
+<!-- Blu-ray / DVD disc-menu control for minimal Android TV remotes (e.g. NVIDIA Shield).
+
+     IMPORTANT: while a Blu-ray (especially BD-J) is playing, Kodi is NOT in the
+     <FullscreenVideo> keymap window. CWindowTranslator::GetVirtualWindow() remaps
+     WINDOW_FULLSCREEN_VIDEO to WINDOW_VIDEO_MENU whenever CApplicationPlayer::IsInMenu()
+     is true, and for BD-J discs that is effectively the whole time (libbluray keeps an
+     overlay plane present, so CDVDInputStreamBluray::IsInMenu() returns true even when no
+     menu is visibly drawn). So disc-playback key bindings MUST live in <VideoMenu>, not
+     <FullscreenVideo>, or they never fire (the key falls through to the global default,
+     which is why long-press OK used to resolve to "Select").
+
+     Short OK/Enter stays "Select" (the default) - that is how you click the disc's own
+     on-screen menu buttons, so it must not be overridden.
+
+     LONG-PRESS OK/Enter calls "showvideomenu" (ACTION_SHOW_VIDEOMENU) ->
+     CDVDInputStreamBluray::OnMenu(), which asks libbluray for the in-movie POPUP menu first
+     (BD_VK_POPUP) and falls back to the TOP/root menu. Because <VideoMenu> maps a short
+     OK/Enter, the long-press MUST be declared in this same section or Kodi ignores it
+     (see the long-press note in keyboard.xml).
+
+     The <FullscreenVideo> block is kept for DVDs / HDMV / plain-video moments where
+     IsInMenu() is false and that window is the active one. -->
+<keymap>
+  <VideoMenu>
+    <keyboard>
+      <return mod="longpress">showvideomenu</return>
+      <enter mod="longpress">showvideomenu</enter>
+      <ok mod="longpress">showvideomenu</ok>
+    </keyboard>
+  </VideoMenu>
+  <FullscreenVideo>
+    <keyboard>
+      <backspace>OSD</backspace>
+      <browser_back>OSD</browser_back>
+      <return mod="longpress">showvideomenu</return>
+      <enter mod="longpress">showvideomenu</enter>
+      <ok mod="longpress">showvideomenu</ok>
+    </keyboard>
+  </FullscreenVideo>
+</keymap>

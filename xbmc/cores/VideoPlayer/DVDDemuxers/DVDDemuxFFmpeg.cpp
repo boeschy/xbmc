@@ -57,6 +57,9 @@ extern "C"
 #include <libavutil/dovi_meta.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#ifdef HAVE_LIBDOVI
+#include <libdovi/rpu_parser.h>
+#endif
 }
 
 using namespace KODI::UTILS;
@@ -82,6 +85,18 @@ static const struct StereoModeConversionMap WmvToInternalStereoModeMap[] =
 
 namespace
 {
+#ifdef HAVE_LIBDOVI
+// The two layers of one frame always share a timestamp; their ARRIVAL order is not
+// guaranteed. Prefer pts, fall back to dts, and report NOPTS when neither is usable so
+// the caller can fall back to demux order.
+double DoviPairingKey(const DemuxPacket* pkt)
+{
+  if (pkt->pts != DVD_NOPTS_VALUE)
+    return pkt->pts;
+  return pkt->dts;
+}
+#endif
+
 const std::vector<std::string> font_mimetypes = {"application/x-truetype-font",
                                                  "application/vnd.ms-opentype",
                                                  "application/x-font-ttf",
@@ -707,6 +722,11 @@ void CDVDDemuxFFmpeg::Dispose()
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
 
+#ifdef HAVE_LIBDOVI
+  // the queue owns its base-layer packets; teardown does not go through Flush()
+  ClearDoviPending();
+#endif
+
   if (m_pFormatContext)
   {
     if (m_ioContext && m_pFormatContext->pb && m_pFormatContext->pb != m_ioContext)
@@ -752,6 +772,10 @@ void CDVDDemuxFFmpeg::Flush()
 
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
+
+#ifdef HAVE_LIBDOVI
+  ClearDoviPending();
+#endif
 
   m_displayTime = 0;
   m_dtsAtDisplayTime = DVD_NOPTS_VALUE;
@@ -1215,6 +1239,96 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
           // store internal id until we know the continuous id presented to player
           // the stream might not have been created yet
           pPacket->iStreamId = m_pkt.pkt.stream_index;
+
+#ifdef HAVE_LIBDOVI
+          // Dolby Vision profile 7 -> 8.1 merge: the base layer and its enhancement
+          // layer are two packets carrying the same timestamp, and the RPU lives in the
+          // enhancement layer, so each base-layer access unit has to have its own RPU
+          // spliced onto it. Only for real reads (!keep).
+          //
+          // Pair on the TIMESTAMP, never on arrival order. The layers are nominally
+          // delivered BL-then-EL, but a real disc interleaves them in bursts
+          // (BL BL EL EL), and order-based pairing cannot represent that at all: it
+          // emits the first base layer with no RPU and gives the second one the first
+          // one's RPU. Measured on a menu clip, that was ~34% of frames unpaired and
+          // another ~34% carrying another frame's metadata, in a stream the decoder has
+          // been told is Dolby Vision. Queueing both sides and matching on the timestamp
+          // is what makes a burst pair correctly.
+          //
+          // Still designed to never starve the video stream: a queued base layer is
+          // always emitted, at worst DVP7_MAX_PENDING frames late and without its RPU.
+          if (m_dvP7Merge && !keep)
+          {
+            if (m_pkt.pkt.stream_index == m_dvP7ElIndex)
+            {
+              std::vector<uint8_t> rpuNal;
+              ExtractConvertedDoviRpu(pPacket->pData, pPacket->iSize, rpuNal);
+              const double elKey = DoviPairingKey(pPacket);
+              CDVDDemuxUtils::FreeDemuxPacket(pPacket);
+              pPacket = nullptr;
+
+              if (!ResolveDoviPending(elKey, rpuNal))
+              {
+                // Its base layer has not been demuxed yet - hold the RPU for it rather
+                // than discard it, which is what leaves a frame unpaired.
+                if (!rpuNal.empty())
+                {
+                  m_dvP7EarlyRpu.emplace_back(elKey, std::move(rpuNal));
+                  if (m_dvP7EarlyRpu.size() > DVP7_MAX_PENDING)
+                  {
+                    m_dvP7EarlyRpu.pop_front();
+                    m_dvP7ElNoBlCount++;
+                  }
+                }
+                else
+                {
+                  m_dvP7NoRpuCount++;
+                }
+              }
+
+              pPacket = DrainDoviPending();
+              if (!pPacket)
+                bReturnEmpty = true;
+            }
+            else if (m_pkt.pkt.stream_index == m_dvP7BlIndex)
+            {
+              DvP7Pending entry;
+              entry.bl = pPacket;
+
+              // An enhancement layer that arrived ahead of its base layer.
+              const double blKey = DoviPairingKey(pPacket);
+              for (auto it = m_dvP7EarlyRpu.begin(); it != m_dvP7EarlyRpu.end(); ++it)
+              {
+                if (it->first == blKey)
+                {
+                  entry.rpu = std::move(it->second);
+                  entry.resolved = true;
+                  m_dvP7EarlyRpu.erase(it);
+                  break;
+                }
+              }
+
+              m_dvP7Pending.push_back(std::move(entry));
+              pPacket = DrainDoviPending();
+              if (!pPacket)
+                bReturnEmpty = true;
+            }
+
+            if ((m_dvP7MergedCount + m_dvP7NoRpuCount + m_dvP7BlNoElCount) % 256 == 0 &&
+                (m_dvP7MergedCount + m_dvP7NoRpuCount + m_dvP7BlNoElCount) != m_dvP7LastLogCount)
+            {
+              m_dvP7LastLogCount = m_dvP7MergedCount + m_dvP7NoRpuCount + m_dvP7BlNoElCount;
+              // blNoEl and elNoBl are the health of the merge: both should sit at ~0.
+              // Anything else means frames are reaching a Dolby Vision decoder without
+              // their metadata. queued/rpuq show how deep the disc's interleave runs.
+              CLog::Log(LOGINFO,
+                        "CDVDDemuxFFmpeg DoVi P7 merge stats: merged={} noRpu={} blNoEl={} "
+                        "elNoBl={} queued={} rpuq={}",
+                        m_dvP7MergedCount, m_dvP7NoRpuCount, m_dvP7BlNoElCount, m_dvP7ElNoBlCount,
+                        m_dvP7Pending.size(), m_dvP7EarlyRpu.size());
+            }
+          }
+#endif
         }
         if (!keep)
         {
@@ -1605,6 +1719,17 @@ void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
   };
 
   DisposeStreams();
+
+#ifdef HAVE_LIBDOVI
+  // Reset Dolby Vision profile 7 merge state; it is re-armed by SetupDoviProfile7Merge
+  // if this program still carries a DV enhancement layer. This keeps m_dvP7ElIndex from
+  // going stale across playlist/program changes (which would wrongly protect the wrong
+  // stream from the discard pass below).
+  m_dvP7Merge = false;
+  m_dvP7BlIndex = -1;
+  m_dvP7ElIndex = -1;
+  ClearDoviPending();
+#endif
 
   // add the ffmpeg streams to our own stream map
   if (m_pFormatContext->nb_programs)
@@ -2189,12 +2314,42 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
       // This is not used by streaming services and devices (ATV, Nvidia Shield, XONE).
       if (pStream->id == 0x1015)
       {
+#ifdef HAVE_LIBDOVI
+        // On a Dolby Vision profile 7 disc the enhancement layer carries the RPU (the
+        // per-frame dynamic metadata). Rather than discarding it, keep demuxing its
+        // packets so the RPU can be converted to single-layer profile 8.1 and merged
+        // into the base layer, giving real Dolby Vision on Android MediaCodec instead
+        // of the HDR10 base layer.
+        SetupDoviProfile7Merge(pStream->index);
+        if (m_dvP7Merge && m_dvP7ElIndex == static_cast<int>(pStream->index))
+        {
+          // Keep the enhancement layer in the stream map so program/stream accounting
+          // stays consistent - if it were absent, IsProgramChange() would see an active
+          // ffmpeg stream with no matching demux stream and loop reopening forever, and
+          // the "discard all unneeded streams" pass would set AVDISCARD_ALL on it and cut
+          // off the RPU. Mark it disabled so the player never opens or decodes it; its
+          // packets are consumed by the RPU merge in ReadInternal and never surface.
+          stream->disabled = true;
+          stream->dvdNavId = pStream->id;
+        }
+        else
+        {
+          CLog::Log(LOGDEBUG, "CDVDDemuxFFmpeg::AddStream - discarding Dolby Vision stream");
+          pStream->discard = AVDISCARD_ALL;
+          delete stream;
+          return nullptr;
+        }
+      }
+      else
+        stream->dvdNavId = pStream->id;
+#else
         CLog::Log(LOGDEBUG, "CDVDDemuxFFmpeg::AddStream - discarding Dolby Vision stream");
         pStream->discard = AVDISCARD_ALL;
         delete stream;
         return nullptr;
       }
       stream->dvdNavId = pStream->id;
+#endif
 
       auto it = std::find_if(m_streams.begin(), m_streams.end(),
         [&stream](const std::pair<int, CDemuxStream*>& v)
@@ -2843,3 +2998,218 @@ StreamHdrType CDVDDemuxFFmpeg::DetermineHdrType(AVStream* pStream)
 
   return hdrType;
 }
+
+#ifdef HAVE_LIBDOVI
+void CDVDDemuxFFmpeg::SetupDoviProfile7Merge(int elStreamIndex)
+{
+  // Gate on the user's "Convert Dolby Vision" setting: it doubles as the off switch for
+  // this profile 7 -> 8.1 disc merge. When disabled, the enhancement layer is left to be
+  // discarded (below) and the base layer plays as plain HDR10, the pre-merge behaviour.
+  const auto comp = CServiceBroker::GetSettingsComponent();
+  if (!comp || !comp->GetSettings() ||
+      !comp->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_CONVERTDOVI))
+  {
+    CLog::Log(LOGDEBUG, "CDVDDemuxFFmpeg::SetupDoviProfile7Merge - discarding Dolby Vision "
+                        "stream (convertdovi disabled)");
+    return;
+  }
+
+  // Locate the already-added base-layer video stream (BD Dolby Vision BL, PID 0x1011).
+  // The base layer is stream 0 and is created before this enhancement layer, so it is
+  // always present in m_streams by now.
+  CDemuxStreamVideoFFmpeg* bl = nullptr;
+  int blIndex = -1;
+  for (const auto& elem : m_streams)
+  {
+    if (elem.second->type == StreamType::VIDEO && elem.second->dvdNavId == 0x1011)
+    {
+      bl = dynamic_cast<CDemuxStreamVideoFFmpeg*>(elem.second);
+      blIndex = elem.first;
+      break;
+    }
+  }
+
+  if (!bl)
+  {
+    CLog::Log(LOGWARNING, "CDVDDemuxFFmpeg::SetupDoviProfile7Merge - base layer not found, "
+                          "Dolby Vision merge disabled");
+    return;
+  }
+
+  // Advertise the (post-merge) base layer as single-layer Dolby Vision profile 8.1 so the
+  // decoder selects the Dolby Vision path. The per-frame RPU is converted in ReadInternal.
+  bl->hdr_type = StreamHdrType::HDR_TYPE_DOLBYVISION;
+
+  AVDOVIDecoderConfigurationRecord dovi{};
+  dovi.dv_version_major = 1;
+  dovi.dv_version_minor = 0;
+  dovi.dv_profile = 8;
+  dovi.dv_level = 6;
+  dovi.rpu_present_flag = 1;
+  dovi.el_present_flag = 0;
+  dovi.bl_present_flag = 1;
+  dovi.dv_bl_signal_compatibility_id = 1; // 8.1: HDR10-compatible base layer
+  bl->dovi = dovi;
+
+  m_dvP7Merge = true;
+  m_dvP7BlIndex = blIndex; // m_streams key == ffmpeg stream index
+  m_dvP7ElIndex = elStreamIndex;
+
+  CLog::Log(LOGINFO, "CDVDDemuxFFmpeg::SetupDoviProfile7Merge - Dolby Vision profile 7 -> 8.1 "
+                     "enhancement-layer RPU merge enabled (BL stream {}, EL stream {})",
+            blIndex, elStreamIndex);
+}
+
+DemuxPacket* CDVDDemuxFFmpeg::MergeDoviRpu(DemuxPacket* bl, const std::vector<uint8_t>& rpuNal)
+{
+  DemuxPacket* merged =
+      CDVDDemuxUtils::AllocateDemuxPacket(static_cast<int>(bl->iSize + rpuNal.size()));
+  memcpy(merged->pData, bl->pData, bl->iSize);
+  memcpy(merged->pData + bl->iSize, rpuNal.data(), rpuNal.size());
+  merged->iSize = bl->iSize + static_cast<int>(rpuNal.size());
+  merged->pts = bl->pts;
+  merged->dts = bl->dts;
+  merged->duration = bl->duration;
+  merged->dispTime = bl->dispTime;
+  merged->recoveryPoint = bl->recoveryPoint;
+  merged->iStreamId = bl->iStreamId;
+  // carry over any side data owned by the base-layer packet
+  merged->pSideData = bl->pSideData;
+  merged->iSideDataElems = bl->iSideDataElems;
+  bl->pSideData = nullptr;
+  bl->iSideDataElems = 0;
+  CDVDDemuxUtils::FreeDemuxPacket(bl);
+  return merged;
+}
+
+bool CDVDDemuxFFmpeg::ResolveDoviPending(double key, std::vector<uint8_t>& rpuNal)
+{
+  for (auto& e : m_dvP7Pending)
+  {
+    if (e.resolved)
+      continue;
+    // With no usable timestamp on either side there is nothing to match on, so fall
+    // back to demux order and take the oldest frame still waiting.
+    if (key == DVD_NOPTS_VALUE || DoviPairingKey(e.bl) == key)
+    {
+      e.rpu = std::move(rpuNal);
+      e.resolved = true;
+      if (e.rpu.empty())
+        m_dvP7NoRpuCount++;
+      return true;
+    }
+  }
+  return false;
+}
+
+DemuxPacket* CDVDDemuxFFmpeg::DrainDoviPending()
+{
+  if (m_dvP7Pending.empty())
+    return nullptr;
+
+  // Emit only from the front, so the merge can never reorder the stream. While the
+  // oldest frame is still waiting for its enhancement layer, hold everything - unless
+  // the queue has grown past any plausible interleave, in which case that frame's EL is
+  // not coming and it goes out unpaired rather than starve the video stream.
+  if (!m_dvP7Pending.front().resolved && m_dvP7Pending.size() <= DVP7_MAX_PENDING)
+    return nullptr;
+
+  DvP7Pending e = std::move(m_dvP7Pending.front());
+  m_dvP7Pending.pop_front();
+
+  if (!e.rpu.empty())
+  {
+    m_dvP7MergedCount++;
+    return MergeDoviRpu(e.bl, e.rpu);
+  }
+
+  // Unpaired: a frame handed to a decoder configured for Dolby Vision with no RPU on
+  // it. This counter is the health of the merge and should sit at ~0.
+  if (!e.resolved)
+    m_dvP7BlNoElCount++;
+  return e.bl;
+}
+
+void CDVDDemuxFFmpeg::ClearDoviPending()
+{
+  for (auto& e : m_dvP7Pending)
+    CDVDDemuxUtils::FreeDemuxPacket(e.bl);
+  m_dvP7Pending.clear();
+  m_dvP7EarlyRpu.clear();
+}
+
+bool CDVDDemuxFFmpeg::ExtractConvertedDoviRpu(const uint8_t* elData,
+                                              int elSize,
+                                              std::vector<uint8_t>& rpuNal)
+{
+  rpuNal.clear();
+  if (!elData || elSize < 5)
+    return false;
+
+  // Walk the enhancement-layer access unit's Annex-B NAL units looking for the Dolby
+  // Vision RPU (HEVC NAL unit type 62). Convert it from profile 7 to single-layer
+  // profile 8.1 and return it as an Annex-B NAL (with start code) ready to append to
+  // the base-layer access unit.
+  int i = 0;
+  while (i + 4 < elSize)
+  {
+    const bool sc3 = (elData[i] == 0 && elData[i + 1] == 0 && elData[i + 2] == 1);
+    const bool sc4 =
+        (elData[i] == 0 && elData[i + 1] == 0 && elData[i + 2] == 0 && elData[i + 3] == 1);
+    if (!sc3 && !sc4)
+    {
+      i++;
+      continue;
+    }
+
+    const int start = sc3 ? i + 3 : i + 4;
+
+    // find the next start code to delimit this NAL
+    int end = start;
+    while (end + 3 < elSize &&
+           !((elData[end] == 0 && elData[end + 1] == 0 && elData[end + 2] == 1) ||
+             (elData[end] == 0 && elData[end + 1] == 0 && elData[end + 2] == 0 &&
+              elData[end + 3] == 1)))
+      end++;
+    if (end + 3 >= elSize)
+      end = elSize;
+
+    if (start < end)
+    {
+      const uint8_t nalType = (elData[start] >> 1) & 0x3f;
+      if (nalType == 62) // HEVC_NAL_UNSPEC62 - Dolby Vision RPU
+      {
+        DoviRpuOpaque* rpu = dovi_parse_unspec62_nalu(elData + start, end - start);
+        const DoviRpuDataHeader* header = dovi_rpu_get_header(rpu);
+        if (header)
+        {
+          int ret = 0;
+          if (header->guessed_profile == 7)
+            ret = dovi_convert_rpu_with_mode(rpu, 2); // -> profile 8.1
+
+          if (ret == 0)
+          {
+            const DoviData* out = dovi_write_unspec62_nalu(rpu);
+            if (out && out->data && out->len)
+            {
+              static const uint8_t startcode[4] = {0, 0, 0, 1};
+              rpuNal.insert(rpuNal.end(), startcode, startcode + 4);
+              rpuNal.insert(rpuNal.end(), out->data, out->data + out->len);
+            }
+            if (out)
+              dovi_data_free(out);
+          }
+          dovi_rpu_free_header(header);
+        }
+        dovi_rpu_free(rpu);
+
+        if (!rpuNal.empty())
+          return true;
+      }
+    }
+    i = end;
+  }
+
+  return false;
+}
+#endif
