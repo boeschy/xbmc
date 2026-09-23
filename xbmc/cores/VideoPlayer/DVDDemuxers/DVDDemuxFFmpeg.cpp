@@ -1560,12 +1560,17 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
   if (ret >= 0)
   {
     XbmcThreads::EndTime<> timer(1000ms);
+    bool keepPacket{false};
     while (m_currentPts == DVD_NOPTS_VALUE && !timer.IsTimePast())
     {
-      m_pkt.result = -1;
-      av_packet_unref(&m_pkt.pkt);
+      if (!keepPacket)
+      {
+        m_pkt.result = -1;
+        av_packet_unref(&m_pkt.pkt);
+      }
 
       DemuxPacket* pkt = ReadInternal(true);
+      keepPacket = pkt && pkt->iStreamId == DMX_SPECIALID_STREAMCHANGE;
       if (!pkt)
       {
         KODI::TIME::Sleep(10ms);
