@@ -19,6 +19,7 @@
 #include "dialogs/GUIDialogKaiToast.h"
 #include "dialogs/GUIDialogPlayEject.h"
 #ifdef HAVE_LIBBLURAY
+#include "filesystem/BlurayDirectory.h"
 #include "filesystem/BlurayDiscCache.h"
 #endif
 #include "filesystem/File.h"
@@ -117,6 +118,13 @@ void CMediaManager::Stop()
   m_platformStorage.reset();
 }
 
+void CMediaManager::ScanForPresentMedia()
+{
+  std::unique_lock lock(m_CritSecStorageProvider);
+  if (m_platformStorage)
+    m_platformStorage->ScanForPresentMedia();
+}
+
 void CMediaManager::Initialize()
 {
   if (!m_platformStorage)
@@ -128,6 +136,13 @@ void CMediaManager::Initialize()
   m_strFirstAvailDrive = m_platformStorage->GetFirstOpticalDeviceFileName();
 #endif
   m_platformStorage->Initialize();
+#ifndef TARGET_WINDOWS
+  {
+    // Discs already in the drive(s)
+    std::unique_lock lock(m_CritSecStorageProvider);
+    m_removableDrivePaths = GetRemovableDrivePaths();
+  }
+#endif
 }
 
 void CMediaManager::LoadSources()
@@ -435,15 +450,16 @@ void CMediaManager::RemoveAutoSource(const CMediaSource &share)
 
 /////////////////////////////////////////////////////////////
 // AutoSource status functions:
-//! @todo translate cdda://<device>/
 
 std::string CMediaManager::TranslateDevicePath(const std::string& devicePath, bool bReturnAsDevice)
 {
   std::unique_lock waitLock(m_muAutoSource);
   std::string strDevice = devicePath;
-  // fallback for cdda://local/ and empty devicePath
 #ifdef HAS_OPTICAL_DRIVE
-  if(devicePath.empty() || StringUtils::StartsWith(devicePath, "cdda://local"))
+  // cdda://<device>/ names the drive, cdda://local/ means the first available one
+  if (URIUtils::IsProtocol(devicePath, "cdda"))
+    strDevice = CURL(devicePath).GetHostName();
+  if (strDevice.empty() || strDevice == "local")
     strDevice = m_strFirstAvailDrive;
 #endif
 
@@ -947,7 +963,7 @@ bool CMediaManager::Eject(const std::string& mountpath)
   return ejected;
 }
 
-void CMediaManager::EjectTray( const bool bEject, const char cDriveLetter )
+void CMediaManager::EjectTray(const bool bEject, const std::string& devicePath)
 {
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
@@ -955,14 +971,17 @@ void CMediaManager::EjectTray( const bool bEject, const char cDriveLetter )
 #ifdef HAVE_LIBBLURAY
     m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
 #endif
-    const std::string devicePath{TranslateDevicePath("")};
-    m_platformDiscDriveHander->EjectDriveTray(devicePath);
-    ResetDriveCaches(devicePath);
+    const std::string trayDevicePath{TranslateDevicePath(devicePath)};
+    if (bEject)
+      m_platformDiscDriveHander->EjectDriveTray(trayDevicePath);
+    else
+      m_platformDiscDriveHander->CloseDriveTray(trayDevicePath);
+    ResetDriveCaches(trayDevicePath);
   }
 #endif
 }
 
-void CMediaManager::CloseTray(const char cDriveLetter)
+void CMediaManager::CloseTray(const std::string& devicePath)
 {
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
@@ -970,14 +989,14 @@ void CMediaManager::CloseTray(const char cDriveLetter)
 #ifdef HAVE_LIBBLURAY
     m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
 #endif
-    const std::string devicePath{TranslateDevicePath("")};
-    m_platformDiscDriveHander->ToggleDriveTray(devicePath);
-    ResetDriveCaches(devicePath);
+    const std::string trayDevicePath{TranslateDevicePath(devicePath)};
+    m_platformDiscDriveHander->CloseDriveTray(trayDevicePath);
+    ResetDriveCaches(trayDevicePath);
   }
 #endif
 }
 
-void CMediaManager::ToggleTray(const char cDriveLetter)
+void CMediaManager::ToggleTray(const std::string& devicePath)
 {
 #ifdef HAS_OPTICAL_DRIVE
   if (m_platformDiscDriveHander)
@@ -985,18 +1004,50 @@ void CMediaManager::ToggleTray(const char cDriveLetter)
 #ifdef HAVE_LIBBLURAY
     m_hasBlurayPlaylist = HasBlurayPlaylist::UNKNOWN;
 #endif
-    const std::string devicePath{TranslateDevicePath("")};
-    m_platformDiscDriveHander->ToggleDriveTray(devicePath);
-    ResetDriveCaches(devicePath);
+    const std::string trayDevicePath{TranslateDevicePath(devicePath)};
+    m_platformDiscDriveHander->ToggleDriveTray(trayDevicePath);
+    ResetDriveCaches(trayDevicePath);
   }
 #endif
 }
+
+#ifndef TARGET_WINDOWS
+std::set<std::string> CMediaManager::GetRemovableDrivePaths() const
+{
+  std::vector<CMediaSource> drives;
+  m_platformStorage->GetRemovableDrives(drives);
+  std::set<std::string> paths;
+  for (const auto& drive : drives)
+  {
+    paths.insert(drive.strPath);
+    if (!drive.strDevicePath.empty())
+      paths.insert(drive.strDevicePath);
+  }
+  return paths;
+}
+#endif
 
 void CMediaManager::ProcessEvents()
 {
   std::unique_lock lock(m_CritSecStorageProvider);
   if (m_platformStorage->PumpDriveChangeEvents(this))
   {
+#ifndef TARGET_WINDOWS
+    // Windows learns which drive changed through the storage callbacks and forgets its disc
+    // there
+    // A disc the OS has not mounted is never listed, but is still probed by its device node
+    if (const std::string opticalDevice{m_platformStorage->GetFirstOpticalDeviceFileName()};
+        !opticalDevice.empty())
+      RemoveDiscInfo(opticalDevice);
+
+    std::set<std::string> current{GetRemovableDrivePaths()};
+    for (const auto& path : m_removableDrivePaths)
+      RemoveDiscInfo(path);
+    for (const auto& path : current)
+      RemoveDiscInfo(path);
+    m_removableDrivePaths = std::move(current);
+#endif
+
 #if defined(HAS_OPTICAL_DRIVE)
 #if defined(TARGET_DARWIN_OSX)
     // darwins GetFirstOpticalDeviceFileName only gives us something
@@ -1043,6 +1094,7 @@ void CMediaManager::AddOpticalSource(const std::string& devicePath)
 {
   CMediaSource share;
   share.strPath = devicePath;
+  share.strDevicePath = devicePath;
   share.strName = devicePath;
 
   RemoveAutoSource(share);
@@ -1214,11 +1266,13 @@ UTILS::DISCS::DiscInfo CMediaManager::GetDiscInfo(const std::string& mediaPath)
     if (!info.empty())
       return info;
   }
+#ifdef HAVE_LIBBLURAY
   // check for Blu-ray discs
   if (CFileUtils::Exists(URIUtils::AddFileToFolder(mediaPath, "BDMV", "index.bdmv")))
   {
-    info = UTILS::DISCS::ProbeBlurayDiscInfo(mediaPath);
+    info = XFILE::CBlurayDirectory::ProbeDisc(mediaPath);
   }
+#endif
 
   return info;
 }

@@ -21,7 +21,6 @@ import android.view.Choreographer;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
-import android.view.WindowManager;
 import android.widget.RelativeLayout;
 
 import java.util.ArrayList;
@@ -120,10 +119,6 @@ public class Main extends NativeActivity implements Choreographer.FrameCallback
     System.loadLibrary("@APP_NAME_LC@");
 
     super.onCreate(savedInstanceState);
-
-    // Kodi's main rendering window does not host an Android text editor. Prevent controller
-    // motion events from being dispatched to the IME before NativeActivity.
-    getWindow().addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
 
     // Request a persistent HDR-capable window color mode. The Blu-ray disc-menu overlay feature
     // presents the GUI as BT2020-PQ buffers over HDR video; declaring the whole window HDR once

@@ -325,7 +325,7 @@
 					<visible>System.AddonIsEnabled(resource.images.studios.white) + !String.IsEmpty($PARAM[infolabel_prefix]ListItem.Studio)</visible>
 				</control>
 				<control type="image">
-					<visible>!String.IsEmpty(ListItem.Premiered)</visible>
+					<visible>![String.IsEmpty(ListItem.Premiered) + String.IsEmpty(ListItem.Year)]</visible>
 					<top>-2</top>
 					<width>32</width>
 					<height>32</height>
@@ -333,13 +333,13 @@
 					<texture colordiffuse="white">lists/year.png</texture>
 				</control>
 				<control type="label">
-					<visible>!String.IsEmpty(ListItem.Premiered)</visible>
+					<visible>![String.IsEmpty(ListItem.Premiered) + String.IsEmpty(ListItem.Year)]</visible>
 					<left>-10</left>
 					<width>auto</width>
 					<height>32</height>
 					<aligny>center</aligny>
 					<font>font_flag</font>
-					<label>$INFO[ListItem.Premiered]</label>
+					<label fallback="$INFO[ListItem.Year]">$INFO[ListItem.Premiered]</label>
 				</control>
 				<control type="image">
 					<visible>!String.IsEmpty(ListItem.Duration) + !Control.IsVisible(504)</visible>
@@ -1737,7 +1737,7 @@
 					<height>60</height>
 					<aligny>center</aligny>
 					<textcolor>grey</textcolor>
-					<label>$VAR[MediaInfoListLabelVar]</label>
+					<label>$INFO[ListItem.Label]</label>
 				</control>
 				<control type="label">
 					<left>135</left>
@@ -1747,7 +1747,7 @@
 					<font>font10</font>
 					<aligny>center</aligny>
 					<textcolor>grey</textcolor>
-					<label>$INFO[ListItem.Duration,$LOCALIZE[180]: ][CR]$VAR[MediaInfoListLabel2Var]</label>
+					<label>$INFO[ListItem.Duration,$LOCALIZE[180]: ][CR]$VAR[MediaVideoPropVar]$VAR[MediaAudioPropVar, | ]</label>
 				</control>
 			</itemlayout>
 			<focusedlayout height="$PARAM[height]" width="$PARAM[width]">
@@ -1774,7 +1774,7 @@
 					<height>60</height>
 					<aligny>center</aligny>
 					<scroll>true</scroll>
-					<label>$VAR[MediaInfoListLabelVar]</label>
+					<label>$INFO[ListItem.Label]</label>
 				</control>
 				<control type="label">
 					<left>135</left>
@@ -1783,7 +1783,7 @@
 					<height>65</height>
 					<font>font10</font>
 					<aligny>center</aligny>
-					<label>$INFO[ListItem.Duration,$LOCALIZE[180]: ][CR]$VAR[MediaInfoListLabel2Var]</label>
+					<label>$INFO[ListItem.Duration,$LOCALIZE[180]: ][CR]$VAR[MediaVideoPropVar]$VAR[MediaAudioPropVar, | ]</label>
 				</control>
 			</focusedlayout>
 		</definition>
