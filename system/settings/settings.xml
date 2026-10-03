@@ -3572,6 +3572,20 @@
           </dependencies>
           <control type="toggle" />
         </setting>
+        <setting id="audiooutput.passthroughvolumecontrol" type="boolean" label="40805" help="40806">
+          <level>2</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible">
+              <and>
+                <condition on="property" name="aesettingvisible" setting="audiooutput.passthrough">audiooutput.passthrough</condition>
+                <condition on="property" name="aesettingvisible" setting="audiooutput.config">audiooutput.passthrough</condition>
+              </and>
+            </dependency>
+            <dependency type="enable" setting="audiooutput.passthrough" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle" />
+        </setting>
         <setting id="audiooutput.passthroughdevice" type="string" label="546" help="36372">
           <level>1</level>
           <default>Default</default> <!-- will be properly set on startup -->
@@ -3753,6 +3767,19 @@
           <dependencies>
             <dependency type="visible" on="property" name="HasPowerOffFeature" />
           </dependencies>
+          <default>false</default>
+          <control type="toggle" />
+        </setting>
+      </group>
+      <group id="4" label="35150">
+        <setting id="input.useapplicationkeyboard" type="boolean" label="24162" help="34008">
+          <requirement>
+            <or>
+              <condition>HAVE_ANDROID</condition>
+              <condition>HAVE_TVOS</condition>
+            </or>
+          </requirement>
+          <level>1</level>
           <default>false</default>
           <control type="toggle" />
         </setting>

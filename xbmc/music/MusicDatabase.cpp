@@ -14,7 +14,6 @@
 #include "FileItem.h"
 #include "FileItemList.h"
 #include "GUIInfoManager.h"
-#include "LangInfo.h"
 #include "ServiceBroker.h"
 #include "Song.h"
 #include "TextureCache.h"
@@ -40,6 +39,7 @@
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "imagefiles/ImageFileURL.h"
 #include "interfaces/AnnouncementManager.h"
+#include "language/LangInfo.h"
 #include "messaging/helpers/DialogHelper.h"
 #include "messaging/helpers/DialogOKHelper.h"
 #include "music/MusicDbUrl.h"
@@ -11542,17 +11542,17 @@ int CMusicDatabase::GetSongIDFromPath(const std::string& filePath)
 
 bool CMusicDatabase::CommitTransaction()
 {
-  if (CDatabase::CommitTransaction())
-  { // number of items in the db has likely changed, so reset the infomanager cache
-    CGUIComponent* gui = CServiceBroker::GetGUI();
-    if (gui)
-    {
-      gui->GetInfoManager().GetInfoProviders().GetLibraryInfoProvider().SetLibraryBool(
-          LIBRARY_HAS_MUSIC, GetSongsCount() > 0);
-      return true;
-    }
+  if (!CDatabase::CommitTransaction())
+    return false;
+
+  // number of items in the db has likely changed, so reset the infomanager cache
+  if (CGUIComponent* gui = CServiceBroker::GetGUI())
+  {
+    gui->GetInfoManager().GetInfoProviders().GetLibraryInfoProvider().SetLibraryBool(
+        LIBRARY_HAS_MUSIC, GetSongsCount() > 0);
   }
-  return false;
+
+  return true;
 }
 
 bool CMusicDatabase::SetScraperAll(const std::string& strBaseDir, const ADDON::ScraperPtr& scraper)

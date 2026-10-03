@@ -420,6 +420,8 @@ public:
   static constexpr auto SETTING_AUDIOOUTPUT_GUISOUNDMODE = "audiooutput.guisoundmode";
   static constexpr auto SETTING_AUDIOOUTPUT_GUISOUNDVOLUME = "audiooutput.guisoundvolume";
   static constexpr auto SETTING_AUDIOOUTPUT_PASSTHROUGH = "audiooutput.passthrough";
+  static constexpr auto SETTING_AUDIOOUTPUT_PASSTHROUGHVOLUMECONTROL =
+      "audiooutput.passthroughvolumecontrol";
   static constexpr auto SETTING_AUDIOOUTPUT_PASSTHROUGHDEVICE = "audiooutput.passthroughdevice";
   static constexpr auto SETTING_AUDIOOUTPUT_AC3PASSTHROUGH = "audiooutput.ac3passthrough";
   static constexpr auto SETTING_AUDIOOUTPUT_AC3TRANSCODE = "audiooutput.ac3transcode";
@@ -444,7 +446,7 @@ public:
       "input.siriremotehorizontalsensitivity";
   static constexpr auto SETTING_INPUT_SIRIREMOTEVERTICALSENSITIVITY =
       "input.siriremoteverticalsensitivity";
-  static constexpr auto SETTING_INPUT_TVOSUSEKODIKEYBOARD = "input.tvosusekodikeyboard";
+  static constexpr auto SETTING_INPUT_USEAPPLICATIONKEYBOARD = "input.useapplicationkeyboard";
   static constexpr auto SETTING_NETWORK_USEHTTPPROXY = "network.usehttpproxy";
   static constexpr auto SETTING_NETWORK_HTTPPROXYTYPE = "network.httpproxytype";
   static constexpr auto SETTING_NETWORK_HTTPPROXYSERVER = "network.httpproxyserver";

@@ -18,9 +18,11 @@
 #include "utils/URIUtils.h"
 #include "video/Bookmark.h"
 #include "video/VideoDatabase.h"
+#include "video/VideoDbUrl.h"
 #include "video/VideoInfoTag.h"
 
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -362,6 +364,24 @@ TEST_F(TestVideoDatabase, AddPathReusesRowAcrossZipAndArchiveProtocols)
   EXPECT_LT(m_db.GetPathId(archive), 0);
 }
 
+TEST_F(TestVideoDatabase, AMovieIsFoundByItsDirectorsName)
+{
+  CVideoInfoTag directed{Tag("/videos/directed.mkv")};
+  directed.SetDirector({"Jane Director"});
+  const int idMovie{m_db.SetDetailsForMovie(directed, KODI::ART::Artwork{})};
+  ASSERT_GT(idMovie, 0);
+  ASSERT_GT(AddMovie("/videos/undirected.mkv"), 0);
+
+  CVideoDbUrl url;
+  ASSERT_TRUE(url.FromString("videodb://movies/titles/"));
+  url.AddOption("director", "Jane Director");
+
+  CFileItemList items;
+  ASSERT_TRUE(m_db.GetMoviesByWhere(url.ToString(), CDatabase::Filter(), items));
+  ASSERT_EQ(1, items.Size());
+  EXPECT_EQ(idMovie, items[0]->GetVideoInfoTag()->m_iDbId);
+}
+
 TEST_F(TestVideoDatabase, GetPlayCountsListingInsideArchiveAcrossZipAndArchiveProtocols)
 {
   MarkPlayed(ArchivePath("zip", "/tv/season.zip", "e01.mkv"), 1);
@@ -436,4 +456,42 @@ TEST_F(TestVideoDatabase, GetItemsForPathReturnsArchivedMoviesWithCollapsedPaths
   EXPECT_EQ(archived, archivedItems[0]->GetPath());
   EXPECT_EQ(0, archivedItems[0]->GetVideoInfoTag()->GetPlayCount());
   EXPECT_EQ(1200.0, archivedItems[0]->GetVideoInfoTag()->GetResumePoint().timeInSeconds);
+}
+
+TEST_F(TestVideoDatabase, ToStoredPathAddsTheTrailingSeparator)
+{
+  EXPECT_EQ("smb://server/movies/", CVideoDatabase::ToStoredPath("smb://server/movies"));
+  EXPECT_EQ("smb://server/movies/", CVideoDatabase::ToStoredPath("smb://server/movies/"));
+}
+
+TEST_F(TestVideoDatabase, GetPathsForCleaningMatchesADirectoryGivenWithoutItsSeparator)
+{
+  const int idSource{m_db.AddPath("smb://server/movies/")};
+  const int idFilm{m_db.AddPath("smb://server/movies/film/", "smb://server/movies/")};
+  ASSERT_GT(idSource, 0);
+  ASSERT_GT(idFilm, 0);
+
+  // no content named, so the path's own content, here none, does not matter
+  std::set<int> paths;
+  ASSERT_TRUE(m_db.GetPathsForCleaning("smb://server/movies", "", paths));
+  EXPECT_EQ((std::set<int>{idSource, idFilm}), paths);
+}
+
+TEST_F(TestVideoDatabase, GetPathsForCleaningResolvesNothingForAnUnknownDirectory)
+{
+  ASSERT_GT(m_db.AddPath("smb://server/movies/"), 0);
+
+  std::set<int> paths;
+  ASSERT_TRUE(m_db.GetPathsForCleaning("smb://server/shows", "", paths));
+  EXPECT_TRUE(paths.empty());
+}
+
+TEST_F(TestVideoDatabase, GetPathsForCleaningMatchesTheWholeLibraryByContentExactly)
+{
+  ASSERT_GT(m_db.AddPath("smb://server/movies/"), 0);
+
+  // a path with no scraper has no content, so a clean for movies leaves it alone
+  std::set<int> paths;
+  ASSERT_TRUE(m_db.GetPathsForCleaning("", "movies", paths));
+  EXPECT_TRUE(paths.empty());
 }
