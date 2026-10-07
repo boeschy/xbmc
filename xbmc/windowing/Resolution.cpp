@@ -345,6 +345,18 @@ StereoMatch FindNative3DMode(const std::vector<RESOLUTION>& candidates,
   return match;
 }
 
+// allow hardware decoder surface padding due to codec block alignment and GPU requirements
+// (height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176) and
+// encoder cropping of up to 2% e.g. 3840→3832
+bool MatchesMode(int width, int height, const RESOLUTION_INFO& info)
+{
+  const auto withinTolerance = [](int v, int screen, int pad)
+  { return v <= screen + pad && v >= screen * 0.98; };
+
+  return (withinTolerance(height, info.iScreenHeight, 32) && width <= info.iScreenWidth + 8) ||
+         (withinTolerance(width, info.iScreenWidth, 8) && height <= info.iScreenHeight + 32);
+}
+
 } // namespace
 
 EdgeInsets::EdgeInsets(float l, float t, float r, float b) : left(l), top(t), right(r), bottom(b)
@@ -620,10 +632,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps,
     const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
 
     // allow resolutions that are exact and have the correct refresh rate
-    // allow hardware decoder surface padding due to codec block alignment and GPU requirements
-    // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
-    if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-         (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
+    if (MatchesMode(width, height, info) &&
         (info.dwFlags & modeMask) == (curr.dwFlags & modeMask) &&
         MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
     {
@@ -655,10 +664,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps,
       const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
 
       // allow resolutions that are exact and have double the refresh rate
-      // allow hardware decoder surface padding due to codec block alignment and GPU requirements
-      // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
-      if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-           (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
+      if (MatchesMode(width, height, info) &&
           (info.dwFlags & modeMask) == (curr.dwFlags & modeMask) &&
           MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
       {
@@ -695,10 +701,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps,
       const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
 
       // allow resolutions that are exact and have 2.5 times the refresh rate
-      // allow hardware decoder surface padding due to codec block alignment and GPU requirements
-      // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
-      if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-           (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
+      if (MatchesMode(width, height, info) &&
           (info.dwFlags & modeMask) == (curr.dwFlags & modeMask) &&
           MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
       {

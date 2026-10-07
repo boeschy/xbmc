@@ -258,18 +258,30 @@ CVideoInfoScanner::~CVideoInfoScanner()
           }
           else
           {
-            // The remaining sub directories under the path to scan were not found on disk, skip
-            // the individual scans.
+            // Skip the individual scans of the sub directories still queued under the path to
+            // scan. Not all of them are missing - disc folders are consumed by Stack() and
+            // season folders are not recursed into.
             // Happens mostly for TV Shows that are in the library and were deleted from a sub
             // directory of a defined source.
-            std::function<void(const std::string&)> f;
-            if (m_bClean)
-              f = [this](const std::string& dir)
-              { m_pathsToClean.insert(m_database.GetPathId(dir)); };
+            size_t missing{0};
+            // Checking each folder is only worth its cost when the count is logged
+            const bool countMissing{CServiceBroker::GetLogging().IsLogLevelLogged(LOGDEBUG)};
+            auto f{[this, &missing, countMissing](const std::string& dir)
+                   {
+                     if (m_bClean)
+                       m_pathsToClean.insert(m_database.GetPathId(dir));
 
-            if (auto count = RemoveSubDirectories(m_pathsToScan, directory, f))
+                     // CPluginDirectory::Exists always says yes, so treat a plugin path as missing
+                     if (!countMissing || (!URIUtils::IsPlugin(dir) && CDirectory::Exists(dir)))
+                       return;
+
+                     ++missing;
+                   }};
+
+            RemoveSubDirectories(m_pathsToScan, directory, f);
+            if (missing)
               CLog::Log(LOGDEBUG, "VideoInfoScanner: Skipped {} missing sub directories of {}.",
-                        count, directory);
+                        missing, directory);
           }
         }
       }
@@ -746,6 +758,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
           tag.m_set.SetOriginalTitle(tag.m_set.GetTitle());
           if (!setTag.GetTitle().empty())
             tag.m_set.SetTitle(setTag.GetTitle());
+          if (setTag.HasSortTitle())
+            tag.m_set.SetSortTitle(setTag.GetSortTitle());
           if (!setTag.GetOverview().empty())
             tag.m_set.SetOverview(setTag.GetOverview());
           if (setTag.HasArt())
@@ -2077,7 +2091,8 @@ CVideoInfoScanner::~CVideoInfoScanner()
     CLog::LogF(LOGDEBUG, "Adding new set {}", set.GetTitle());
 
     // Create set
-    const int idSet{m_database.AddSet(set.GetTitle(), set.GetOverview(), set.GetOriginalTitle())};
+    const int idSet{m_database.AddSet(set.GetTitle(), set.GetOverview(), set.GetOriginalTitle(),
+                                      set.GetSortTitle())};
 
     // Assume art in set
     if (idSet > 0)
@@ -2998,8 +3013,7 @@ CVideoInfoScanner::~CVideoInfoScanner()
           else
           {
             m_database.ConvertVideoToVersion(ContentToVideoDbType(content), idMovie, dbId,
-                                             idVideoAssetType, VideoAssetType::EXTRA,
-                                             DeleteMovieCascadeAction::ALL_ASSETS);
+                                             idVideoAssetType, VideoAssetType::EXTRA);
           }
         },
         [](const std::shared_ptr<CFileItem>& dirItem) { return !HasNoMedia(dirItem->GetPath()); },
