@@ -79,7 +79,7 @@
 #include <utility>
 
 using namespace KODI;
-using namespace KODI::UTILS;
+using namespace KODI::LANGUAGE;
 using namespace std::chrono_literals;
 
 //------------------------------------------------------------------------------
