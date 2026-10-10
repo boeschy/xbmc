@@ -27,6 +27,7 @@ xbmc/games/controllers/test       test/games/controllers
 xbmc/games/dialogs/disc/test      test/games/dialogs/disc
 xbmc/guilib/test                  test/guilib
 xbmc/imagefiles/test              test/imagefiles
+xbmc/input/test                   test/input
 xbmc/input/keyboard/test          test/input/keyboard
 xbmc/input/keymaps/test           test/input/keymaps
 xbmc/interfaces/test              test/interfaces
@@ -40,6 +41,7 @@ xbmc/music/tags/test              test/music_tags
 xbmc/music/test                   test/music
 xbmc/network/test                 test/network
 xbmc/pictures/metadata/test       test/pictures/metadata
+xbmc/peripherals/test             test/peripherals
 xbmc/playlists/test               test/playlists
 xbmc/pvr/channels/test            test/pvrchannels
 xbmc/pvr/epg/test                 test/pvrepg
@@ -51,3 +53,4 @@ xbmc/threads/test                 test/threads
 xbmc/utils/test                   test/utils
 xbmc/video/geometry/test          test/video/geometry
 xbmc/video/test                   test/video
+xbmc/windowing/test               test/windowing
