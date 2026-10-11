@@ -124,6 +124,10 @@ struct PlaylistInformation
   std::vector<SubtitleStreamInfo> pgStreams;
   std::string languages;
 
+  std::vector<unsigned int> dependentViewClips;
+
+  bool baseViewIsRightEye{false};
+
   //! Whether the playlist carries a secondary video stream, ie. it presents the content
   //! picture-in-picture (see IsPictureInPicturePresentation)
   bool hasSecondaryVideo{false};
@@ -144,8 +148,19 @@ struct PlaylistInformation
     languages.clear();
     hasSecondaryVideo = false;
     hasDolbyVision = false;
+    dependentViewClips.clear();
+    baseViewIsRightEye = false;
   }
 };
+
+inline bool AreDifferentStereoscopicPresentations(const PlaylistInformation& a,
+                                                  const PlaylistInformation& b)
+{
+  if (a.dependentViewClips != b.dependentViewClips)
+    return true;
+
+  return !a.dependentViewClips.empty() && a.baseViewIsRightEye != b.baseViewIsRightEye;
+}
 
 struct ClipInfo
 {

@@ -232,7 +232,7 @@ void RemoveDuplicatePlaylists(std::vector<PlaylistInformation>& playlists)
                            return a.playlist > b.playlist;
                          }};
 
-  std::unordered_set<unsigned int> duplicatePlaylists;
+  std::map<unsigned int, unsigned int> duplicatePlaylists;
   for (size_t i = 0; i + 1 < playlists.size(); ++i)
   {
     for (size_t j = i + 1; j < playlists.size(); ++j)
@@ -243,13 +243,27 @@ void RemoveDuplicatePlaylists(std::vector<PlaylistInformation>& playlists)
           playlists[i].chapters == playlists[j].chapters &&
           playlists[i].clips == playlists[j].clips)
       {
-        duplicatePlaylists.emplace(isDiscarded(playlists[i], playlists[j]) ? playlists[i].playlist
-                                                                           : playlists[j].playlist);
+        if (AreDifferentStereoscopicPresentations(playlists[i], playlists[j]))
+          continue;
+
+        const bool discardI{isDiscarded(playlists[i], playlists[j])};
+        const PlaylistInformation& discarded{discardI ? playlists[i] : playlists[j]};
+        const PlaylistInformation& kept{discardI ? playlists[j] : playlists[i]};
+        duplicatePlaylists.try_emplace(discarded.playlist, kept.playlist);
       }
     }
   }
-  std::erase_if(playlists, [&duplicatePlaylists](const PlaylistInformation& p)
-                { return duplicatePlaylists.contains(p.playlist); });
+  std::erase_if(playlists,
+                [&duplicatePlaylists](const PlaylistInformation& p)
+                {
+                  const auto it{duplicatePlaylists.find(p.playlist)};
+                  if (it == duplicatePlaylists.end())
+                    return false;
+
+                  CLog::LogF(LOGDEBUG, "Discarding playlist {} - duplicate of playlist {}",
+                             p.playlist, it->second);
+                  return true;
+                });
 }
 
 bool SetStreamDetails(const CURL& url,

@@ -2548,6 +2548,8 @@ bool IsSamePresentation(const PlaylistInformation& a,
 {
   if (a.duration != b.duration)
     return false;
+  if (AreDifferentStereoscopicPresentations(a, b))
+    return false;
   if (a.clips == b.clips)
     return true;
   if (aClipDurations.size() < 2 || a.chapters.size() != b.chapters.size() ||

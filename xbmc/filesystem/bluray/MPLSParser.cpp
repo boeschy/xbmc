@@ -701,6 +701,8 @@ constexpr unsigned int OFFSET_MPLS_PLAYLIST_MARK_POSITION = 12;
 constexpr unsigned int OFFSET_MPLS_EXTENSION_DATA_POSITION = 16;
 constexpr unsigned int OFFSET_MPLS_APP_INFO_PLAYLIST = 40;
 constexpr unsigned int OFFSET_MPLS_APP_INFO_PLAYBACK_TYPE = 5;
+constexpr unsigned int OFFSET_MPLS_APP_INFO_FLAGS = 16;
+constexpr uint8_t MPLS_APP_INFO_MVC_BASE_VIEW_R = 0x10;
 constexpr unsigned int OFFSET_MPLS_NUM_PLAYITEMS = 6;
 constexpr unsigned int OFFSET_MPLS_NUM_SUBPATHS = 8;
 constexpr unsigned int OFFSET_MPLS_SUBPATH_NUM_SUBPLAYITEMS = 9;
@@ -1104,6 +1106,8 @@ bool ParseMPLS(const CURL& url,
     playbackCount = GetWord(buffer, offset + 6);
   playlistInformation.playbackType = playbackType;
   playlistInformation.playbackCount = playbackCount;
+  playlistInformation.baseViewIsRightEye =
+      (GetByte(buffer, offset + OFFSET_MPLS_APP_INFO_FLAGS) & MPLS_APP_INFO_MVC_BASE_VIEW_R) != 0;
 
   // Parse Playlist
   offset = playlistPosition;

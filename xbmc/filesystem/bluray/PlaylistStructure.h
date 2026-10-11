@@ -37,6 +37,8 @@ struct BlurayPlaylistInformation
   std::vector<PlaylistMarkInformation> playlistMarks;
   std::vector<ChapterInformation> chapters;
 
+  bool baseViewIsRightEye{false};
+
   //! Whether the clips carry the stream information from their .clpi (see CMPLSParser::ReadMPLS)
   bool clipStreamsRead{false};
 };
