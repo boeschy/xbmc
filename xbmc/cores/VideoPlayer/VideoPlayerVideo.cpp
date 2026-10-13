@@ -678,7 +678,6 @@ void CVideoPlayerVideo::Process()
       }
       if (m_skipToKeyFrame)
       {
-        m_iDroppedFrames++;
         continue;
       }
 
