@@ -833,7 +833,6 @@ GLint CRenderSystemGLES::GUIShaderGetPma()
   return -1;
 }
 
-<<<<<<< HEAD
 GLint CRenderSystemGLES::GUIShaderGetGUIMatrix()
 {
   if (m_pShader[m_method])
