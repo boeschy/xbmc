@@ -3,8 +3,8 @@ LIBNAME=edge264-mvc
 # pin, not a tagged release (the project has no version tags at time of
 # writing) - re-pin to a tagged release once one exists, and re-verify
 # the hash below whenever this commit is bumped.
-VERSION=0c63655172023960768809b6e79941940e5c9c27
+VERSION=e8f4b3b54e34d752c16760efa1e7ad966307eb2b
 BASE_URL=https://github.com/jens-duttke/edge264-mvc/archive
 ARCHIVE=$(VERSION).tar.gz
-SHA512=1d60891e6775d2b00c453779b7980b4585cf41aa95d0e6a9f82dce9d0e3a82092a15caff43a21ffc43fdbc0ed49acd96eab2be71694c17b88289ec479dea74d9
-BYPRODUCT=libedge264.a
+SHA512=1b53993045b2eae519ee4ef25c2d1f86d38a32786113031a2f69d15e5cfe1f0091ad104726f7d86a87f7f4857b09b19e7b10a7029eca6a0851943a45bf49643e
+BYPRODUCT=libedge264mvc.a

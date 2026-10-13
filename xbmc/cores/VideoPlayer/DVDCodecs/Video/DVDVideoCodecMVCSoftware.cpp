@@ -16,16 +16,10 @@
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SystemClock.h"
 #include "utils/log.h"
 
 #include <algorithm>
-#include <cerrno>
-#include <chrono>
-#include <cstdlib>
 #include <cstring>
-#include <set>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -39,9 +33,24 @@ namespace
 // this codec is anything more than a PoC.
 constexpr int EDGE264_THREADS = 4;
 
-// How long a NAL waits for the worker threads to free a DPB slot before the
-// frames edge264 is holding back are forced out
-constexpr auto ENOBUFS_TIMEOUT = std::chrono::milliseconds(500);
+int64_t PtsToInt(double pts)
+{
+  int64_t value;
+  std::memcpy(&value, &pts, sizeof(value));
+  return value;
+}
+
+double IntToPts(int64_t value)
+{
+  double pts;
+  std::memcpy(&pts, &value, sizeof(pts));
+  return pts;
+}
+
+const uint8_t* FindStartCode(const uint8_t* buf, const uint8_t* end)
+{
+  return buf + edge264mvc_find_start_code(buf, static_cast<size_t>(end - buf));
+}
 } // namespace
 
 CDVDVideoCodecMVCSoftware::CDVDVideoCodecMVCSoftware(CProcessInfo& processInfo)
@@ -51,15 +60,7 @@ CDVDVideoCodecMVCSoftware::CDVDVideoCodecMVCSoftware(CProcessInfo& processInfo)
 
 CDVDVideoCodecMVCSoftware::~CDVDVideoCodecMVCSoftware()
 {
-  if (m_decoder)
-  {
-    // edge264_free() releases every DPB slot it still owns via FreeCb,
-    // which returns each block to m_framePool rather than freeing it
-    // immediately (see ReleaseToPool()) - so the actual std::free() call
-    // only happens afterwards, here.
-    edge264_free(&m_decoder);
-  }
-  DrainPool(m_framePool);
+  edge264mvc_close(&m_decoder);
 }
 
 std::unique_ptr<CDVDVideoCodec> CDVDVideoCodecMVCSoftware::Create(CProcessInfo& processInfo)
@@ -207,12 +208,14 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
     return false;
   }
 
-  m_decoder = edge264_alloc(EDGE264_THREADS, &CDVDVideoCodecMVCSoftware::LogCb, this,
-                             0 /* log_mbs */, &CDVDVideoCodecMVCSoftware::AllocCb,
-                             &CDVDVideoCodecMVCSoftware::FreeCb, this);
-  if (!m_decoder)
+  Edge264MvcSettings settings;
+  edge264mvc_default_settings(&settings);
+  settings.n_threads = EDGE264_THREADS;
+  const int openRet = edge264mvc_open(&m_decoder, &settings);
+  if (openRet != EDGE264MVC_OK || !m_decoder)
   {
-    CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::Open - edge264_alloc failed");
+    CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::Open - edge264mvc_open failed ({})", openRet);
+    m_decoder = nullptr;
     return false;
   }
 
@@ -293,17 +296,18 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
     end = buf + m_bitstream.GetConvertSize();
   }
 
-  m_ptsPending = packet.pts != DVD_NOPTS_VALUE ? packet.pts : packet.dts;
-  // Consumed smallest-first as frames come out - see m_ptsQueue in the header
-  m_ptsQueue.insert(m_ptsPending);
+  const int64_t pts = PtsToInt(packet.pts != DVD_NOPTS_VALUE ? packet.pts : packet.dts);
 
-  auto decode = [this](const uint8_t* start, const uint8_t* stop)
+  auto decode = [this, pts](const uint8_t* start, const uint8_t* stop)
   {
-    // edge264 returns plain positive errno values, 0 on success
-    const int ret = DecodeNal(start, stop);
-    if (ret != 0)
+    const int ret = DecodeNal(start, static_cast<size_t>(stop - start), pts);
+    if (ret == EDGE264MVC_NOMEM)
     {
-      CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264_decode_NAL returned {}",
+      CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::AddData - out of memory, dropping a NAL");
+    }
+    else if (ret != EDGE264MVC_OK)
+    {
+      CLog::Log(LOGDEBUG, "CDVDVideoCodecMVCSoftware::AddData - edge264mvc_send_nal returned {}",
                 ret);
     }
   };
@@ -312,15 +316,15 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   // a merged access unit, and edge264 clears its parameter sets on it - feed it last
   std::vector<std::pair<const uint8_t*, const uint8_t*>> trailing;
 
-  // edge264_find_start_code() points at the "00 00 01" itself; a 4-byte start
+  // edge264mvc_find_start_code() points at the "00 00 01" itself; a 4-byte start
   // code is found by its last three bytes, so skipping 3 is right for both
-  const uint8_t* nal = edge264_find_start_code(buf, end, 0);
+  const uint8_t* nal = FindStartCode(buf, end);
   if (nal < end)
   {
     nal += 3;
     while (nal < end)
     {
-      const uint8_t* nalEnd = edge264_find_start_code(nal, end, 0);
+      const uint8_t* nalEnd = FindStartCode(nal, end);
 
       const uint8_t nalType = nal[0] & 0x1f;
       if (nalType == 10 || nalType == 11)
@@ -342,75 +346,35 @@ bool CDVDVideoCodecMVCSoftware::AddData(const DemuxPacket& packet)
   return true;
 }
 
-int CDVDVideoCodecMVCSoftware::DecodeNal(const uint8_t* nal, const uint8_t* end)
+int CDVDVideoCodecMVCSoftware::DecodeNal(const uint8_t* nal, size_t size, int64_t pts)
 {
-  int ret = edge264_decode_NAL(m_decoder, nal, end, nullptr, nullptr);
-  if (ret != ENOBUFS)
-    return ret;
-
-  // ENOBUFS leaves the NAL unconsumed. The DPB is full of frames the workers have
-  // not finished yet, so wait for them: dropping the NAL loses a slice, and in a
-  // merged access unit that is the dependent view's, which comes last
-  XbmcThreads::EndTime<> timeout(ENOBUFS_TIMEOUT);
-  bool forced = false;
-  while (ret == ENOBUFS)
+  int ret = edge264mvc_send_nal(m_decoder, nal, size, pts, 0);
+  while (ret == EDGE264MVC_AGAIN)
   {
-    if (DrainFrames() == 0)
-    {
-      if (!timeout.IsTimePast())
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      else if (!forced)
-      {
-        forced = true;
-        ForceOutput();
-      }
-      else
-      {
-        CLog::Log(LOGWARNING,
-                  "CDVDVideoCodecMVCSoftware::DecodeNal - DPB stalled, dropping a NAL");
-        break;
-      }
-    }
-    ret = edge264_decode_NAL(m_decoder, nal, end, nullptr, nullptr);
+    DrainFrames();
+    ret = edge264mvc_send_nal(m_decoder, nal, size, pts, 0);
   }
   return ret;
-}
-
-void CDVDVideoCodecMVCSoftware::ForceOutput()
-{
-  // buf >= end makes edge264 release every frame it is holding back
-  static constexpr uint8_t END_MARKER = 0;
-  edge264_decode_NAL(m_decoder, &END_MARKER, &END_MARKER, nullptr, nullptr);
 }
 
 int CDVDVideoCodecMVCSoftware::DrainFrames()
 {
   int count = 0;
-  Edge264Frame frame{};
-  // borrow=1: workers keep decoding meanwhile, so the slot must stay reserved
-  // until PackFrame() has copied every plane out of it
-  while (edge264_get_frame(m_decoder, &frame, 1) == 0)
+  Edge264MvcFrame frame{};
+  while (edge264mvc_receive_frame(m_decoder, &frame) == EDGE264MVC_OK)
   {
-    if (frame.samples[0])
+    if (frame.views[0].planes[0])
     {
       auto picture = std::make_unique<VideoPicture>();
       if (PackFrame(frame, picture.get()))
       {
-        if (!m_ptsQueue.empty())
-        {
-          picture->pts = *m_ptsQueue.begin();
-          m_ptsQueue.erase(m_ptsQueue.begin());
-        }
-        else
-        {
-          picture->pts = m_ptsPending;
-        }
+        picture->pts = IntToPts(frame.views[0].pts);
         picture->dts = picture->pts;
         m_pictures.push_back(std::move(picture));
         count++;
       }
     }
-    edge264_return_frame(m_decoder, frame.return_arg);
+    edge264mvc_release_frame(m_decoder, &frame);
   }
   return count;
 }
@@ -418,10 +382,8 @@ int CDVDVideoCodecMVCSoftware::DrainFrames()
 void CDVDVideoCodecMVCSoftware::Reset()
 {
   if (m_decoder)
-    edge264_flush(m_decoder);
+    edge264mvc_flush(m_decoder);
   m_pictures.clear();
-  m_ptsPending = DVD_NOPTS_VALUE;
-  m_ptsQueue.clear();
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVideoPicture)
@@ -429,7 +391,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVi
   // Draining: nothing more is coming to push the held frames out
   if (m_pictures.empty() && m_decoder && (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
   {
-    ForceOutput();
+    edge264mvc_send_end(m_decoder);
     DrainFrames();
   }
 
@@ -441,7 +403,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecMVCSoftware::GetPicture(VideoPicture* pVi
   return VC_PICTURE;
 }
 
-bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPicture* pVideoPicture)
+bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264MvcFrame& frame, VideoPicture* pVideoPicture)
 {
   if (frame.width_Y != static_cast<int>(m_width) || frame.height_Y != static_cast<int>(m_height))
   {
@@ -491,11 +453,11 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
   // for half-SBS/half-TAB files - no renderer changes needed.
   // Idents, menus and the run-up after a seek carry no dependent view: show the base
   // view to both eyes rather than drop to 2D, which would cost a stereo mode switch
-  const bool stereo = frame.samples_mvc[0] != nullptr;
+  const bool stereo = frame.views[1].planes[0] != nullptr;
   for (int plane = 0; plane < 3; plane++)
   {
-    const uint8_t* srcL = frame.samples[plane];
-    const uint8_t* srcR = stereo ? frame.samples_mvc[plane] : srcL;
+    const uint8_t* srcL = frame.views[0].planes[plane];
+    const uint8_t* srcR = stereo ? frame.views[1].planes[plane] : srcL;
     int srcStride = plane == 0 ? frame.stride_Y : frame.stride_C;
     int srcW = plane == 0 ? frame.width_Y : frame.width_C;
     int srcH = plane == 0 ? frame.height_Y : frame.height_C;
@@ -568,102 +530,4 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264Frame& frame, VideoPictur
   pVideoPicture->colorBits = 8;
 
   return true;
-}
-
-void* CDVDVideoCodecMVCSoftware::AllocFromPool(std::vector<PooledBlock>& pool, unsigned size)
-{
-  // Called from AllocCb, which edge264 invokes from whichever of its own
-  // worker threads needs a new DPB slot - never assume single-threaded
-  // access here.
-  std::lock_guard<std::mutex> lock(m_poolMutex);
-
-  for (size_t i = 0; i < pool.size(); i++)
-  {
-    if (pool[i].size == size)
-    {
-      void* ptr = pool[i].ptr;
-      pool.erase(pool.begin() + i);
-      return ptr;
-    }
-  }
-
-  void* ptr = std::malloc(size);
-  if (ptr)
-    m_blockSizes[ptr] = size;
-  return ptr;
-}
-
-void CDVDVideoCodecMVCSoftware::ReleaseToPool(std::vector<PooledBlock>& pool, void* ptr)
-{
-  if (!ptr)
-    return;
-
-  // Same rationale as AllocFromPool(): FreeCb is called from edge264's
-  // worker threads too.
-  std::lock_guard<std::mutex> lock(m_poolMutex);
-
-  auto it = m_blockSizes.find(ptr);
-  if (it == m_blockSizes.end())
-  {
-    // Should not happen - we recorded a size for every block we ever
-    // handed out. Free rather than leak if it does.
-    std::free(ptr);
-    return;
-  }
-
-  if (pool.size() >= MAX_POOLED_BLOCKS)
-  {
-    std::free(ptr);
-    m_blockSizes.erase(it);
-    return;
-  }
-
-  pool.push_back({ptr, it->second});
-}
-
-void CDVDVideoCodecMVCSoftware::DrainPool(std::vector<PooledBlock>& pool)
-{
-  // Only called from the destructor, after edge264_free() has already
-  // joined every worker thread (see edge264.c's shutdown path) - no
-  // concurrent AllocCb/FreeCb calls can be in flight here, so no lock
-  // needed despite this being the counterpart to the two locked
-  // functions above.
-  for (auto& block : pool)
-    std::free(block.ptr);
-  pool.clear();
-}
-
-void CDVDVideoCodecMVCSoftware::AllocCb(
-    void** samples, unsigned samples_size, void** mbs, unsigned mbs_size, int errno_on_fail, void* alloc_arg)
-{
-  auto* self = static_cast<CDVDVideoCodecMVCSoftware*>(alloc_arg);
-  // One contiguous allocation for samples+mbs - see the m_framePool
-  // comment in the header for why this must not be two separate
-  // allocations (edge264's SIMD inter-prediction reads a short distance
-  // past the nominal samples region, relying on it spilling harmlessly
-  // into the immediately-following mbs region of the same block).
-  void* base = self->AllocFromPool(self->m_framePool, samples_size + mbs_size);
-  *samples = base;
-  *mbs = base ? static_cast<uint8_t*>(base) + samples_size : nullptr;
-  if (!base && errno_on_fail)
-  {
-    CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::AllocCb - allocation failed ({} + {} bytes)",
-              samples_size, mbs_size);
-  }
-}
-
-void CDVDVideoCodecMVCSoftware::FreeCb(void* samples, void* mbs, void* alloc_arg)
-{
-  auto* self = static_cast<CDVDVideoCodecMVCSoftware*>(alloc_arg);
-  // mbs is just samples+samples_size within the same allocation (see
-  // AllocCb) - only samples is ever handed back to the pool/freed,
-  // exactly like edge264's own internal_free() only frees the base
-  // pointer it originally returned as *samples.
-  self->ReleaseToPool(self->m_framePool, samples);
-}
-
-int CDVDVideoCodecMVCSoftware::LogCb(const char* str, void* log_arg)
-{
-  CLog::Log(LOGDEBUG, "edge264-mvc: {}", str);
-  return 0;
 }
