@@ -2585,7 +2585,6 @@ void CVideoPlayer::HandlePlaySpeed()
       {
         m_SpeedState.lastpts  = m_VideoPlayerVideo->GetCurrentPts();
         m_SpeedState.lasttime = GetTime();
-        m_SpeedState.lastabstime = m_clock.GetAbsoluteClock();
 
         double error;
         error  = m_clock.GetClock() - m_SpeedState.lastpts;
@@ -2605,7 +2604,15 @@ void CVideoPlayer::HandlePlaySpeed()
         {
           error  = (m_clock.GetClock() - m_SpeedState.lastseekpts) / 1000;
 
-          if (std::abs(error) > 1000 || (m_VideoPlayerVideo->IsRewindStalled() && std::abs(error) > 100))
+          // While rewinding, the demuxer resumes from a keyframe before the seek target;
+          // seeking again before its read position reaches the clock discards that progress.
+          const bool demuxerCatchingUp =
+              m_playSpeed < 0 &&
+              (m_CurrentVideo.dts == DVD_NOPTS_VALUE || m_CurrentVideo.dts < m_clock.GetClock());
+
+          if (!demuxerCatchingUp &&
+              (std::abs(error) > 1000 ||
+               (m_VideoPlayerVideo->IsRewindStalled() && std::abs(error) > 100)))
           {
             CLog::Log(LOGDEBUG, "CVideoPlayer::Process - Seeking to catch up, error was: {:f}",
                       error);
@@ -3451,7 +3458,7 @@ void CVideoPlayer::HandleMessages()
             m_messenger.Put(std::make_shared<CDVDMsgPlayerSeek>(mode));
           }
         }
-        else
+        else if (!st.IsCurrent(m_CurrentAudio))
         {
 #if defined(HAVE_LIBBLURAY)
           if (m_pInputStream && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) && m_pDemuxer)
@@ -3502,7 +3509,7 @@ void CVideoPlayer::HandleMessages()
             m_messenger.Put(std::make_shared<CDVDMsgPlayerSeek>(mode));
           }
         }
-        else
+        else if (!st.IsCurrent(m_CurrentVideo))
         {
           CloseStream(m_CurrentVideo, false);
           OpenStream(m_CurrentVideo, st.demuxerId, st.id, st.source);
@@ -3532,7 +3539,7 @@ void CVideoPlayer::HandleMessages()
             CloseStream(m_CurrentSubtitle, false);
           }
         }
-        else
+        else if (!st.IsCurrent(m_CurrentSubtitle) || m_CurrentSubtitle.demuxDisabled)
         {
 #if defined(HAVE_LIBBLURAY)
           if (m_pInputStream && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) && m_pDemuxer)
@@ -3546,6 +3553,7 @@ void CVideoPlayer::HandleMessages()
           }
 #endif
 
+          // a stream disabled in the demuxer is only enabled again by a reopen
           CloseStream(m_CurrentSubtitle, false);
           OpenStream(m_CurrentSubtitle, st.demuxerId, st.id, st.source);
 
@@ -3647,7 +3655,13 @@ void CVideoPlayer::HandleMessages()
         m_State.timestamp = m_clock.GetAbsoluteClock();
       }
 
-      if (speed != DVD_PLAYSPEED_PAUSE && m_playSpeed != DVD_PLAYSPEED_PAUSE && speed != m_playSpeed)
+      const SpeedChangeNotifications notifications =
+          GetSpeedChangeNotifications(m_playSpeed, speed, msg->IsTempo());
+
+      if (notifications.resumed)
+        m_callback.OnPlayBackResumed();
+
+      if (notifications.speedChanged)
       {
         m_callback.OnPlayBackSpeedChanged(speed / DVD_PLAYSPEED_NORMAL);
         m_processInfo->SeekFinished(0);
@@ -3667,10 +3681,12 @@ void CVideoPlayer::HandleMessages()
           (m_playSpeed != DVD_PLAYSPEED_NORMAL && m_playSpeed != DVD_PLAYSPEED_PAUSE &&
            !m_processInfo->IsTempoAllowed(static_cast<float>(m_playSpeed) / DVD_PLAYSPEED_NORMAL));
 
-      // Seek when returning to normal 1.0x or tempo play from FF/RW
+      // Seek when returning to normal 1.0x, tempo play or pause from FF/RW
       // back from RW: clock is not in sync with current pts
       // back from FF: fill the empty audio queue to avoid no audio
-      if ((speed == DVD_PLAYSPEED_NORMAL || isTempoSpeed) && wasFFRW)
+      // back to pause: realign the clock so frames buffered while paused are held
+      if ((speed == DVD_PLAYSPEED_NORMAL || speed == DVD_PLAYSPEED_PAUSE || isTempoSpeed) &&
+          wasFFRW)
       {
         double iTime = m_VideoPlayerVideo->GetCurrentPts();
         if (iTime == DVD_NOPTS_VALUE)
@@ -3820,6 +3836,24 @@ void CVideoPlayer::SetCaching(ECacheState state)
   m_caching = state;
 
   m_clock.SetSpeedAdjust(0);
+}
+
+CVideoPlayer::SpeedChangeNotifications CVideoPlayer::GetSpeedChangeNotifications(int previousSpeed,
+                                                                                 int newSpeed,
+                                                                                 bool isTempo)
+{
+  SpeedChangeNotifications notifications;
+
+  const bool wasPaused = (previousSpeed == DVD_PLAYSPEED_PAUSE);
+  const bool unpausedToNormal = wasPaused && (newSpeed == DVD_PLAYSPEED_NORMAL || isTempo);
+
+  if (wasPaused && newSpeed != DVD_PLAYSPEED_PAUSE && !unpausedToNormal)
+    notifications.resumed = true;
+
+  if (newSpeed != DVD_PLAYSPEED_PAUSE && newSpeed != previousSpeed && !unpausedToNormal)
+    notifications.speedChanged = true;
+
+  return notifications;
 }
 
 void CVideoPlayer::SetPlaySpeed(int speed)
@@ -4196,6 +4230,7 @@ void CVideoPlayer::SetEnableStream(CCurrentStream& current, bool isEnabled)
       m_SelectionStreams.Contains(current.type, current.source, current.demuxerId, current.id))
   {
     m_pDemuxer->EnableStream(current.demuxerId, current.id, isEnabled);
+    current.demuxDisabled = !isEnabled;
   }
 }
 
@@ -4494,6 +4529,7 @@ bool CVideoPlayer::OpenStream(CCurrentStream& current, int64_t demuxerId, int iS
     current.id = iStream;
     current.demuxerId = demuxerId;
     current.source = source;
+    current.demuxDisabled = false;
     current.hint = hint;
     current.stream = (void*)stream;
     current.lastdts = DVD_NOPTS_VALUE;
