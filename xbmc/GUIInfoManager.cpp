@@ -4635,7 +4635,7 @@ constexpr std::array<InfoMap, 94> videoplayer = {{
 ///     @return **True** if achievements are being earned in hardcore mode\,
 ///     **False** otherwise.
 ///     <p><hr>
-///     @skinning_v23 **[New Boolean Condition]** \link RetroPlayer_AchievementsHardcore `RetroPlayer.AchievementsHardcore`\endlink
+///     @skinning_v22 **[New Boolean Condition]** \link RetroPlayer_AchievementsHardcore `RetroPlayer.AchievementsHardcore`\endlink
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`RetroPlayer.LeaderboardTrackerTitle`</b>,
@@ -5777,7 +5777,7 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///     @return The genre of the currently selected song\, album\, movie or game in a
 ///     container.
 ///     <p><hr>
-///     @skinning_v23 **[Infolabel Updated]** \link ListItem_Genre `ListItem.Genre`\endlink extended
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_Genre `ListItem.Genre`\endlink extended
 ///     to support games
 ///     <p>
 ///   }
@@ -6778,7 +6778,7 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///                  _string_,
 ///     @return The complete Text Summary of Video or a game in a container.
 ///     <p><hr>
-///     @skinning_v23 **[Infolabel Updated]** \link ListItem_Plot `ListItem.Plot`\endlink extended
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_Plot `ListItem.Plot`\endlink extended
 ///     to support games
 ///     <p>
 ///   }
@@ -7632,7 +7632,7 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///     <p><hr>
 ///     @skinning_v18 **[New Infolabel]** \link ListItem_Platform `ListItem.Platform`\endlink
 ///
-///     @skinning_v23 **[Infolabel Updated]** \link ListItem_Platform `ListItem.Platform`\endlink
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_Platform `ListItem.Platform`\endlink
 ///     now available for games in a container.
 ///     <p>
 ///   }
@@ -7651,7 +7651,7 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///     <p><hr>
 ///     @skinning_v18 **[New Infolabel]** \link ListItem_Publisher `ListItem.Publisher`\endlink
 ///
-///     @skinning_v23 **[Infolabel Updated]** \link ListItem_Publisher `ListItem.Publisher`\endlink
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_Publisher `ListItem.Publisher`\endlink
 ///     now available for games in a container.
 ///     <p>
 ///   }
@@ -7662,7 +7662,7 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///     <p><hr>
 ///     @skinning_v18 **[New Infolabel]** \link ListItem_Developer `ListItem.Developer`\endlink
 ///
-///     @skinning_v23 **[Infolabel Updated]** \link ListItem_Developer `ListItem.Developer`\endlink
+///     @skinning_v22 **[Infolabel Updated]** \link ListItem_Developer `ListItem.Developer`\endlink
 ///     now available for games in a container.
 ///     <p>
 ///   }
