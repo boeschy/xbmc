@@ -21,8 +21,8 @@
  *
  *  Known PoC limitations (see accompanying .cpp for details):
  *   - no interlace/field support
- *   - PTS reordering assumes AddData() is fed one demux packet == one AU
- *     (each feed contributes exactly one pending pts to reorder against)
+ *   - PTS handling assumes AddData() is fed one demux packet == one AU
+ *     (the packet's pts is attached to the picture its NALs start)
  *   - no secure/DRM path
  *   - thread count and buffering are unturned
  */
@@ -35,17 +35,12 @@
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "utils/BitstreamConverter.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <memory>
-#include <mutex>
-#include <set>
-#include <unordered_map>
-#include <vector>
 
-extern "C"
-{
-#include "edge264.h"
-}
+#include "edge264mvc.h"
 
 class CDVDVideoCodecMVCSoftware : public CDVDVideoCodec
 {
@@ -80,80 +75,14 @@ protected:
   // base view, independent of whether the demuxer populated `profile`.
   static bool DetectStereoHighProfile(const CDVDStreamInfo& hints);
 
-  bool PackFrame(const Edge264Frame& frame, VideoPicture* pVideoPicture);
-  // Moves every frame edge264 has ready into m_pictures; returns how many
+  bool PackFrame(const Edge264MvcFrame& frame, VideoPicture* pVideoPicture);
+  // Moves every frame edge264-mvc has ready into m_pictures; returns how many
   int DrainFrames();
-  // Feeds one NAL, waiting out a full DPB instead of dropping it; returns
-  // edge264's errno-style code
-  int DecodeNal(const uint8_t* nal, const uint8_t* end);
-  // Makes edge264 release every frame it is holding back for reordering
-  void ForceOutput();
+  // Sends one NAL, receiving frames while the decoder is full; returns the
+  // EDGE264MVC_* result
+  int DecodeNal(const uint8_t* nal, size_t size, int64_t pts);
 
-  // Simple size-bucketed free-list pool backing AllocCb/FreeCb: edge264
-  // requests/releases DPB slots continuously during decode, and for a
-  // given stream (fixed resolution) these come in a small, stable set of
-  // sizes, so a malloc/free per frame is pure, avoidable churn. Actual
-  // frees only happen in the destructor via DrainPool().
-  // Single pool keyed by the *combined* samples+mbs size. edge264's
-  // internal default allocator (used whenever no alloc_cb is supplied,
-  // i.e. exactly what a plain vanilla caller like edge264_test gets)
-  // allocates samples and mbs as ONE contiguous block and derives mbs as
-  // samples+samples_size (see internal_alloc() in edge264.c) - and its
-  // SIMD-based inter-prediction code (edge264_inter.c, e.g.
-  // decode_inter_chroma's _mm_loadu_si128/NEON equivalent) reads a short
-  // distance past the nominal end of the samples region, relying on that
-  // spilling harmlessly into the adjacent, same-allocation mbs region.
-  // Handing back samples/mbs as two independent allocations (our
-  // original approach here) breaks that: the exact same read becomes a
-  // genuine heap-buffer-overflow into unrelated memory the moment it
-  // walks off the end of the standalone samples block, rather than
-  // landing safely inside the (still allocated, just logically separate
-  // to us) mbs block. Confirmed by reproducing the crash standalone
-  // under ASan against the actual failing stream: identical two-pool
-  // scheme => heap-buffer-overflow in decode_inter_chroma every time;
-  // switching to one contiguous samples+mbs allocation => clean decode,
-  // zero ASan reports, same stream, same alloc/borrow pattern otherwise.
-  // Pool by the *sum* so a same-format stream keeps reusing one
-  // contiguous block per slot, exactly as it did per-plane before.
-  struct PooledBlock
-  {
-    void* ptr;
-    unsigned size;
-  };
-  void* AllocFromPool(std::vector<PooledBlock>& pool, unsigned size);
-  void ReleaseToPool(std::vector<PooledBlock>& pool, void* ptr);
-  static void DrainPool(std::vector<PooledBlock>& pool);
-
-  // Defensive cap so a misbehaving/variable-resolution stream can't grow
-  // this pool without bound; edge264's actual DPB is far smaller than
-  // this in practice (typically <= 16 frames * 2 views).
-  static constexpr size_t MAX_POOLED_BLOCKS = 40;
-
-  std::vector<PooledBlock> m_framePool;
-  // Records the allocation size for every live pointer handed out by
-  // AllocFromPool(), since edge264's FreeCb only gives us the pointer
-  // back, not the size - and the pool needs the size to bucket the block
-  // for reuse.
-  std::unordered_map<void*, unsigned> m_blockSizes;
-  // AllocCb/FreeCb are called by edge264 from its own worker threads
-  // (n_threads=4 in Open()), not just from the thread that calls
-  // AddData() - m_framePool/m_blockSizes are ordinary STL containers
-  // with no internal locking, so concurrent mutation from multiple
-  // worker threads (e.g. two threads both reallocating the same
-  // vector's backing store at once) is a real, unguarded data race.
-  // Every access to those two members must hold this mutex.
-  std::mutex m_poolMutex;
-
-  static void AllocCb(void** samples,
-                       unsigned samples_size,
-                       void** mbs,
-                       unsigned mbs_size,
-                       int errno_on_fail,
-                       void* alloc_arg);
-  static void FreeCb(void* samples, void* mbs, void* alloc_arg);
-  static int LogCb(const char* str, void* log_arg);
-
-  Edge264Decoder* m_decoder = nullptr;
+  Edge264MvcDecoder* m_decoder = nullptr;
   CBitstreamConverter m_bitstream;
   bool m_annexB = false; // input is Annex-B already, m_bitstream stays closed
   PackMode m_packMode = PackMode::SBS;
@@ -165,19 +94,6 @@ protected:
 
   // Packed pictures waiting for GetPicture(), in display order
   std::deque<std::unique_ptr<VideoPicture>> m_pictures;
-  double m_ptsPending = DVD_NOPTS_VALUE;
-  // edge264 decodes in bitstream/decode order but - per its own
-  // documented guarantee - always emits frames via edge264_get_frame()
-  // in strict, monotonic DISPLAY order. m_ptsPending only ever holds the
-  // pts of whichever demux packet was *most recently fed*, i.e. decode
-  // order; whenever a B-frame (or any reordering) is in play, that is
-  // not the pts of the frame actually being emitted right now. A real
-  // pts (unlike decode order) is fundamentally a display-time value, so
-  // sorting the pending, not-yet-consumed pts values and handing out the
-  // smallest one on every successful frame is correct independent of
-  // GOP structure, reorder depth, or B-frame count - no bitstream POC
-  // math required. See AddData()/GetPicture().
-  std::multiset<double> m_ptsQueue;
 
   CDVDStreamInfo m_hints;
 };
