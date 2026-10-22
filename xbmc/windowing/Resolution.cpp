@@ -414,6 +414,16 @@ RESOLUTION CResolutionUtils::ChooseBestResolution(
   {
     PerEyeSize(width, height);
 
+    // Over/under output halves the height of each eye, so ask for a 2160p mode to
+    // leave a 1080p eye its full height.
+    if (stereoMode == RenderStereoMode::SPLIT_HORIZONTAL &&
+        CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+            CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION) == 2160)
+    {
+      width = std::max(width, 3840);
+      height = std::max(height, 2160);
+    }
+
     CLog::Log(LOGDEBUG, "[WHITELIST] Stereoscopic source, matching modes against one eye: {}x{}",
               width, height);
   }
