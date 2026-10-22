@@ -23569,7 +23569,31 @@ msgctxt "#37057"
 msgid "Data chunk size used on SMB connections"
 msgstr ""
 
-#empty strings from id 37058 to 37100
+#. Setting #37058 "3D over/under output resolution"
+#: system/settings/android.xml
+msgctxt "#37058"
+msgid "3D over/under output resolution"
+msgstr ""
+
+#. Description of setting #37058 "3D over/under output resolution"
+#: system/settings/android.xml
+msgctxt "#37059"
+msgid "Display resolution used for stereoscopic playback in over/under output. 2160p keeps the full vertical resolution of each 1080p eye and requires the GUI resolution limit to be set to auto or unlimited."
+msgstr ""
+
+#. Option of setting #37058 "3D over/under output resolution"
+#: system/settings/android.xml
+msgctxt "#37060"
+msgid "1080p (half vertical resolution)"
+msgstr ""
+
+#. Option of setting #37058 "3D over/under output resolution"
+#: system/settings/android.xml
+msgctxt "#37061"
+msgid "2160p (full resolution per eye)"
+msgstr ""
+
+#empty strings from id 37062 to 37100
 
 #. Settings / Services "Caching" category label
 #: system/settings/settings.xml

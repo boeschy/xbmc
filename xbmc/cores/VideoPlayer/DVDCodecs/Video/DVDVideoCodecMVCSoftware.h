@@ -86,6 +86,7 @@ protected:
   CBitstreamConverter m_bitstream;
   bool m_annexB = false; // input is Annex-B already, m_bitstream stays closed
   PackMode m_packMode = PackMode::SBS;
+  bool m_fullResolution = false; // pack both eyes at full size instead of halving the width
   bool m_baseViewIsRightEye = false;
   int m_codecControlFlags = 0;
 
