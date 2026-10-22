@@ -1738,6 +1738,8 @@ bool CApplication::Stop(int exitCode)
     smb.Deinit();
 #endif
 
+    CScriptInvocationManager::GetInstance().NotifyAllScriptsAborting();
+
     // Stop services before unloading Python
     CServiceBroker::GetServiceAddons().Stop();
 
