@@ -389,6 +389,8 @@ public:
   static constexpr auto SETTING_VIDEOSCREEN_MONITOR = "videoscreen.monitor";
   static constexpr auto SETTING_VIDEOSCREEN_SCREEN = "videoscreen.screen";
   static constexpr auto SETTING_VIDEOSCREEN_WHITELIST = "videoscreen.whitelist";
+  static constexpr auto SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION =
+      "videoscreen.stereoscopictabresolution";
   static constexpr auto SETTING_VIDEOSCREEN_RESOLUTION = "videoscreen.resolution";
   static constexpr auto SETTING_VIDEOSCREEN_SCREENMODE = "videoscreen.screenmode";
   static constexpr auto SETTING_VIDEOSCREEN_FAKEFULLSCREEN = "videoscreen.fakefullscreen";
