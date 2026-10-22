@@ -15,6 +15,7 @@
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecs.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/log.h"
 
@@ -195,6 +196,8 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   // TODO: expose as a video setting; top-bottom halves vertical
   // resolution instead of horizontal and may suit some panels better.
   m_packMode = PackMode::SBS;
+  m_fullResolution = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+                         CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION) == 2160;
   // A Blu-ray playlist may code the right eye as the base view
   m_baseViewIsRightEye = hints.stereo_mode == "right_left" || hints.stereo_mode == "block_rl";
 
@@ -411,7 +414,8 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264MvcFrame& frame, VideoPic
               frame.width_Y, frame.height_Y, m_width, m_height);
   }
 
-  const unsigned int packedWidth = m_packMode == PackMode::SBS ? m_width : m_width;
+  const unsigned int packedWidth =
+      m_packMode == PackMode::SBS && m_fullResolution ? m_width * 2 : m_width;
   const unsigned int packedHeight = m_packMode == PackMode::SBS ? m_height : m_height;
 
   IVideoBufferPool* pool = nullptr;
@@ -465,7 +469,16 @@ bool CDVDVideoCodecMVCSoftware::PackFrame(const Edge264MvcFrame& frame, VideoPic
     uint8_t* dst = planes[plane];
     int dstStride = strides[plane];
 
-    if (m_packMode == PackMode::SBS)
+    if (m_packMode == PackMode::SBS && m_fullResolution)
+    {
+      for (int y = 0; y < srcH; y++)
+      {
+        uint8_t* row = dst + static_cast<size_t>(y) * dstStride;
+        std::memcpy(row, srcL + static_cast<size_t>(y) * srcStride, srcW);
+        std::memcpy(row + srcW, srcR + static_cast<size_t>(y) * srcStride, srcW);
+      }
+    }
+    else if (m_packMode == PackMode::SBS)
     {
       // 2-tap horizontal box filter (average of each adjacent pixel pair)
       // instead of nearest-neighbour line-skip: line-skip aliases badly
