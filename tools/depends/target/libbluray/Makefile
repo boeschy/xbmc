@@ -6,7 +6,6 @@ DEPS = ../../Makefile.include LIBBLURAY-VERSION Makefile ../../download-files.in
                                   004-win-remove-lib-version.patch \
                                   005-aarch64-java-arch.patch \
                                   006-all-hdmv-bc-compare.patch \
-                                  007-all-navigation-angle-oob.patch \
                                   008-all-bdj-await-image-decode.patch \
                                   008-forward-1.0.2.patch \
                                   009-add-3D-subtitle-depth-plane-info.patch \
@@ -60,7 +59,6 @@ endif
 	cd $(PLATFORM); patch -p1 -i ../003-all-libxml_searchname.patch
 	cd $(PLATFORM); patch -p1 -i ../005-aarch64-java-arch.patch
 	cd $(PLATFORM); patch -p1 -i ../006-all-hdmv-bc-compare.patch
-	cd $(PLATFORM); patch -p1 -i ../007-all-navigation-angle-oob.patch
 	cd $(PLATFORM); patch -p1 -i ../008-all-bdj-await-image-decode.patch
         cd $(PLATFORM); patch -p1 -i ../008-forward-1.0.2.patch
         cd $(PLATFORM); patch -p1 -i ../009-add-3D-subtitle-depth-plane-info.patch

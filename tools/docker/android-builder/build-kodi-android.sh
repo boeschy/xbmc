@@ -502,10 +502,6 @@ export M4="${NATIVEPREFIX}/bin/m4"
 # archive, neither of which notices a new patch. So adding a patch and pressing
 # Start produces a build that silently does NOT contain it.
 #
-# 2026-08-13: 007-all-navigation-angle-oob.patch fixes an out-of-bounds read that
-# crashes BD-J discs at title transitions. Without the patch-set check below, the
-# first clean-room build of that fix is precisely the one that would not have it.
-#
 # So hash the patch set and evict when it moves. A missing stamp counts as a
 # mismatch, which makes existing state volumes rebuild libbluray exactly once.
 # ---------------------------------------------------------------------------
