@@ -77,8 +77,7 @@ void CDVDInputStream::SavePlaylistDetails(std::vector<PlaylistInformation>& play
     // Update last playlist entry
     auto& lastPlaylist = playedPlaylists.back();
 
-    assert(lastPlaylist.duration == currentPlaylistInformation.duration); // Should be the same
-
+    lastPlaylist.duration = currentPlaylistInformation.duration;
     lastPlaylist.watchedTime += watchedTime;
     lastPlaylist.details = currentPlaylistInformation.details;
     CLog::LogFC(LOGDEBUG, LOGBLURAY, "Updated playlist/title {} - watched time {} seconds",
