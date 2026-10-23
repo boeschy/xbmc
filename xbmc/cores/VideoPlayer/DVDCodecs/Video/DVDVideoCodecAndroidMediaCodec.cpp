@@ -1384,6 +1384,11 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecAndroidMediaCodec::GetPicture(VideoPictur
     else
     {
       m_videobuffer.videoBuffer = nullptr;
+      // A codec that has not produced a picture yet reports its output format (or a new buffer
+      // list) before the first output buffer. That is not the end of the drain: the picture,
+      // e.g. a still frame that is only released by the end of stream, comes right after.
+      if (retgp == -3 && m_state == MEDIACODEC_STATE_WAIT_ENDOFSTREAM)
+        return VC_NONE;
       if (retgp == -1 || m_state == MEDIACODEC_STATE_WAIT_ENDOFSTREAM) // EOS
       {
         m_state = (retgp == -2) ? MEDIACODEC_STATE_ERROR : MEDIACODEC_STATE_ENDOFSTREAM;
@@ -1797,9 +1802,14 @@ int CDVDVideoCodecAndroidMediaCodec::GetOutputPicture(void)
     }
     else
       ConfigureOutputFormat(mediaformat);
+
+    rtn = -3; // output event, not a timeout
   }
-  else if (index == CJNIMediaCodec::INFO_TRY_AGAIN_LATER ||
-           index == CJNIMediaCodec::INFO_OUTPUT_BUFFERS_CHANGED)
+  else if (index == CJNIMediaCodec::INFO_OUTPUT_BUFFERS_CHANGED)
+  {
+    rtn = -3; // output event, not a timeout
+  }
+  else if (index == CJNIMediaCodec::INFO_TRY_AGAIN_LATER)
   {
     // ignore
     rtn = 0;
