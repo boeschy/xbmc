@@ -203,6 +203,9 @@ public:
   void DestroySurface();
   void DestroyContext();
   bool SetVSync(bool enable);
+  //! @brief Time (monotonic clock, ns) the next swapped frame is to be shown at, if the display
+  //!        supports EGL_ANDROID_presentation_time.
+  bool SetPresentationTime(int64_t nanos);
   bool TrySwapBuffers();
   void SetDamagedRegions(const CDirtyRegionList& dirtyRegions);
   int GetBufferAge();

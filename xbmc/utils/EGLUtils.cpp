@@ -583,6 +583,23 @@ bool CEGLContextUtils::SetVSync(bool enable)
   return (eglSwapInterval(m_eglDisplay, enable) == EGL_TRUE);
 }
 
+bool CEGLContextUtils::SetPresentationTime(int64_t nanos)
+{
+#if defined(EGL_ANDROID_presentation_time)
+  if (m_eglDisplay == EGL_NO_DISPLAY || m_eglSurface == EGL_NO_SURFACE)
+    return false;
+
+  static const auto setPresentationTime = reinterpret_cast<PFNEGLPRESENTATIONTIMEANDROIDPROC>(
+      eglGetProcAddress("eglPresentationTimeANDROID"));
+  if (!setPresentationTime)
+    return false;
+
+  return setPresentationTime(m_eglDisplay, m_eglSurface, nanos) == EGL_TRUE;
+#else
+  return false;
+#endif
+}
+
 bool CEGLContextUtils::TrySwapBuffers()
 {
   if (m_eglDisplay == EGL_NO_DISPLAY || m_eglSurface == EGL_NO_SURFACE)

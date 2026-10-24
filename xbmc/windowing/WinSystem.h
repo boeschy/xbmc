@@ -125,6 +125,19 @@ public:
    */
   virtual float GetFrameLatencyAdjustment() { return 0.0; }
 
+  /*!
+   * \brief The display refreshes seen so far, for output that has to know which refresh a frame
+   *        ends up on (frame sequential 3D)
+   * \param count number of the latest refresh, rising by one per refresh
+   * \param timeNanos time of that refresh on the monotonic clock
+   * \param periodNanos time between two refreshes
+   * \return false if the window system does not count refreshes
+   */
+  virtual bool GetVsyncTimeline(int64_t& count, int64_t& timeNanos, int64_t& periodNanos)
+  {
+    return false;
+  }
+
   virtual bool Minimize() { return false; }
   virtual bool Restore() { return false; }
   virtual bool Hide() { return false; }

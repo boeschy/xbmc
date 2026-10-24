@@ -920,7 +920,7 @@ void CApplication::Render()
         RenderStereoMode::FRAME_SEQUENTIAL)
     {
       CGraphicContext& gfxContext = CServiceBroker::GetWinSystem()->GetGfxContext();
-      gfxContext.SetStereoView(gfxContext.GetFrameSequentialView());
+      gfxContext.SetStereoView(gfxContext.BeginFrameSequentialFrame());
       hasRendered |= CServiceBroker::GetGUI()->GetWindowManager().Render();
       gfxContext.SetStereoView(RenderStereoView::OFF);
       gfxContext.AdvanceFrameSequentialView();

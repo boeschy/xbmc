@@ -71,6 +71,9 @@
 #include <string.h>
 #include <time.h>
 
+#include <algorithm>
+#include <cmath>
+
 #include <android/bitmap.h>
 #include <android/configuration.h>
 #include <android/log.h>
@@ -1523,6 +1526,29 @@ void CXBMCApp::doFrame(int64_t frameTimeNanos)
   // Calculate the time, when next surface buffer should be rendered
   m_frameTimeNanos = frameTimeNanos;
 
+  {
+    std::lock_guard lock(m_vsyncTimelineMutex);
+    const int64_t nominal = m_refreshRate > 0.0001f
+                                ? static_cast<int64_t>(1.0e9 / static_cast<double>(m_refreshRate))
+                                : 0;
+    int64_t steps = 1;
+    if (m_hasVsyncTimeline)
+    {
+      const int64_t elapsed = frameTimeNanos - m_vsyncTimeNanos;
+      const int64_t period = nominal > 0 ? nominal : m_vsyncPeriodNanos;
+      if (period > 0)
+        steps = std::clamp<int64_t>(std::llround(static_cast<double>(elapsed) / period), 1, 1000);
+      // without a known rate learn the period from refreshes that followed one another
+      if (nominal == 0 && steps == 1 && elapsed > 0 && elapsed < 100000000)
+        m_vsyncPeriodNanos = m_vsyncPeriodNanos > 0 ? (m_vsyncPeriodNanos * 7 + elapsed) / 8 : elapsed;
+    }
+    if (nominal > 0)
+      m_vsyncPeriodNanos = nominal;
+    m_vsyncCount += steps;
+    m_vsyncTimeNanos = frameTimeNanos;
+    m_hasVsyncTimeline = true;
+  }
+
   m_vsyncEvent.Set();
 }
 
@@ -1532,6 +1558,18 @@ int64_t CXBMCApp::GetNextFrameTime() const
     return m_frameTimeNanos + static_cast<int64_t>(1500000000ll / m_refreshRate);
   else
     return m_frameTimeNanos;
+}
+
+bool CXBMCApp::GetVsyncTimeline(int64_t& count, int64_t& timeNanos, int64_t& periodNanos) const
+{
+  std::lock_guard lock(m_vsyncTimelineMutex);
+  if (!m_hasVsyncTimeline || m_vsyncPeriodNanos <= 0)
+    return false;
+
+  count = m_vsyncCount;
+  timeNanos = m_vsyncTimeNanos;
+  periodNanos = m_vsyncPeriodNanos;
+  return true;
 }
 
 float CXBMCApp::GetFrameLatencyMs() const

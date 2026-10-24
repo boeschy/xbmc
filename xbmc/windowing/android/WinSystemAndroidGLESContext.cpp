@@ -11,8 +11,10 @@
 #include "ServiceBroker.h"
 #include "VideoSyncAndroid.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
+#include "rendering/RenderSystemTypes.h"
 #include "threads/SingleLock.h"
 #include "utils/log.h"
+#include "windowing/GraphicContext.h"
 #include "windowing/WindowSystemFactory.h"
 
 #include "platform/android/activity/XBMCApp.h"
@@ -138,10 +140,30 @@ void CWinSystemAndroidGLESContext::PresentRenderImpl(bool rendered)
 
   // Ignore EGL_BAD_SURFACE: It seems to happen during/after mode changes, but
   // we can't actually do anything about it
-  if (rendered && !m_pGLContext.TrySwapBuffers())
-    CEGLUtils::Log(LOGERROR, "eglSwapBuffers failed");
+  if (rendered)
+  {
+    CGraphicContext& gfxContext = GetGfxContext();
+    const int64_t presentTime = gfxContext.GetFrameSequentialPresentTime();
+    if (gfxContext.GetStereoMode() == RenderStereoMode::FRAME_SEQUENTIAL && presentTime > 0 &&
+        !m_pGLContext.SetPresentationTime(presentTime) && !m_presentationTimeWarned)
+    {
+      CLog::LogF(LOGWARNING, "EGL_ANDROID_presentation_time is not available, frame sequential "
+                             "output can not pin frames to refreshes");
+      m_presentationTimeWarned = true;
+    }
+
+    if (!m_pGLContext.TrySwapBuffers())
+      CEGLUtils::Log(LOGERROR, "eglSwapBuffers failed");
+  }
 
   CXBMCApp::Get().WaitVSync(1000);
+}
+
+bool CWinSystemAndroidGLESContext::GetVsyncTimeline(int64_t& count,
+                                                    int64_t& timeNanos,
+                                                    int64_t& periodNanos)
+{
+  return CXBMCApp::Get().GetVsyncTimeline(count, timeNanos, periodNanos);
 }
 
 float CWinSystemAndroidGLESContext::GetFrameLatencyAdjustment()

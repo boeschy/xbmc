@@ -38,6 +38,7 @@ public:
   std::unique_ptr<CVideoSync> GetVideoSync(CVideoReferenceClock* clock) override;
 
   float GetFrameLatencyAdjustment() override;
+  bool GetVsyncTimeline(int64_t& count, int64_t& timeNanos, int64_t& periodNanos) override;
   bool IsHDRDisplay() override;
   bool SetHDR(const VideoPicture* videoPicture) override;
 
@@ -54,6 +55,7 @@ private:
 
   CEGLContextUtils m_pGLContext;
   bool m_hasHDRConfig = false;
+  bool m_presentationTimeWarned{false};
 
   std::unique_ptr<AVMasteringDisplayMetadata> m_displayMetadata;
   std::unique_ptr<AVContentLightMetadata> m_lightMetadata;

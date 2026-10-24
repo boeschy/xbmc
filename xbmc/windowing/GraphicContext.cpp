@@ -746,6 +746,46 @@ void CGraphicContext::SetRenderingResolution(const RESOLUTION_INFO &res, bool ne
   UpdateCameraPosition(m_cameras.top(), m_stereoFactors.top());
 }
 
+namespace
+{
+constexpr int64_t FRAME_SEQUENTIAL_REFRESH_LEAD{2};
+} // namespace
+
+RenderStereoView CGraphicContext::GetFrameSequentialView() const
+{
+  bool right = m_frameSequentialRight;
+
+  int64_t count{0};
+  int64_t timeNanos{0};
+  int64_t periodNanos{0};
+  if (CServiceBroker::GetWinSystem()->GetVsyncTimeline(count, timeNanos, periodNanos))
+    right = ((count + FRAME_SEQUENTIAL_REFRESH_LEAD) & 1) != 0;
+
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          CSettings::SETTING_VIDEOSCREEN_FRAMESEQUENTIALSWAPEYES))
+    right = !right;
+
+  return right ? RenderStereoView::RIGHT : RenderStereoView::LEFT;
+}
+
+RenderStereoView CGraphicContext::BeginFrameSequentialFrame()
+{
+  int64_t count{0};
+  int64_t timeNanos{0};
+  int64_t periodNanos{0};
+  if (CServiceBroker::GetWinSystem()->GetVsyncTimeline(count, timeNanos, periodNanos))
+  {
+    m_frameSequentialPresentTime =
+        timeNanos + FRAME_SEQUENTIAL_REFRESH_LEAD * periodNanos - periodNanos / 2;
+  }
+  else
+  {
+    m_frameSequentialPresentTime = 0;
+  }
+
+  return GetFrameSequentialView();
+}
+
 void CGraphicContext::SetStereoView(RenderStereoView view)
 {
   m_stereoView = view;
