@@ -225,6 +225,7 @@ protected:
 
   std::chrono::time_point<std::chrono::steady_clock> m_lastRenderTime;
   bool m_skipGuiRender = false;
+  bool m_frameSequentialRight = false;
 
   std::unique_ptr<MUSIC_INFO::CMusicInfoScanner> m_musicInfoScanner;
 

@@ -87,12 +87,22 @@ namespace
 //! wants it.
 RenderStereoMode ArrangementForDisplay(RenderStereoMode mode)
 {
-  if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL)
+  if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL &&
+      mode != RenderStereoMode::FRAME_SEQUENTIAL)
     return mode;
 
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
           CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) == ADJUST_REFRESHRATE_OFF)
-    return mode;
+  {
+    const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
+    if (mode != RenderStereoMode::FRAME_SEQUENTIAL || !player || !player->IsPlaying())
+      return mode;
+
+    CGraphicContext& context = CServiceBroker::GetWinSystem()->GetGfxContext();
+    const bool fastEnough = context.GetResInfo(context.GetVideoResolution()).fRefreshRate >=
+                            STEREO_FRAME_SEQUENTIAL_MIN_REFRESH;
+    return fastEnough ? mode : RenderStereoMode::SPLIT_HORIZONTAL;
+  }
 
   const auto& components = CServiceBroker::GetAppComponents();
   const auto appPlayer = components.GetComponent<CApplicationPlayer>();
@@ -132,6 +142,8 @@ static const struct StereoModeMap StringToGuiModeMap[] = {
     {"anaglyph_yellow_blue", RenderStereoMode::ANAGLYPH_YELLOW_BLUE},
     {"hardware_based", RenderStereoMode::HARDWAREBASED},
     {"monoscopic", RenderStereoMode::MONO},
+    {"frame_sequential", RenderStereoMode::FRAME_SEQUENTIAL},
+    {"frame_seq", RenderStereoMode::FRAME_SEQUENTIAL},
     {}};
 
 CStereoscopicsManager::CStereoscopicsManager()
@@ -340,6 +352,9 @@ std::string CStereoscopicsManager::GetLabelForStereoMode(const RenderStereoMode 
       break;
     case RenderStereoMode::MONO:
       msgId = 36509;
+      break;
+    case RenderStereoMode::FRAME_SEQUENTIAL:
+      msgId = 37062;
       break;
     default:
       msgId = 36502 + static_cast<int>(mode);

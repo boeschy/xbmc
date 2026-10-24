@@ -15,6 +15,8 @@ enum class RenderStereoView
   RIGHT,
 };
 
+constexpr float STEREO_FRAME_SEQUENTIAL_MIN_REFRESH{100.0f};
+
 enum class RenderStereoMode
 {
   OFF,
@@ -27,6 +29,7 @@ enum class RenderStereoMode
   CHECKERBOARD,
   HARDWAREBASED,
   MONO,
+  FRAME_SEQUENTIAL,
   COUNT,
 
   // Pseudo modes

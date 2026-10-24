@@ -1445,6 +1445,8 @@ bool CGUIWindowManager::Render()
   // If we visualize the regions we will always render the entire viewport
   // If the buffer age is zero, the current content is undefined and has to be rendered
   if (visualizeDirtyRegions || bufferAge == 0 ||
+      CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+          RenderStereoMode::FRAME_SEQUENTIAL ||
       CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_guiAlgorithmDirtyRegions ==
           DIRTYREGION_SOLVER_FILL_VIEWPORT_ALWAYS)
   {

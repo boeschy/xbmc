@@ -939,6 +939,9 @@ GLint CRenderSystemGLES::GUIShaderGetBrightness()
 
 bool CRenderSystemGLES::SupportsStereo(RenderStereoMode mode) const
 {
+  if (mode == RenderStereoMode::FRAME_SEQUENTIAL)
+    return true;
+
   return CRenderSystemBase::SupportsStereo(mode);
 }
 

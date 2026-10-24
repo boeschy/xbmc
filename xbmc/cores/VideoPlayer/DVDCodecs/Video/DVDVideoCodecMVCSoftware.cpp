@@ -14,6 +14,7 @@
 #include "ServiceBroker.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecs.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
+#include "rendering/RenderSystemTypes.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -196,8 +197,13 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   // TODO: expose as a video setting; top-bottom halves vertical
   // resolution instead of horizontal and may suit some panels better.
   m_packMode = PackMode::SBS;
-  m_fullResolution = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
-                         CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION) == 2160;
+  const auto appSettings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  const auto isFrameSequential = [&appSettings](const char* id)
+  { return appSettings->GetInt(id) == static_cast<int>(RenderStereoMode::FRAME_SEQUENTIAL); };
+  m_fullResolution =
+      appSettings->GetInt(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION) == 2160 ||
+      isFrameSequential(CSettings::SETTING_VIDEOSCREEN_PREFEREDSTEREOSCOPICMODE) ||
+      isFrameSequential(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE);
   // A Blu-ray playlist may code the right eye as the base view
   m_baseViewIsRightEye = hints.stereo_mode == "right_left" || hints.stereo_mode == "block_rl";
 

@@ -22,6 +22,7 @@
 #include "windowing/WinSystem.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
@@ -48,6 +49,7 @@ bool MatchesMode(int width, int height, const RESOLUTION_INFO& info)
 }
 
 constexpr uint32_t STEREO_FLAGS{D3DPRESENTFLAG_MODE3DSBS | D3DPRESENTFLAG_MODE3DTB};
+constexpr float FRAME_SEQUENTIAL_REFRESH_FACTOR{5.0f};
 
 //! @brief The 3D layout a display mode has to carry for a split arrangement.
 uint32_t StereoFlagFor(RenderStereoMode arrangement)
@@ -316,6 +318,38 @@ bool BetterMatch(const StereoMatch& a, const StereoMatch& b)
   return PreferFramePacking() ? a.area > b.area : a.area < b.area;
 }
 
+RESOLUTION FindFrameSequentialMode(float fps, int width, int height, const RESOLUTION_INFO& curr)
+{
+  std::vector<RESOLUTION> allowed;
+  CServiceBroker::GetWinSystem()->GetGfxContext().GetAllowedResolutions(allowed);
+
+  const float target = fps * FRAME_SEQUENTIAL_REFRESH_FACTOR;
+  RESOLUTION best{RES_INVALID};
+  float bestRateDiff{0.0f};
+  int bestPenalty{0};
+
+  for (const RESOLUTION res : allowed)
+  {
+    const RESOLUTION_INFO& info = CDisplaySettings::GetInstance().GetResolutionInfo(res);
+    if ((info.dwFlags & STEREO_FLAGS) || info.fRefreshRate < STEREO_FRAME_SEQUENTIAL_MIN_REFRESH ||
+        !MatchesMode(width, height, info) ||
+        (info.dwFlags & D3DPRESENTFLAG_INTERLACED) != (curr.dwFlags & D3DPRESENTFLAG_INTERLACED))
+      continue;
+
+    const float rateDiff = std::abs(info.fRefreshRate - target);
+    const int penalty = std::abs(info.iScreenHeight - height) + std::abs(info.iScreenWidth - width);
+    if (best == RES_INVALID || rateDiff < bestRateDiff ||
+        (rateDiff == bestRateDiff && penalty < bestPenalty))
+    {
+      best = res;
+      bestRateDiff = rateDiff;
+      bestPenalty = penalty;
+    }
+  }
+
+  return best;
+}
+
 //! @brief The best candidate natively flagged @p stereoFlag: the earliest @p tiers
 //!        entry any of them matches, and the largest at that tier, so frame packing
 //!        (1920x2205) wins over a half-resolution 3D mode - unless the
@@ -466,10 +500,28 @@ RenderStereoMode CResolutionUtils::ChooseStereoArrangement(RenderStereoMode want
                                                            int width,
                                                            int height)
 {
-  if (wanted != RenderStereoMode::SPLIT_VERTICAL && wanted != RenderStereoMode::SPLIT_HORIZONTAL)
+  if (wanted != RenderStereoMode::SPLIT_VERTICAL && wanted != RenderStereoMode::SPLIT_HORIZONTAL &&
+      wanted != RenderStereoMode::FRAME_SEQUENTIAL)
     return wanted;
 
   PerEyeSize(width, height);
+
+  if (wanted == RenderStereoMode::FRAME_SEQUENTIAL)
+  {
+    CGraphicContext& context = CServiceBroker::GetWinSystem()->GetGfxContext();
+    if (FindFrameSequentialMode(fps, width, height,
+                                context.GetResInfo(context.GetVideoResolution())) != RES_INVALID)
+      return wanted;
+
+    CLog::Log(LOGWARNING,
+              "Stereoscopic 3D: no high refresh rate mode for {}x{}, falling back to over/under",
+              width, height);
+    wanted = RenderStereoMode::SPLIT_HORIZONTAL;
+
+    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+            CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION) == 2160)
+      return wanted;
+  }
 
   const std::vector<CVariant> indexList =
       CServiceBroker::GetSettingsComponent()->GetSettings()->GetList(
@@ -608,6 +660,24 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps,
   // here it is taken as given, and only the refresh rate and that layout matter,
   // never the video's pixel size - the renderer crops the correct eye whatever the
   // source layout is.
+  if (stereoMode == RenderStereoMode::FRAME_SEQUENTIAL)
+  {
+    const RESOLUTION match = FindFrameSequentialMode(fps, width, height, curr);
+    if (match != RES_INVALID)
+    {
+      resolution = match;
+      const RESOLUTION_INFO matched =
+          CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(resolution);
+      CLog::Log(LOGDEBUG, "[WHITELIST] Matched a frame sequential mode {} ({})", matched.strMode,
+                resolution);
+      return;
+    }
+
+    CLog::Log(LOGWARNING, "[WHITELIST] Frame sequential output wanted, but the display offers no "
+                          "high refresh rate mode for {}x{}",
+              width, height);
+  }
+
   if (!wants2D)
   {
     // Search the 3D modes the whitelisted timings permit rather than the whitelist

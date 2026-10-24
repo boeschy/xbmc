@@ -916,7 +916,17 @@ void CApplication::Render()
 
   if (guiWillRender)
   {
-    if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() != RenderStereoMode::OFF)
+    if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+        RenderStereoMode::FRAME_SEQUENTIAL)
+    {
+      CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoView(
+          m_frameSequentialRight ? RenderStereoView::RIGHT : RenderStereoView::LEFT);
+      hasRendered |= CServiceBroker::GetGUI()->GetWindowManager().Render();
+      CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoView(RenderStereoView::OFF);
+      m_frameSequentialRight = !m_frameSequentialRight;
+    }
+    else if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() !=
+             RenderStereoMode::OFF)
     {
       CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoView(RenderStereoView::LEFT);
       hasRendered |= CServiceBroker::GetGUI()->GetWindowManager().Render();
