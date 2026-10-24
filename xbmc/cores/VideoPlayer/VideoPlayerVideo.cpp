@@ -134,6 +134,18 @@ double CVideoPlayerVideo::GetOutputDelay()
   return time;
 }
 
+namespace
+{
+// The single picture of a DVD menu still stays inside a hardware decoder until a following
+// picture or the end of the stream pushes it out, and not every decoder delivers it then.
+// A software decoder can be drained, so MPEG-1/2 stills are decoded in software.
+bool MustDecodeInSoftware(const CDVDStreamInfo& hint)
+{
+  return hint.stills &&
+         (hint.codec == AV_CODEC_ID_MPEG2VIDEO || hint.codec == AV_CODEC_ID_MPEG1VIDEO);
+}
+} // namespace
+
 void CVideoPlayerVideo::DropParkedCodec()
 {
   if (!m_parkedVideoCodec)
@@ -157,7 +169,8 @@ std::unique_ptr<CDVDVideoCodec> CVideoPlayerVideo::TakeParkedCodec(CDVDStreamInf
 
   std::unique_ptr<CDVDVideoCodec> codec;
 
-  if (m_parkedVideoCodec->Reconfigure(hint))
+  if (!(MustDecodeInSoftware(hint) && m_processInfo.IsVideoHwDecoder()) &&
+      m_parkedVideoCodec->Reconfigure(hint))
   {
     CLog::Log(LOGINFO, "CVideoPlayerVideo::OpenStream - adopting the parked video codec");
     // no Reset() here on purpose - the decoder is carrying on with the next clip,
@@ -198,6 +211,9 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
     }
     // clang-format on
   }
+
+  if (MustDecodeInSoftware(hint))
+    hint.codecOptions |= CODEC_FORCE_SOFTWARE;
 
   CLog::Log(LOGINFO, "Creating video codec: {}", avcodec_get_name(hint.codec));
 
@@ -289,7 +305,11 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVid
   else
     m_fForcedAspectRatio = 0.0f;
 
-  if (m_pVideoCodec && m_pVideoCodec->Reconfigure(hint))
+  if (MustDecodeInSoftware(hint))
+    hint.codecOptions |= CODEC_FORCE_SOFTWARE;
+
+  if (m_pVideoCodec && !(MustDecodeInSoftware(hint) && m_processInfo.IsVideoHwDecoder()) &&
+      m_pVideoCodec->Reconfigure(hint))
   {
     // reuse old decoder
     codec = std::move(m_pVideoCodec);
