@@ -1084,6 +1084,13 @@ void CRenderManager::PrepareNextRender()
   if (!m_showVideo && !m_forceNext)
     return;
 
+  {
+    CGraphicContext& gfxContext = CServiceBroker::GetWinSystem()->GetGfxContext();
+    if (!m_forceNext && gfxContext.GetStereoMode() == RenderStereoMode::FRAME_SEQUENTIAL &&
+        gfxContext.GetFrameSequentialView() == RenderStereoView::RIGHT)
+      return;
+  }
+
   const double frameOnScreen = m_dvdClock.GetClock();
   const double frametime =
       1.0 / static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS()) *

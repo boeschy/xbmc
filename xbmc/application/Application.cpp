@@ -919,11 +919,11 @@ void CApplication::Render()
     if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
         RenderStereoMode::FRAME_SEQUENTIAL)
     {
-      CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoView(
-          m_frameSequentialRight ? RenderStereoView::RIGHT : RenderStereoView::LEFT);
+      CGraphicContext& gfxContext = CServiceBroker::GetWinSystem()->GetGfxContext();
+      gfxContext.SetStereoView(gfxContext.GetFrameSequentialView());
       hasRendered |= CServiceBroker::GetGUI()->GetWindowManager().Render();
-      CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoView(RenderStereoView::OFF);
-      m_frameSequentialRight = !m_frameSequentialRight;
+      gfxContext.SetStereoView(RenderStereoView::OFF);
+      gfxContext.AdvanceFrameSequentialView();
     }
     else if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() !=
              RenderStereoMode::OFF)
@@ -1466,6 +1466,11 @@ void CApplication::FrameMove(bool processEvents, bool processGUI)
     if (!m_skipGuiRender && appPlayer->IsRenderingVideoLayer() &&
         !CServiceBroker::GetGUI()->GetWindowManager().HasDirtyRegions())
       m_skipGuiRender = true;
+
+    if (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+        RenderStereoMode::FRAME_SEQUENTIAL)
+      m_skipGuiRender = false;
+
     CServiceBroker::GetGUI()->GetWindowManager().FrameMove();
   }
 
