@@ -29,19 +29,20 @@
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:8-jdk AS bdj-jars
 
-ARG LIBBLURAY_VERSION=1.5.0
-ARG LIBBLURAY_SHA512=32725c8490479b134f2fc9ec72e77a6f57a85b3de33a4a3ad2c82575b7045c0d31a997c0dd05f1dc175628cd2ce61f58573f58a7b799057ec4d6984616b0e732
-ARG LIBBLURAY_URL=https://mirrors.kodi.tv/build-deps/sources
+ARG LIBBLURAY_VERSION=HEAD
+ARG LIBBLURAY_SHA512=fb78deef627e1f7b4d8bc1e4dfa4d580e958dd74a04295bbfde167f01421ea45907d4113df70841d9a23866ef9dc982e18cc915caf7ed302203fa4a6ad95c3f7
+ARG LIBBLURAY_URL=https://code.videolan.org/videolan/libbluray/-/archive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ant bzip2 ca-certificates curl \
+      ant bzip2 gzip ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
+
 RUN curl -LsS --retry 10 --retry-connrefused \
-      -o libbluray.tar.bz2 "${LIBBLURAY_URL}/libbluray-${LIBBLURAY_VERSION}.tar.bz2" \
-    && echo "${LIBBLURAY_SHA512}  libbluray.tar.bz2" | sha512sum -c - \
-    && mkdir -p src && tar --strip-components=1 -xf libbluray.tar.bz2 -C src
+      -o libbluray.tar.gz "${LIBBLURAY_URL}/HEAD/HEAD.tar.gz" \
+    && echo "${LIBBLURAY_SHA512}  libbluray.tar.gz" | sha512sum -c - \
+    && mkdir -p src && tar --strip-components=1 -xf libbluray.tar.gz -C src
 
 # Mirrors the ant invocation in src/libbluray/bdj/meson.build. Output names must
 # stay libbluray-j2se-<ver>.jar / libbluray-awt-j2se-<ver>.jar - the names are
@@ -176,7 +177,7 @@ RUN if [ "${BAKE_ANDROID_SDK}" = "1" ]; then \
 # problem - it only rewrites the aarch64 branch of the meson conditional.
 ARG JRE_ARM64_URL=https://github.com/fandangos/JRE-Kodi-Android/releases/download/1.2-aarch64/script.service.jre-aarch64-v1.2.zip
 ARG JRE_ARM32_URL=https://github.com/fandangos/JRE-Kodi-Android/releases/download/1.2/script.service.jre-arm-v1.2.zip
-ARG LIBBLURAY_VERSION=1.5.0
+ARG LIBBLURAY_VERSION=HEAD
 
 COPY --from=bdj-jars /opt/bdj-jars /opt/bdj-jars
 
