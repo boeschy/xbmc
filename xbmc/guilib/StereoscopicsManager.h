@@ -49,7 +49,7 @@ public:
   std::string DetectStereoModeByString(const std::string& needle) const;
   std::string GetLabelForStereoMode(const RenderStereoMode mode) const;
 
-  void SetStereoMode(const RenderStereoMode mode);
+  void SetStereoMode(const RenderStereoMode mode, bool manual = false);
 
   static const char* ConvertGuiStereoModeToString(const RenderStereoMode mode);
   /**
@@ -84,6 +84,10 @@ public:
    *         allowed to change the display mode
    */
   RESOLUTION GetResolutionForPlayingVideo(RenderStereoMode mode) const;
+
+  RESOLUTION GetResolutionForFrameSequential(RenderStereoMode previous,
+                                             RenderStereoMode mode,
+                                             RESOLUTION current) const;
 
   //! \brief Choose and apply the stereo mode the stream that just started calls for.
   void UpdateStereoModeForStream();
