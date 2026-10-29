@@ -203,6 +203,11 @@ public:
   void DestroySurface();
   void DestroyContext();
   bool SetVSync(bool enable);
+  //! @brief Time (monotonic clock, ns) the next swapped frame is to be shown at, if the display
+  //!        supports EGL_ANDROID_presentation_time.
+  bool SetPresentationTime(int64_t nanos);
+  bool GetNextFrameId(uint64_t& frameId);
+  int GetDisplayPresentTime(uint64_t frameId, int64_t& nanos);
   bool TrySwapBuffers();
   void SetDamagedRegions(const CDirtyRegionList& dirtyRegions);
   int GetBufferAge();
@@ -245,6 +250,7 @@ private:
 
   PFNEGLSETDAMAGEREGIONKHRPROC m_eglSetDamageRegionKHR{nullptr};
   bool m_partialUpdateSupport{false};
+  EGLSurface m_timestampsSurface{EGL_NO_SURFACE};
   bool m_bufferAgeSupport{false};
   bool m_damageRegionError{false};
 };

@@ -152,3 +152,5 @@ constexpr const int GUI_MSG_PLAYBACK_PAUSED = GUI_MSG_USER + 47;
 constexpr const int GUI_MSG_PLAYBACK_RESUMED = GUI_MSG_USER + 48;
 constexpr const int GUI_MSG_PLAYBACK_SEEKED = GUI_MSG_USER + 49;
 constexpr const int GUI_MSG_PLAYBACK_SPEED_CHANGED = GUI_MSG_USER + 50;
+
+constexpr const int GUI_MSG_DISPLAY_MODES_CHANGED = GUI_MSG_USER + 51;
