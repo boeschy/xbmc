@@ -180,13 +180,16 @@ bool CRendererMediaCodec::RenderHook(int index)
     ver[i][3] = 1.0f;
   }
 
-  // Set texture coordinates (MediaCodec is flipped in y)
+  // Set texture coordinates (MediaCodec is flipped in y: the texture matrix maps a
+  // bottom-up coordinate v to the real texture row, the rect is top-down, so v = 1 - y).
+  // Merely swapping y1/y2 is only right for symmetric rects; the per-eye crop of top/bottom
+  // 3D (y1 = 0 or 0.5) would otherwise show the wrong half.
   if (m_currentField == FIELD_FULL)
   {
     tex[0][0] = tex[3][0] = plane.rect.x1;
-    tex[0][1] = tex[1][1] = plane.rect.y2;
+    tex[0][1] = tex[1][1] = 1.0f - plane.rect.y1;
     tex[1][0] = tex[2][0] = plane.rect.x2;
-    tex[2][1] = tex[3][1] = plane.rect.y1;
+    tex[2][1] = tex[3][1] = 1.0f - plane.rect.y2;
   }
   else
   {
