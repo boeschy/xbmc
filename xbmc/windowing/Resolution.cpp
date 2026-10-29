@@ -502,6 +502,14 @@ bool CResolutionUtils::SupportsFrameSequential(int width, int height)
                                  context.GetResInfo(context.GetVideoResolution())) != RES_INVALID;
 }
 
+RESOLUTION CResolutionUtils::FindFrameSequentialResolution(float fps, int width, int height)
+{
+  PerEyeSize(width, height);
+  CGraphicContext& context = CServiceBroker::GetWinSystem()->GetGfxContext();
+  return FindFrameSequentialMode(fps, width, height,
+                                 context.GetResInfo(context.GetVideoResolution()));
+}
+
 RenderStereoMode CResolutionUtils::ChooseStereoArrangement(RenderStereoMode wanted,
                                                            float fps,
                                                            int width,
