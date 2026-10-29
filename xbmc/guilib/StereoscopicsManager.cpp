@@ -72,6 +72,19 @@ static const struct StereoModeMap VideoModeToGuiModeMap[] = {
 namespace
 {
 
+RenderStereoMode FrameSequentialOrFallback(RenderStereoMode mode)
+{
+  if (mode != RenderStereoMode::FRAME_SEQUENTIAL ||
+      CResolutionUtils::SupportsFrameSequential(1920, 1080))
+    return mode;
+
+  CLog::Log(LOGWARNING, "Stereoscopic 3D: display offers no 1080p high refresh rate mode, "
+                        "falling back to over/under");
+  return CServiceBroker::GetRenderSystem()->SupportsStereo(RenderStereoMode::SPLIT_HORIZONTAL)
+             ? RenderStereoMode::SPLIT_HORIZONTAL
+             : mode;
+}
+
 //! @brief The split arrangement to output, given the one @p mode asks for.
 //!
 //! Which of the two the source uses is not what decides this - the renderer crops the
@@ -87,22 +100,32 @@ namespace
 //! wants it.
 RenderStereoMode ArrangementForDisplay(RenderStereoMode mode)
 {
-  if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL)
+  if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL &&
+      mode != RenderStereoMode::FRAME_SEQUENTIAL)
     return mode;
 
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
           CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) == ADJUST_REFRESHRATE_OFF)
-    return mode;
+  {
+    const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
+    if (mode != RenderStereoMode::FRAME_SEQUENTIAL || !player || !player->IsPlaying())
+      return mode;
+
+    CGraphicContext& context = CServiceBroker::GetWinSystem()->GetGfxContext();
+    const bool fastEnough = context.GetResInfo(context.GetVideoResolution()).fRefreshRate >=
+                            STEREO_FRAME_SEQUENTIAL_MIN_REFRESH;
+    return fastEnough ? mode : RenderStereoMode::SPLIT_HORIZONTAL;
+  }
 
   const auto& components = CServiceBroker::GetAppComponents();
   const auto appPlayer = components.GetComponent<CApplicationPlayer>();
   if (!appPlayer || !appPlayer->IsPlaying())
-    return mode;
+    return FrameSequentialOrFallback(mode);
 
   VideoStreamInfo info;
   appPlayer->GetVideoStreamInfo(CURRENT_STREAM, info);
   if (!info.valid || info.fpsRate == 0 || info.fpsScale == 0)
-    return mode;
+    return FrameSequentialOrFallback(mode);
 
   const float fps = static_cast<float>(info.fpsRate) / static_cast<float>(info.fpsScale);
   const RenderStereoMode arrangement =
@@ -132,6 +155,8 @@ static const struct StereoModeMap StringToGuiModeMap[] = {
     {"anaglyph_yellow_blue", RenderStereoMode::ANAGLYPH_YELLOW_BLUE},
     {"hardware_based", RenderStereoMode::HARDWAREBASED},
     {"monoscopic", RenderStereoMode::MONO},
+    {"frame_sequential", RenderStereoMode::FRAME_SEQUENTIAL},
+    {"frame_seq", RenderStereoMode::FRAME_SEQUENTIAL},
     {}};
 
 CStereoscopicsManager::CStereoscopicsManager()
@@ -341,6 +366,9 @@ std::string CStereoscopicsManager::GetLabelForStereoMode(const RenderStereoMode 
     case RenderStereoMode::MONO:
       msgId = 36509;
       break;
+    case RenderStereoMode::FRAME_SEQUENTIAL:
+      msgId = 37062;
+      break;
     default:
       msgId = 36502 + static_cast<int>(mode);
   }
@@ -465,9 +493,25 @@ bool CStereoscopicsManager::OnMessage(CGUIMessage &message)
   case GUI_MSG_PLAYLISTPLAYER_STOPPED:
     OnPlaybackStopped();
     break;
+  case GUI_MSG_DISPLAY_MODES_CHANGED:
+    OnDisplayModesChanged();
+    break;
   }
 
   return false;
+}
+
+void CStereoscopicsManager::OnDisplayModesChanged()
+{
+  const RenderStereoMode mode = GetStereoMode();
+  const RenderStereoMode wanted = m_stereoModeSetByUser != RenderStereoMode::UNDEFINED
+                                      ? m_stereoModeSetByUser
+                                      : GetPreferredPlaybackMode();
+  const bool inFallback = wanted == RenderStereoMode::FRAME_SEQUENTIAL &&
+                          mode == RenderStereoMode::SPLIT_HORIZONTAL && IsVideoStereoscopic();
+
+  if (mode == RenderStereoMode::FRAME_SEQUENTIAL || inFallback)
+    SetStereoMode(RenderStereoMode::FRAME_SEQUENTIAL);
 }
 
 bool CStereoscopicsManager::OnAction(const CAction &action)

@@ -1084,10 +1084,12 @@ void CRenderManager::PrepareNextRender()
   if (!m_showVideo && !m_forceNext)
     return;
 
+  const bool eyePairs = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() ==
+                        RenderStereoMode::FRAME_SEQUENTIAL;
   const double frameOnScreen = m_dvdClock.GetClock();
   const double frametime =
-      1.0 / static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS()) *
-      DVD_TIME_BASE;
+      (eyePairs ? 2.0 : 1.0) /
+      static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS()) * DVD_TIME_BASE;
 
   m_displayLatency = DVD_MSEC_TO_TIME(
       m_latencyTweak +

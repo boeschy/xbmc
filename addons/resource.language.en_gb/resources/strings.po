@@ -23630,7 +23630,25 @@ msgctxt "#37061"
 msgid "2160p (full resolution per eye)"
 msgstr ""
 
-#empty strings from id 37062 to 37100
+#. Stereoscopic 3D mode "Frame sequential"
+#: xbmc/guilib/StereoscopicsManager.cpp
+msgctxt "#37062"
+msgid "Frame sequential (120 Hz)"
+msgstr ""
+
+#. Setting #37063 "Swap eyes in frame sequential output"
+#: system/settings/android.xml
+msgctxt "#37063"
+msgid "Swap eyes in frame sequential output"
+msgstr ""
+
+#. Description of setting #37063 "Swap eyes in frame sequential output"
+#: system/settings/android.xml
+msgctxt "#37064"
+msgid "Frame sequential output carries no marker for the left eye, so the display may show the eyes the wrong way round. Switch this on if the depth looks inverted."
+msgstr ""
+
+#empty strings from id 37065 to 37100
 
 #. Settings / Services "Caching" category label
 #: system/settings/settings.xml

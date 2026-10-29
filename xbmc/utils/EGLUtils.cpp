@@ -583,6 +583,80 @@ bool CEGLContextUtils::SetVSync(bool enable)
   return (eglSwapInterval(m_eglDisplay, enable) == EGL_TRUE);
 }
 
+bool CEGLContextUtils::SetPresentationTime(int64_t nanos)
+{
+#if defined(EGL_ANDROID_presentation_time)
+  if (m_eglDisplay == EGL_NO_DISPLAY || m_eglSurface == EGL_NO_SURFACE)
+    return false;
+
+  static const auto setPresentationTime = reinterpret_cast<PFNEGLPRESENTATIONTIMEANDROIDPROC>(
+      eglGetProcAddress("eglPresentationTimeANDROID"));
+  if (!setPresentationTime)
+    return false;
+
+  return setPresentationTime(m_eglDisplay, m_eglSurface, nanos) == EGL_TRUE;
+#else
+  return false;
+#endif
+}
+
+bool CEGLContextUtils::GetNextFrameId(uint64_t& frameId)
+{
+#if defined(EGL_ANDROID_get_frame_timestamps)
+  if (m_eglDisplay == EGL_NO_DISPLAY || m_eglSurface == EGL_NO_SURFACE)
+    return false;
+
+  static const auto getNextFrameId = reinterpret_cast<PFNEGLGETNEXTFRAMEIDANDROIDPROC>(
+      eglGetProcAddress("eglGetNextFrameIdANDROID"));
+  if (!getNextFrameId)
+    return false;
+
+  if (m_timestampsSurface != m_eglSurface)
+  {
+    if (eglSurfaceAttrib(m_eglDisplay, m_eglSurface, EGL_TIMESTAMPS_ANDROID, EGL_TRUE) != EGL_TRUE)
+      return false;
+    m_timestampsSurface = m_eglSurface;
+  }
+
+  EGLuint64KHR id{0};
+  if (getNextFrameId(m_eglDisplay, m_eglSurface, &id) != EGL_TRUE)
+    return false;
+
+  frameId = id;
+  return true;
+#else
+  return false;
+#endif
+}
+
+int CEGLContextUtils::GetDisplayPresentTime(uint64_t frameId, int64_t& nanos)
+{
+#if defined(EGL_ANDROID_get_frame_timestamps)
+  if (m_eglDisplay == EGL_NO_DISPLAY || m_eglSurface == EGL_NO_SURFACE)
+    return -1;
+
+  static const auto getFrameTimestamps = reinterpret_cast<PFNEGLGETFRAMETIMESTAMPSANDROIDPROC>(
+      eglGetProcAddress("eglGetFrameTimestampsANDROID"));
+  if (!getFrameTimestamps)
+    return -1;
+
+  const EGLint name = EGL_DISPLAY_PRESENT_TIME_ANDROID;
+  EGLnsecsANDROID value{0};
+  if (getFrameTimestamps(m_eglDisplay, m_eglSurface, frameId, 1, &name, &value) != EGL_TRUE)
+    return -1;
+
+  if (value == EGL_TIMESTAMP_PENDING_ANDROID)
+    return 0;
+  if (value == EGL_TIMESTAMP_INVALID_ANDROID || value <= 0)
+    return -1;
+
+  nanos = value;
+  return 1;
+#else
+  return -1;
+#endif
+}
+
 bool CEGLContextUtils::TrySwapBuffers()
 {
   if (m_eglDisplay == EGL_NO_DISPLAY || m_eglSurface == EGL_NO_SURFACE)

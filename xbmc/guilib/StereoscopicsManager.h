@@ -115,6 +115,7 @@ private:
 
   void ApplyStereoMode(const RenderStereoMode mode, bool notify = true);
   void OnPlaybackStopped(void);
+  void OnDisplayModesChanged();
 
   /**
    * @brief will convert a string representation into a GUI stereo mode

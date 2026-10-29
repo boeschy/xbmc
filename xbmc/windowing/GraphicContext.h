@@ -157,6 +157,13 @@ public:
   void SetCameraPosition(const CPoint &camera);
   void SetStereoView(RenderStereoView view);
   RenderStereoView GetStereoView() { return m_stereoView; }
+  void SetFrameSequentialEye(RenderStereoView eye) { m_frameSequentialEye = eye; }
+  RenderStereoView GetFrameSequentialEye() const { return m_frameSequentialEye; }
+  void BindFrameSequentialSlot();
+  int64_t GetFrameSequentialQueuedFrames() const;
+  int64_t GetFrameSequentialTargetTime() const { return m_frameSequentialTargetTime; }
+  void SetFrameSequentialPhase(double phase) { m_frameSequentialPhase = phase; }
+  int64_t GetFrameSequentialPresentTime() const { return m_frameSequentialPresentTime; }
   /*! \brief Set the stereo mode Flip() will make current.
    *
    * Requested from the player's event thread and applied on the render thread, so the
@@ -282,6 +289,11 @@ protected:
   UITransform m_finalTransform;
   std::stack<UITransform, std::vector<UITransform>> m_transforms;
   RenderStereoView m_stereoView = RenderStereoView::OFF;
+  RenderStereoView m_frameSequentialEye{RenderStereoView::LEFT};
+  int64_t m_frameSequentialPresentTime{0};
+  int64_t m_frameSequentialTargetTime{0};
+  int64_t m_frameSequentialLastTarget{0};
+  double m_frameSequentialPhase{0.0};
   RenderStereoMode m_stereoMode = RenderStereoMode::OFF;
   std::atomic<RenderStereoMode> m_nextStereoMode{RenderStereoMode::OFF};
 

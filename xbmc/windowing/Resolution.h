@@ -162,6 +162,7 @@ public:
                                                   float fps,
                                                   int width,
                                                   int height);
+  static bool SupportsFrameSequential(int width, int height);
   static bool HasWhitelist();
   static void PrintWhitelist();
 

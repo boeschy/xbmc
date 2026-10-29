@@ -25,8 +25,10 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/Setting.h"
+#include "utils/TimeUtils.h"
 #include "utils/log.h"
 
+#include <algorithm>
 #include <cassert>
 #include <mutex>
 
@@ -744,6 +746,55 @@ void CGraphicContext::SetRenderingResolution(const RESOLUTION_INFO &res, bool ne
 
   SetScalingResolution(res, needsScaling);
   UpdateCameraPosition(m_cameras.top(), m_stereoFactors.top());
+}
+
+namespace
+{
+constexpr int64_t FRAME_SEQUENTIAL_REFRESH_LEAD{2};
+constexpr int64_t FRAME_SEQUENTIAL_MAX_RUNAHEAD{4};
+} // namespace
+
+int64_t CGraphicContext::GetFrameSequentialQueuedFrames() const
+{
+  int64_t count{0};
+  int64_t timeNanos{0};
+  int64_t periodNanos{0};
+  if (!CServiceBroker::GetWinSystem()->GetVsyncTimeline(count, timeNanos, periodNanos))
+    return FRAME_SEQUENTIAL_MAX_RUNAHEAD;
+
+  const int64_t sinceTick = std::max<int64_t>(0, CurrentHostCounter() - timeNanos);
+  const int64_t earliest = count + sinceTick / periodNanos + FRAME_SEQUENTIAL_REFRESH_LEAD;
+  return std::max<int64_t>(0, m_frameSequentialLastTarget - earliest + 1);
+}
+
+void CGraphicContext::BindFrameSequentialSlot()
+{
+  m_frameSequentialPresentTime = 0;
+  m_frameSequentialTargetTime = 0;
+
+  int64_t count{0};
+  int64_t timeNanos{0};
+  int64_t periodNanos{0};
+  if (!CServiceBroker::GetWinSystem()->GetVsyncTimeline(count, timeNanos, periodNanos))
+    return;
+
+  const bool swapEyes = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+      CSettings::SETTING_VIDEOSCREEN_FRAMESEQUENTIALSWAPEYES);
+  const bool wantOdd = (m_frameSequentialEye == RenderStereoView::RIGHT) != swapEyes;
+
+  const int64_t sinceTick = std::max<int64_t>(0, CurrentHostCounter() - timeNanos);
+  int64_t target = count + sinceTick / periodNanos + FRAME_SEQUENTIAL_REFRESH_LEAD;
+  const int64_t next = m_frameSequentialLastTarget + 1;
+  if (next > target && next <= target + FRAME_SEQUENTIAL_MAX_RUNAHEAD)
+    target = next;
+  if (((target & 1) != 0) != wantOdd)
+    ++target;
+
+  m_frameSequentialLastTarget = target;
+  m_frameSequentialTargetTime = timeNanos + (target - count) * periodNanos;
+  m_frameSequentialPresentTime =
+      m_frameSequentialTargetTime +
+      static_cast<int64_t>((m_frameSequentialPhase - 0.5) * static_cast<double>(periodNanos));
 }
 
 void CGraphicContext::SetStereoView(RenderStereoView view)
