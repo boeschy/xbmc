@@ -1063,6 +1063,7 @@ void CGraphicContext::Flip(bool rendered, bool videoLayer)
   const RenderStereoMode nextStereoMode{m_nextStereoMode.load()};
   if (m_stereoMode != nextStereoMode)
   {
+    const RenderStereoMode previousStereoMode{m_stereoMode};
     m_stereoMode = nextStereoMode;
 
     // The surface changes shape with the stereo mode, so the display mode is re-applied
@@ -1075,7 +1076,16 @@ void CGraphicContext::Flip(bool rendered, bool videoLayer)
       const RESOLUTION forVideo{
           gui->GetStereoscopicsManager().GetResolutionForPlayingVideo(m_stereoMode)};
       if (forVideo != RES_INVALID)
+      {
         resolution = forVideo;
+      }
+      else
+      {
+        const RESOLUTION forRefresh{gui->GetStereoscopicsManager().GetResolutionForFrameSequential(
+            previousStereoMode, m_stereoMode, resolution)};
+        if (forRefresh != RES_INVALID)
+          resolution = forRefresh;
+      }
     }
 
     SetVideoResolution(resolution, true);
