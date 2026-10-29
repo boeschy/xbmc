@@ -14,15 +14,23 @@
 #include "ServiceBroker.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecs.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
+#include "rendering/RenderSystemTypes.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/log.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstring>
 #include <utility>
 #include <vector>
+
+#if defined(TARGET_POSIX)
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
 namespace
 {
@@ -33,6 +41,41 @@ namespace
 // feasibility" question that needs measuring on actual hardware before
 // this codec is anything more than a PoC.
 constexpr int EDGE264_THREADS = 4;
+constexpr int EDGE264_WORKER_NICE = 6;
+
+class CScopedThreadNice
+{
+public:
+  explicit CScopedThreadNice(int nice)
+  {
+#if defined(TARGET_POSIX)
+    m_tid = static_cast<id_t>(syscall(SYS_gettid));
+    errno = 0;
+    const int current = getpriority(PRIO_PROCESS, m_tid);
+    if (errno == 0 && setpriority(PRIO_PROCESS, m_tid, nice) == 0)
+    {
+      m_previous = current;
+      m_changed = true;
+    }
+#endif
+  }
+
+  ~CScopedThreadNice()
+  {
+#if defined(TARGET_POSIX)
+    if (m_changed)
+      setpriority(PRIO_PROCESS, m_tid, m_previous);
+#endif
+  }
+
+  CScopedThreadNice(const CScopedThreadNice&) = delete;
+  CScopedThreadNice& operator=(const CScopedThreadNice&) = delete;
+
+private:
+  id_t m_tid{0};
+  int m_previous{0};
+  bool m_changed{false};
+};
 
 int64_t PtsToInt(double pts)
 {
@@ -196,8 +239,13 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   // TODO: expose as a video setting; top-bottom halves vertical
   // resolution instead of horizontal and may suit some panels better.
   m_packMode = PackMode::SBS;
-  m_fullResolution = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
-                         CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION) == 2160;
+  const auto appSettings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  const auto isFrameSequential = [&appSettings](const char* id)
+  { return appSettings->GetInt(id) == static_cast<int>(RenderStereoMode::FRAME_SEQUENTIAL); };
+  m_fullResolution =
+      appSettings->GetInt(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICTABRESOLUTION) == 2160 ||
+      isFrameSequential(CSettings::SETTING_VIDEOSCREEN_PREFEREDSTEREOSCOPICMODE) ||
+      isFrameSequential(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE);
   // A Blu-ray playlist may code the right eye as the base view
   m_baseViewIsRightEye = hints.stereo_mode == "right_left" || hints.stereo_mode == "block_rl";
 
@@ -214,7 +262,11 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   Edge264MvcSettings settings;
   edge264mvc_default_settings(&settings);
   settings.n_threads = EDGE264_THREADS;
-  const int openRet = edge264mvc_open(&m_decoder, &settings);
+  int openRet;
+  {
+    CScopedThreadNice workerPriority(EDGE264_WORKER_NICE);
+    openRet = edge264mvc_open(&m_decoder, &settings);
+  }
   if (openRet != EDGE264MVC_OK || !m_decoder)
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::Open - edge264mvc_open failed ({})", openRet);

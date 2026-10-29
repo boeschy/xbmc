@@ -23,7 +23,11 @@
 #include "cores/VideoPlayer/Process/android/ProcessInfoAndroid.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererMediaCodec.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererMediaCodecSurface.h"
+#include "GUIUserMessages.h"
 #include "guilib/DispResource.h"
+#include "guilib/GUIComponent.h"
+#include "guilib/GUIMessage.h"
+#include "guilib/GUIWindowManager.h"
 #include "rendering/gles/ScreenshotSurfaceGLES.h"
 #include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
@@ -48,6 +52,19 @@
 
 using namespace KODI;
 using namespace std::chrono_literals;
+
+namespace
+{
+void NotifyDisplayModesChanged()
+{
+  CGUIComponent* gui = CServiceBroker::GetGUI();
+  if (!gui)
+    return;
+
+  CGUIMessage msg(GUI_MSG_DISPLAY_MODES_CHANGED, 0, 0);
+  gui->GetWindowManager().SendThreadMessage(msg);
+}
+} // namespace
 
 CWinSystemAndroid::CWinSystemAndroid()
 {
@@ -146,6 +163,7 @@ bool CWinSystemAndroid::CreateNewWindow(const std::string& name,
     CLog::LogF(LOGDEBUG, "display modes update was pending, refreshing resolutions");
     UpdateResolutions(false);
     m_dispModesUpdatePending = false;
+    NotifyDisplayModesChanged();
   }
 
   m_android->SetNativeResolution(res);
@@ -268,6 +286,7 @@ void CWinSystemAndroid::SetHdmiState(bool connected)
       resource->OnResetDisplay();
     m_dispResetTimer->Stop();
     m_HdmiModeTriggered = false;
+    NotifyDisplayModesChanged();
   }
   else
   {
@@ -285,6 +304,7 @@ void CWinSystemAndroid::UpdateDisplayModes()
   {
     // update display settings
     UpdateResolutions(false);
+    NotifyDisplayModesChanged();
   }
   else
   {
