@@ -37,6 +37,11 @@
           </constraints>
           <control type="spinner" format="string" />
         </setting>
+        <setting id="videoscreen.framesequentialswapeyes" type="boolean" label="37063" help="37064">
+          <level>2</level>
+          <default>false</default>
+          <control type="toggle" />
+        </setting>
       </group>
     </category>
   </section>
