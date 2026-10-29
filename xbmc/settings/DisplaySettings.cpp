@@ -347,6 +347,7 @@ bool CDisplaySettings::OnSettingChanging(const std::shared_ptr<const CSetting>& 
                                          CVariant{""}, 15000) != DialogResponse::CHOICE_YES)
         {
           m_resolutionChangeAborted = true;
+          CServiceBroker::GetGUI()->GetStereoscopicsManager().OnResolutionChangeDeclined();
           return false;
         }
       }
@@ -377,6 +378,7 @@ bool CDisplaySettings::OnSettingChanging(const std::shared_ptr<const CSetting>& 
                                        10000) != DialogResponse::CHOICE_YES)
       {
         m_resolutionChangeAborted = true;
+        CServiceBroker::GetGUI()->GetStereoscopicsManager().OnResolutionChangeDeclined();
         return false;
       }
     }
