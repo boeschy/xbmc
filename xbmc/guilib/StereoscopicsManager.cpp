@@ -31,6 +31,7 @@
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/Setting.h"
@@ -98,7 +99,7 @@ RenderStereoMode FrameSequentialOrFallback(RenderStereoMode mode)
 //! whatever was picked by hand in videoscreen.resolution, and overriding the
 //! arrangement would only split the frame the way a mode nobody is going to switch to
 //! wants it.
-RenderStereoMode ArrangementForDisplay(RenderStereoMode mode)
+RenderStereoMode ArrangementForDisplay(RenderStereoMode mode, bool manual = false)
 {
   if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL &&
       mode != RenderStereoMode::FRAME_SEQUENTIAL)
@@ -107,6 +108,9 @@ RenderStereoMode ArrangementForDisplay(RenderStereoMode mode)
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
           CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) == ADJUST_REFRESHRATE_OFF)
   {
+    if (mode == RenderStereoMode::FRAME_SEQUENTIAL && manual)
+      return FrameSequentialOrFallback(mode);
+
     const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
     if (mode != RenderStereoMode::FRAME_SEQUENTIAL || !player || !player->IsPlaying())
       return mode;
@@ -167,7 +171,8 @@ CStereoscopicsManager::CStereoscopicsManager()
 
   //! @todo Move this to Initialize() to avoid potential problems in ctor
   m_settings->GetSettingsManager()->RegisterCallback(
-      this, {CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE});
+      this, {CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE,
+             CSettings::SETTING_VIDEOSCREEN_RESOLUTION});
 }
 
 CStereoscopicsManager::~CStereoscopicsManager(void)
@@ -194,10 +199,10 @@ void CStereoscopicsManager::SetStereoModeByUser(const RenderStereoMode mode)
     m_lastStereoModeSetByUser = m_stereoModeSetByUser;
 
   m_stereoModeSetByUser = mode;
-  SetStereoMode(mode);
+  SetStereoMode(mode, true);
 }
 
-void CStereoscopicsManager::SetStereoMode(const RenderStereoMode mode)
+void CStereoscopicsManager::SetStereoMode(const RenderStereoMode mode, bool manual)
 {
   RenderStereoMode currentMode = GetStereoMode();
   RenderStereoMode applyMode = mode;
@@ -206,7 +211,7 @@ void CStereoscopicsManager::SetStereoMode(const RenderStereoMode mode)
   if (mode == RenderStereoMode::AUTO)
     applyMode = GetStereoModeOfPlayingVideo();
 
-  applyMode = ArrangementForDisplay(applyMode);
+  applyMode = ArrangementForDisplay(applyMode, manual);
 
   if (applyMode != currentMode && applyMode >= RenderStereoMode::OFF)
   {
@@ -476,7 +481,34 @@ void CStereoscopicsManager::OnSettingChanged(const std::shared_ptr<const CSettin
     RenderStereoMode mode = GetStereoMode();
     CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode setting changed to {}",
               ConvertGuiStereoModeToString(mode));
+
+    const RenderStereoMode arranged = FrameSequentialOrFallback(mode);
+    if (arranged != mode)
+    {
+      m_settings->SetInt(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE,
+                         static_cast<int>(arranged));
+      return;
+    }
+
     ApplyStereoMode(mode);
+  }
+  else if (settingId == CSettings::SETTING_VIDEOSCREEN_RESOLUTION)
+  {
+    if (GetStereoMode() != RenderStereoMode::FRAME_SEQUENTIAL)
+      return;
+
+    const auto resolution{
+        static_cast<RESOLUTION>(std::static_pointer_cast<const CSettingInt>(setting)->GetValue())};
+    if (CDisplaySettings::GetInstance().GetResolutionInfo(resolution).fRefreshRate >=
+        STEREO_FRAME_SEQUENTIAL_MIN_REFRESH)
+      return;
+
+    CLog::Log(LOGINFO,
+              "Stereoscopic 3D: refresh rate lowered below frame sequential range, switching "
+              "3D output off");
+    m_stereoModeSetByUser = RenderStereoMode::UNDEFINED;
+    m_settings->SetInt(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE,
+                       static_cast<int>(RenderStereoMode::OFF));
   }
 }
 
@@ -623,6 +655,43 @@ RESOLUTION CStereoscopicsManager::GetResolutionForPlayingVideo(RenderStereoMode 
                                                 info.width, info.height, is3D, mode);
 }
 
+RESOLUTION CStereoscopicsManager::GetResolutionForFrameSequential(RenderStereoMode previous,
+                                                                  RenderStereoMode mode,
+                                                                  RESOLUTION current) const
+{
+  if (mode == RenderStereoMode::FRAME_SEQUENTIAL)
+  {
+    CGraphicContext& context = CServiceBroker::GetWinSystem()->GetGfxContext();
+    if (context.GetResInfo(current).fRefreshRate >= STEREO_FRAME_SEQUENTIAL_MIN_REFRESH)
+      return RES_INVALID;
+
+    float fps{24.0f};
+    int width{1920};
+    int height{1080};
+
+    const auto& components = CServiceBroker::GetAppComponents();
+    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+    if (appPlayer && appPlayer->IsPlaying())
+    {
+      VideoStreamInfo info;
+      appPlayer->GetVideoStreamInfo(CURRENT_STREAM, info);
+      if (info.valid && info.fpsRate != 0 && info.fpsScale != 0)
+      {
+        fps = static_cast<float>(info.fpsRate) / static_cast<float>(info.fpsScale);
+        width = info.width;
+        height = info.height;
+      }
+    }
+
+    return CResolutionUtils::FindFrameSequentialResolution(fps, width, height);
+  }
+
+  if (previous == RenderStereoMode::FRAME_SEQUENTIAL)
+    return CDisplaySettings::GetInstance().GetCurrentResolution();
+
+  return RES_INVALID;
+}
+
 void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool notify)
 {
   // The arrangement already asked for, which is not the one in use until the next flip.
@@ -664,8 +733,10 @@ void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool no
       // where playback would be allowed to: with refresh rate adjusting off the display
       // mode is the one picked by hand in videoscreen.resolution, and choosing another
       // would discard that.
-      else if (appPlayer && m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) !=
-                                ADJUST_REFRESHRATE_OFF)
+      else if (appPlayer && mode != RenderStereoMode::FRAME_SEQUENTIAL &&
+               currentMode != RenderStereoMode::FRAME_SEQUENTIAL &&
+               m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) !=
+                   ADJUST_REFRESHRATE_OFF)
       {
         const RESOLUTION_INFO curInfo =
             CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
