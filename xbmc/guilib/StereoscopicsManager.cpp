@@ -98,28 +98,19 @@ RenderStereoMode FrameSequentialOrFallback(RenderStereoMode mode)
 //! rate adjusting turned off: Kodi may not change the display mode then, the mode is
 //! whatever was picked by hand in videoscreen.resolution, and overriding the
 //! arrangement would only split the frame the way a mode nobody is going to switch to
-//! wants it.
-RenderStereoMode ArrangementForDisplay(RenderStereoMode mode, bool manual = false)
+//! wants it. Frame sequential is the exception: the refresh rate follows it, so it is
+//! arranged against what the display offers, and only a display without a 100 Hz or
+//! faster mode gets over/under instead.
+RenderStereoMode ArrangementForDisplay(RenderStereoMode mode)
 {
   if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL &&
       mode != RenderStereoMode::FRAME_SEQUENTIAL)
     return mode;
 
-  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+  if (mode != RenderStereoMode::FRAME_SEQUENTIAL &&
+      CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
           CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) == ADJUST_REFRESHRATE_OFF)
-  {
-    if (mode == RenderStereoMode::FRAME_SEQUENTIAL && manual)
-      return FrameSequentialOrFallback(mode);
-
-    const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
-    if (mode != RenderStereoMode::FRAME_SEQUENTIAL || !player || !player->IsPlaying())
-      return mode;
-
-    CGraphicContext& context = CServiceBroker::GetWinSystem()->GetGfxContext();
-    const bool fastEnough = context.GetResInfo(context.GetVideoResolution()).fRefreshRate >=
-                            STEREO_FRAME_SEQUENTIAL_MIN_REFRESH;
-    return fastEnough ? mode : RenderStereoMode::SPLIT_HORIZONTAL;
-  }
+    return mode;
 
   const auto& components = CServiceBroker::GetAppComponents();
   const auto appPlayer = components.GetComponent<CApplicationPlayer>();
@@ -199,10 +190,10 @@ void CStereoscopicsManager::SetStereoModeByUser(const RenderStereoMode mode)
     m_lastStereoModeSetByUser = m_stereoModeSetByUser;
 
   m_stereoModeSetByUser = mode;
-  SetStereoMode(mode, true);
+  SetStereoMode(mode);
 }
 
-void CStereoscopicsManager::SetStereoMode(const RenderStereoMode mode, bool manual)
+void CStereoscopicsManager::SetStereoMode(const RenderStereoMode mode)
 {
   RenderStereoMode currentMode = GetStereoMode();
   RenderStereoMode applyMode = mode;
@@ -211,7 +202,7 @@ void CStereoscopicsManager::SetStereoMode(const RenderStereoMode mode, bool manu
   if (mode == RenderStereoMode::AUTO)
     applyMode = GetStereoModeOfPlayingVideo();
 
-  applyMode = ArrangementForDisplay(applyMode, manual);
+  applyMode = ArrangementForDisplay(applyMode);
 
   if (applyMode != currentMode && applyMode >= RenderStereoMode::OFF)
   {
@@ -653,6 +644,17 @@ RESOLUTION CStereoscopicsManager::GetResolutionForPlayingVideo(RenderStereoMode 
   return CResolutionUtils::ChooseBestResolution(static_cast<float>(info.fpsRate) /
                                                     static_cast<float>(info.fpsScale),
                                                 info.width, info.height, is3D, mode);
+}
+
+void CStereoscopicsManager::OnResolutionChangeDeclined()
+{
+  if (GetStereoMode() == RenderStereoMode::OFF)
+    return;
+
+  CLog::Log(LOGINFO, "Stereoscopic 3D: resolution change declined, switching 3D output off");
+  m_stereoModeSetByUser = RenderStereoMode::UNDEFINED;
+  m_settings->SetInt(CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE,
+                     static_cast<int>(RenderStereoMode::OFF));
 }
 
 RESOLUTION CStereoscopicsManager::GetResolutionForFrameSequential(RenderStereoMode previous,
