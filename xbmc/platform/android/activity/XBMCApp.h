@@ -23,6 +23,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -203,6 +204,12 @@ public:
 
   bool WaitVSync(unsigned int milliSeconds);
   int64_t GetNextFrameTime() const;
+  //! @brief Display refreshes counted from the Choreographer callbacks.
+  //! @param count Number of the latest refresh, rising by one per refresh (missed callbacks included).
+  //! @param timeNanos Time of that refresh.
+  //! @param periodNanos Time between two refreshes.
+  //! @return false when no refresh was seen yet.
+  bool GetVsyncTimeline(int64_t& count, int64_t& timeNanos, int64_t& periodNanos) const;
   float GetFrameLatencyMs() const;
 
 protected:
@@ -270,6 +277,13 @@ private:
 
   uint32_t m_playback_state{0};
   int64_t m_frameTimeNanos{0};
+  mutable std::mutex m_vsyncTimelineMutex;
+  int64_t m_vsyncCount{0};
+  int64_t m_vsyncTimeNanos{0};
+  int64_t m_vsyncPeriodNanos{0};
+  int64_t m_gridCount{0};
+  int64_t m_gridTimeNanos{0};
+  bool m_hasVsyncTimeline{false};
   float m_refreshRate{0.0f};
 
 public:

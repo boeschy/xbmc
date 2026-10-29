@@ -11,8 +11,10 @@ set(HEADERS OSScreenSaverAndroid.h
             VideoSyncAndroid.h)
 
 if(TARGET ${APP_NAME_LC}::OpenGLES)
-  list(APPEND SOURCES WinSystemAndroidGLESContext.cpp)
-  list(APPEND HEADERS WinSystemAndroidGLESContext.h)
+  list(APPEND SOURCES WinSystemAndroidGLESContext.cpp
+                      FrameSequentialPresenter.cpp)
+  list(APPEND HEADERS WinSystemAndroidGLESContext.h
+                      FrameSequentialPresenter.h)
 endif()
 
 core_add_library(windowing_android)
