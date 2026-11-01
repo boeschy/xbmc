@@ -3379,7 +3379,7 @@ void CVideoPlayer::HandleMessages()
       // A disc menu is kept out of the flush so that a seek does not wipe a page libbluray
       // will not draw again. Nothing draws it again here either, and the disc it belongs to
       // is about to go, so it would be left over the title that follows.
-      m_overlayContainer.Clear(DVDOverlaySource::MENU);
+      m_overlayContainer.Clear();
 
       m_pDemuxer.reset();
       m_pSubtitleDemuxer.reset();
