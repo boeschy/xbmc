@@ -68,7 +68,7 @@ public:
   void SetProgram(int progId) override;
   std::string GetFileName() override;
   std::string GetStreamCodecName(int64_t demuxerId, int iStreamId) override;
-  void EnableStream(int64_t demuxerId, int id, bool enable) override;
+  bool EnableStream(int64_t demuxerId, int id, bool enable) override;
   void OpenStream(int64_t demuxerId, int id) override;
   void SetVideoResolution(unsigned int width, unsigned int height) override;
 

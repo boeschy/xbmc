@@ -702,10 +702,10 @@ std::string CDVDDemuxBluray3D::GetStreamCodecName(int iStreamId)
   return m_base ? m_base->GetStreamCodecName(iStreamId) : std::string{};
 }
 
-void CDVDDemuxBluray3D::EnableStream(int64_t demuxerId, int id, bool enable)
+bool CDVDDemuxBluray3D::EnableStream(int64_t demuxerId, int id, bool enable)
 {
   if (m_base)
-    m_base->EnableStream(demuxerId, id, enable);
+    return m_base->EnableStream(demuxerId, id, enable);
 }
 
 void CDVDDemuxBluray3D::OpenStream(int64_t demuxerId, int id)
