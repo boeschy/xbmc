@@ -62,14 +62,6 @@ constexpr const char* PROPERTY_CATEGORY_MOVE = "categorymove";
 // animation whose condition ends before it does
 constexpr auto CATEGORY_MOVE_TIME = 400ms;
 
-// Window property telling the skin which way the filters moved to another
-// category: "next" or "previous"
-constexpr const char* PROPERTY_CATEGORY_MOVE = "categorymove";
-
-// Long enough for a skin to slide the new filters in, as Kodi resets an
-// animation whose condition ends before it does
-constexpr auto CATEGORY_MOVE_TIME = 400ms;
-
 struct ScalingMethodProperties
 {
   int nameIndex;

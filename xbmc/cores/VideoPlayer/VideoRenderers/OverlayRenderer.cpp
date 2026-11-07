@@ -570,8 +570,7 @@ void CRenderer::PrepareOverlays(int idx)
     const double assPts = e.pts - o.iPTSStartTime;
 
     int currentChange = 0;
-    e.renderedImages = ovAss.GetLibassHandler()->RenderImage(assPts, rOpts, updateStyle,
-                                                             m_overlayStyle, &currentChange);
+    e.renderedImages = ovAss.GetLibassHandler()->RenderImage(assPts, rOpts, m_overlayStyle, &currentChange);
     if (e.renderedImages)
       hasVisible = true;
     if (currentChange > 0)
