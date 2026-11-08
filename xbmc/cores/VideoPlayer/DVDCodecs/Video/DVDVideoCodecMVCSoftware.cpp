@@ -253,7 +253,7 @@ bool CDVDVideoCodecMVCSoftware::Open(CDVDStreamInfo& hints, CDVDCodecOptions& op
   m_annexB = !(hints.extradata && hints.extradata.GetSize() >= 7 &&
                hints.extradata.GetData()[0] == 1);
   if (!m_annexB && !m_bitstream.Open(AV_CODEC_ID_H264, hints.extradata.GetData(),
-                                     hints.extradata.GetSize(), true /* to_annexb */))
+                                     hints.extradata.GetSize()))
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecMVCSoftware::Open - bitstream converter init failed");
     return false;
