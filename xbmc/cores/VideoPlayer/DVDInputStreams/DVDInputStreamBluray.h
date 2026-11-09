@@ -377,13 +377,10 @@ protected:
      * \return True if the clip carries the stream, false otherwise
      */
     bool GetClipStreamLanguage(int pid, std::string& language) const;
-<<<<<<< HEAD
     void OpenClipSpan();
-=======
 
     //! \brief Re-read the playlist with Kodi's MPLS parser to pick up the 3D extension data.
     void UpdatePlaylistInformation();
->>>>>>> 2e7910743ac (VideoPlayer: play the second view of a 3D Blu-ray)
 
     std::unique_ptr<CDVDInputStreamFile> m_pstream;
     std::string m_rootPath;
