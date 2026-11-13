@@ -102,7 +102,6 @@ public:
   //! \brief Live content geometry state for the debug overlay; empty when a player does not
   //! sample.
   virtual std::string GetContentGeometryInfo() { return {}; }
-};
 
   /*!
    * \brief Hold on to the decoder over the next CloseStream() so that the
