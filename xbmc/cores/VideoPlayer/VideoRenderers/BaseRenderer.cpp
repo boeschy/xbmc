@@ -356,7 +356,7 @@ void CBaseRenderer::ManageRenderArea()
 
   CalcNormalRenderRect(renderWindow.x1, renderWindow.y1, renderWindow.Width(),
                        renderWindow.Height(),
-                       (eyeCropped ? GetPerEyeAspectRatio() : contentRatio * 
+                       eyeCropped ? GetPerEyeAspectRatio() : contentRatio * 
                            CDisplaySettings::GetInstance().GetPixelRatio(),
                        CDisplaySettings::GetInstance().GetZoomAmount(),
                        CDisplaySettings::GetInstance().GetVerticalShift());
