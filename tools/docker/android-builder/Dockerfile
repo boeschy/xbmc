@@ -29,15 +29,16 @@
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:8-jdk AS bdj-jars
 
-ARG LIBBLURAY_VERSION=1.5.0
-ARG LIBBLURAY_SHA512=32725c8490479b134f2fc9ec72e77a6f57a85b3de33a4a3ad2c82575b7045c0d31a997c0dd05f1dc175628cd2ce61f58573f58a7b799057ec4d6984616b0e732
+ARG LIBBLURAY_VERSION=1.5.1
+ARG LIBBLURAY_SHA512=50805dd22099d57448d349a09ee3e043c66ed3792e7208ca88bac1e695c337cdb6b96c18c5e7a0c27e360f716755176d2f82d6b962fb46d956516e5a556b1844
 ARG LIBBLURAY_URL=https://mirrors.kodi.tv/build-deps/sources
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ant bzip2 ca-certificates curl \
+      ant bzip2 gzip ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
+
 RUN curl -LsS --retry 10 --retry-connrefused \
       -o libbluray.tar.bz2 "${LIBBLURAY_URL}/libbluray-${LIBBLURAY_VERSION}.tar.bz2" \
     && echo "${LIBBLURAY_SHA512}  libbluray.tar.bz2" | sha512sum -c - \
@@ -176,7 +177,7 @@ RUN if [ "${BAKE_ANDROID_SDK}" = "1" ]; then \
 # problem - it only rewrites the aarch64 branch of the meson conditional.
 ARG JRE_ARM64_URL=https://github.com/fandangos/JRE-Kodi-Android/releases/download/1.2-aarch64/script.service.jre-aarch64-v1.2.zip
 ARG JRE_ARM32_URL=https://github.com/fandangos/JRE-Kodi-Android/releases/download/1.2/script.service.jre-arm-v1.2.zip
-ARG LIBBLURAY_VERSION=1.5.0
+ARG LIBBLURAY_VERSION=1.5.1
 
 COPY --from=bdj-jars /opt/bdj-jars /opt/bdj-jars
 
@@ -200,8 +201,9 @@ RUN set -eux; \
       unzip -q /tmp/addon/script.service.jre/resources/lib/j2re-image.zip -d "/opt/kodi-jre/${abi}"; \
       test -f "/opt/kodi-jre/${abi}/j2re-image/lib/${jvmdir}/server/libjvm.so" \
         || test -f "/opt/kodi-jre/${abi}/j2re-image/lib/${jvmdir}/client/libjvm.so"; \
-      rm -f "/opt/kodi-jre/${abi}/j2re-image"/libbluray-*j2se-*.jar; \
+      rm -f "/opt/kodi-jre/${abi}/j2re-image"/libbluray*.jar; \
       cp -p /opt/bdj-jars/*.jar "/opt/kodi-jre/${abi}/j2re-image/"; \
+      cp -p "/opt/kodi-jre/${abi}/j2re-image/libbluray-j2se-${LIBBLURAY_VERSION}.jar" "/opt/kodi-jre/${abi}/j2re-image/libbluray.jar"; \
       test -s "/opt/kodi-jre/${abi}/j2re-image/libbluray-j2se-${LIBBLURAY_VERSION}.jar"; \
       chmod -R a+rX "/opt/kodi-jre/${abi}"; \
       rm -rf /tmp/addon.zip /tmp/addon; \
