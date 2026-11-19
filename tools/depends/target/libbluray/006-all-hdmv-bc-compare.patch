@@ -21,7 +21,7 @@ Analysis credit: Hendrik Leppkes (via SamuriHL/CoreELEC).
                  BD_DEBUG(DBG_HDMV|DBG_CRIT, "missing operand in BRANCH/JUMP opcode 0x%08x\n", *(uint32_t*)insn);
              }
              switch (insn->cmp_opt) {
--                case INSN_BC: p->pc += !!(dst & ~src); break;
+-                case INSN_BC: p->pc += !!(src & ~dst); break;
 +                /* spec: plain bitwise AND - the condition passes when any
 +                 * tested bit is set. The previous (dst & ~src) subset test
 +                 * never checked the requested bits at all and broke
