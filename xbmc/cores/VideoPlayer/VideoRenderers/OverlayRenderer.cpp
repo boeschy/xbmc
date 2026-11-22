@@ -535,6 +535,7 @@ void CRenderer::PrepareOverlays(int idx)
   bool doMarkDirty = false;
   std::vector<std::shared_ptr<CDVDOverlay>> imageSpuOverlays;
   bool hasLibassImages = false;
+  std::vector<const CDVDOverlay*> imageSpu;
   bool hasVisible = false;
   for (auto& e : m_buffers[idx])
   {
@@ -552,6 +553,7 @@ void CRenderer::PrepareOverlays(int idx)
     {
       imageSpuOverlays.push_back(e.overlay_dvd);
       hasVisible = true;
+      imageSpu.push_back(&o);
       if (o.m_textureid == 0)
         doMarkDirty = true;
       continue;
@@ -615,6 +617,14 @@ void CRenderer::PrepareOverlays(int idx)
   // drawn rather than what was last seen, so a skipped GUI walk keeps asking.
   if (hasVisible && m_subtitlePlaneOffset != m_lastDrawnPlaneOffset)
     doMarkDirty = true;
+
+  // A disc menu that removes part of its images keeps the rest, already uploaded, so neither
+  // check above sees it and the removed images stayed on the GUI plane.
+  if (imageSpu != m_prevImageSpu)
+  {
+    doMarkDirty = true;
+    m_prevImageSpu = std::move(imageSpu);
+  }
 
   if (doMarkDirty)
     MarkDirty();
