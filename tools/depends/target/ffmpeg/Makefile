@@ -5,7 +5,6 @@ DEPS = FFMPEG-VERSION Makefile ../../download-files.include \
                       001-ffmpeg-all-libpostproc-plugin.patch \
                       002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch \
                       008-ffmpeg-all-pgssubdec-use-caller-colorspace.patch \
-                      009-ffmpeg-all-swscale-yuv2rgb-odd-width.patch
                       0001-added_upstream_mvc_patches.patch \
                       0002-MKV-added-basic-block-addition-mapping-support-for-m.patch
 
@@ -52,7 +51,6 @@ all: .installed-$(PLATFORM)
 	cd $(PLATFORM); cp ../CMakeLists.txt ./
 	cd $(PLATFORM); cp ../001-ffmpeg-all-libpostproc-plugin.patch ../002-ffmpeg-libavutil-common-h-cpp11-constant-macros.patch ./
 	cd $(PLATFORM); cp ../008-ffmpeg-all-pgssubdec-use-caller-colorspace.patch ./
-	cd $(PLATFORM); cp ../009-ffmpeg-all-swscale-yuv2rgb-odd-width.patch ./
 	cd $(PLATFORM); cp ../0001-added_upstream_mvc_patches.patch ../0002-MKV-added-basic-block-addition-mapping-support-for-m.patch ./
 	cd $(PLATFORM)/build; $(CMAKE) $(CMAKE_ARGS) ..
 	touch $@
